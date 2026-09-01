@@ -1209,6 +1209,24 @@ if SERVER then
         return true
     end
 
+    --[[ ДЕЙСТВИЯ С ОБЪЕКТОМ — таблица вместо лестницы `elseif action ==`.
+         Право (владелец/дистанция) проверяется ВЫШЕ, до диспетчеризации,
+         один раз на все действия. Контракт: (ply, rec) → ok, msg;
+         пустой msg — «молча обновить окно». ]]
+    local ESTATE_ACTIONS = {
+        collect = function(ply, rec) return ES.Collect(ply, rec) end,
+        buy = function(ply, rec) return ES.BuyFromMarket(ply, rec) end,
+        sell_state = function(ply, rec) return ES.SellToState(ply, rec) end,
+        -- Цена лежит в том же пакете, поэтому читается внутри действия:
+        -- порядок чтения net-полей менять нельзя.
+        sale_on = function(ply, rec) return ES.SetForSale(ply, rec, net.ReadUInt(32)) end,
+        sale_off = function(ply, rec) return ES.SetForSale(ply, rec, 0) end,
+        refresh = function(_ply, rec)
+            ES.InvalidateScan(rec)
+            return true, nil
+        end,
+    }
+
     net.Receive(NET_ACT, function(_, ply)
         if not IsValid(ply) then return end
         if GRM.Net and GRM.Net.Guard
@@ -1224,21 +1242,9 @@ if SERVER then
             return
         end
 
+        local handler = ESTATE_ACTIONS[action]
         local ok, msg = false, "Неизвестное действие"
-        if action == "collect" then
-            ok, msg = ES.Collect(ply, rec)
-        elseif action == "buy" then
-            ok, msg = ES.BuyFromMarket(ply, rec)
-        elseif action == "sell_state" then
-            ok, msg = ES.SellToState(ply, rec)
-        elseif action == "sale_on" then
-            ok, msg = ES.SetForSale(ply, rec, net.ReadUInt(32))
-        elseif action == "sale_off" then
-            ok, msg = ES.SetForSale(ply, rec, 0)
-        elseif action == "refresh" then
-            ES.InvalidateScan(rec)
-            ok, msg = true, nil
-        end
+        if handler then ok, msg = handler(ply, rec) end
         if msg and GRM.Notify then
             GRM.Notify(ply, tostring(msg), ok and 100 or 255, ok and 215 or 150, ok and 125 or 110)
         end

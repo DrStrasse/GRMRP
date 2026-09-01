@@ -543,6 +543,31 @@ if SERVER then
         net.Send(ply)
     end
 
+    --[[ ДЕЙСТВИЯ СО СТОЙКОЙ — таблица вместо лестницы `elseif action ==`.
+         Контракт: (ply, ent, index, data) → ok, msg. Пустой msg означает
+         «молча обновить окно» (так работает refresh). ]]
+    local RACK_ACTIONS = {
+        take = function(ply, ent, index) return RK.Withdraw(ply, ent, index) end,
+        put = function(ply, ent, index) return RK.Deposit(ply, ent, index) end,
+        configure = function(ply, ent, index, data) return RK.ConfigureCell(ply, ent, index, data) end,
+        resize = function(ply, ent, _index, data) return RK.Resize(ply, ent, data.cols, data.rows) end,
+
+        -- Настройки стойки (фракция, сеть, заголовок) — только суперадмину:
+        -- через них стойка привязывается к чужой фракции.
+        settings = function(ply, ent, _index, data)
+            if not ply:IsSuperAdmin() then return false, "Только суперадмин" end
+            ent:SetFactionName(trim(data.faction, 96))
+            ent:SetNetworkID(trim(data.network, 64))
+            ent:SetFactionMode(data.factionMode ~= false)
+            local rack = rackOf(ent)
+            rack.title = trim(data.title, 64)
+            RK.Save("settings")
+            return true, "Настройки стойки сохранены"
+        end,
+
+        refresh = function() return true, nil end,
+    }
+
     net.Receive(RK.NET.ACT, function(_, ply)
         if not IsValid(ply) then return end
         if GRM.Net and GRM.Net.Guard and not GRM.Net.Guard(ply, "rack.act", { rate = 0.15, burst = 6 }, {}) then return end
@@ -552,25 +577,12 @@ if SERVER then
         local data = net.ReadTable() or {}
         if not IsValid(ent) or ent:GetClass() ~= "grm_weapon_rack" then return end
 
-        local ok, msg = false, "Неизвестное действие"
-        if action == "take" then ok, msg = RK.Withdraw(ply, ent, index)
-        elseif action == "put" then ok, msg = RK.Deposit(ply, ent, index)
-        elseif action == "configure" then ok, msg = RK.ConfigureCell(ply, ent, index, data)
-        elseif action == "resize" then ok, msg = RK.Resize(ply, ent, data.cols, data.rows)
-        elseif action == "settings" then
-            if ply:IsSuperAdmin() then
-                ent:SetFactionName(trim(data.faction, 96))
-                ent:SetNetworkID(trim(data.network, 64))
-                ent:SetFactionMode(data.factionMode ~= false)
-                local rack = rackOf(ent)
-                rack.title = trim(data.title, 64)
-                RK.Save("settings")
-                ok, msg = true, "Настройки стойки сохранены"
-            else
-                ok, msg = false, "Только суперадмин"
-            end
-        elseif action == "refresh" then ok, msg = true, nil
+        local handler = RACK_ACTIONS[action]
+        if not handler then
+            notify(ply, false, "Неизвестное действие")
+            return
         end
+        local ok, msg = handler(ply, ent, index, data)
 
         if msg then notify(ply, ok, msg) end
         RK.Open(ply, ent)   -- окно обновляется свежим снимком

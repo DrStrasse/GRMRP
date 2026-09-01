@@ -474,6 +474,13 @@ else
         return cx + dx * t, cy + dy * t, false
     end
 
+    --[[ Цвета маркеров — один раз на файл, а не на кадр (§6.1.8).
+         Маркеры рисуются в HUDPaint для КАЖДОЙ временной точки: на карте
+         с десятком меток это был десяток мусорных таблиц за кадр. ]]
+    local COL_MARKER_OUTLINE = Color(8, 14, 23, 235)
+    local COL_GPS_ACTIVE = Color(255, 215, 70)
+    local COL_GPS_TEMP = Color(255, 90, 70)
+
     local function paintGpsCircle(point, col, rMin, rMax)
         local lp = LocalPlayer()
         if not (IsValid(lp) and istable(point) and istable(point.pos)) then return end
@@ -488,8 +495,8 @@ else
         local sw = ScrW()
         local textX = math.Clamp(x + radius + 12, 12, sw - 12)
         local align = textX > sw - 180 and TEXT_ALIGN_RIGHT or TEXT_ALIGN_LEFT
-        draw.SimpleTextOutlined(tostring(point.name or "GPS"), "GRMMM_Body", textX, y - 10, color_white, align, TEXT_ALIGN_CENTER, 2, Color(8, 14, 23, 235))
-        draw.SimpleTextOutlined(distance .. " юн.", "GRMMM_Small", textX, y + 10, col, align, TEXT_ALIGN_CENTER, 2, Color(8, 14, 23, 235))
+        draw.SimpleTextOutlined(tostring(point.name or "GPS"), "GRMMM_Body", textX, y - 10, color_white, align, TEXT_ALIGN_CENTER, 2, COL_MARKER_OUTLINE)
+        draw.SimpleTextOutlined(distance .. " юн.", "GRMMM_Small", textX, y + 10, col, align, TEXT_ALIGN_CENTER, 2, COL_MARKER_OUTLINE)
     end
 
     hook.Add("HUDPaint", "GRM_GPS_WorldMarkerHUD", function()
@@ -497,7 +504,7 @@ else
         if not IsValid(lp) or not gpsTarget then return end
         local point = gpsPoint(gpsTarget)
         if not point then return end
-        paintGpsCircle(point, Color(255, 215, 70), 9, 20)
+        paintGpsCircle(point, COL_GPS_ACTIVE, 9, 20)
     end)
 
     hook.Add("HUDPaint", "GRM_GPS_TempMarkers", function()
@@ -511,7 +518,7 @@ else
                 if gpsTarget and tostring(point.id) == tostring(gpsTarget) then
                     -- активная цель уже нарисована жёлтым кружком
                 else
-                    paintGpsCircle(point, Color(255, 90, 70), 10, 22)
+                    paintGpsCircle(point, COL_GPS_TEMP, 10, 22)
                 end
             end
         end

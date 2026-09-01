@@ -11,6 +11,26 @@
       • добивание уроном, пока лежит;
       • крик боли и оповещение рядом стоящих.
 ----------------------------------------------------------------------]]
+--[[ Цвета кадра — создаются ОДИН раз при загрузке файла.
+     Раньше каждый из них рождался заново в каждом кадре render-хука:
+     это мусорные таблицы 60–144 раза в секунду и «рывки» сборщика
+     (§6.1.8 — не создавать таблицы в render-кадре). ]]
+local COL_WOUND = Color(244, 78, 96)
+local COL_HOLD_HINT = Color(230, 240, 245)
+local COL_HOLD_SUBHINT = Color(170, 180, 190)
+local COL_HOLD_BAR_BG = Color(20, 20, 28, 220)
+local COL_HOLD_BAR_FILL = Color(70, 200, 120)
+local COL_DOWNED_BG = Color(18, 8, 12, 230)
+local COL_DOWNED_HINT = Color(230, 235, 240)
+local COL_DOWNED_BAR_BG = Color(30, 20, 24, 220)
+-- CalcView зовётся КАЖДЫЙ кадр: смещение камеры и наклон — константы.
+local VIEW_DROP = Vector(0, 0, -28)
+local VIEW_TILT = Angle(8, 0, 6)
+-- Метка «РАНЕН» висит над каждым раненым в кадре.
+local LABEL_UP = Vector(0, 0, 42)
+
+local COL_DOWNED_BAR_FILL = Color(240, 180, 70)
+
 if SERVER then AddCSLuaFile() end
 
 GRM = GRM or {}
@@ -63,6 +83,8 @@ if SERVER then
         if ply._grm911OldCollision then ply:SetCollisionGroup(ply._grm911OldCollision) end
         ply:Freeze(false)
     end
+
+
 
     hook.Add("GRM_911_Downed", "GRM_Bleedout_OnDown", function(ply)
         if not IsValid(ply) then return end
@@ -321,8 +343,8 @@ if CLIENT then
         if not IsValid(ply) or not ply:GetNWBool("GRM_911_Downed") then return end
         if IsValid(ply:GetNWEntity("GRM_911_Ragdoll")) then return end
         return {
-            origin = pos + Vector(0, 0, -28) - ang:Forward() * 18,
-            angles = ang + Angle(8, 0, 6),
+            origin = pos + VIEW_DROP - ang:Forward() * 18,
+            angles = ang + VIEW_TILT,
             fov = fov,
             drawviewer = true,
         }
@@ -334,11 +356,11 @@ if CLIENT then
         local nowE = (GRM.Time and GRM.Time.Epoch) and math.floor(GRM.Time.Epoch()) or os.time()
         for _, p in ipairs(player.GetAll()) do
             if p ~= lp and downed(p) then
-                local pos = p:GetPos() + Vector(0, 0, 42)
+                local pos = p:GetPos() + LABEL_UP
                 local scr = pos:ToScreen()
                 if scr.visible then
                     local left = math.max(0, p:GetNWInt("GRM_911_DeathAt", nowE) - nowE)
-                    draw.SimpleText("✚ РАНЕН · " .. left .. " с", "DermaDefaultBold", scr.x, scr.y, Color(244, 78, 96), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                    draw.SimpleText("✚ РАНЕН · " .. left .. " с", "DermaDefaultBold", scr.x, scr.y, COL_WOUND, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
                 end
             end
         end
@@ -350,12 +372,12 @@ if CLIENT then
                 local prog = ent:GetNWFloat("GRM_911_Hold", 0)
                 local kind = ent:GetNWString("GRM_911_HoldKind", "")
                 local label = kind == "revive" and "Реанимация" or "Стабилизация"
-                draw.SimpleText("Удерживайте [E] — " .. label, "DermaLarge", ScrW() / 2, ScrH() * 0.72, Color(230, 240, 245), TEXT_ALIGN_CENTER)
-                draw.SimpleText("меню помощи: /aid  ·  ALT+E", "DermaDefault", ScrW() / 2, ScrH() * 0.72 + 46, Color(170, 180, 190), TEXT_ALIGN_CENTER)
+                draw.SimpleText("Удерживайте [E] — " .. label, "DermaLarge", ScrW() / 2, ScrH() * 0.72, COL_HOLD_HINT, TEXT_ALIGN_CENTER)
+                draw.SimpleText("меню помощи: /aid  ·  ALT+E", "DermaDefault", ScrW() / 2, ScrH() * 0.72 + 46, COL_HOLD_SUBHINT, TEXT_ALIGN_CENTER)
                 if prog > 0 then
                     local w = 280
-                    draw.RoundedBox(4, ScrW() / 2 - w / 2, ScrH() * 0.72 + 28, w, 10, Color(20, 20, 28, 220))
-                    draw.RoundedBox(4, ScrW() / 2 - w / 2, ScrH() * 0.72 + 28, w * prog, 10, Color(70, 200, 120))
+                    draw.RoundedBox(4, ScrW() / 2 - w / 2, ScrH() * 0.72 + 28, w, 10, COL_HOLD_BAR_BG)
+                    draw.RoundedBox(4, ScrW() / 2 - w / 2, ScrH() * 0.72 + 28, w * prog, 10, COL_HOLD_BAR_FILL)
                 end
             end
             return
@@ -369,12 +391,12 @@ if CLIENT then
         elseif kind == "revive" then hint = "Вас поднимают: " .. lp:GetNWString("GRM_911_HoldBy", "")
         elseif kind == "stabilize" then hint = "Вас стабилизируют: " .. lp:GetNWString("GRM_911_HoldBy", "")
         end
-        draw.RoundedBox(8, ScrW() / 2 - 260, ScrH() - 168, 520, 108, Color(18, 8, 12, 230))
-        draw.SimpleText("ТЯЖЁЛОЕ РАНЕНИЕ · " .. left .. " с", "DermaLarge", ScrW() / 2, ScrH() - 140, Color(244, 78, 96), TEXT_ALIGN_CENTER)
-        draw.SimpleText(hint, "DermaDefaultBold", ScrW() / 2, ScrH() - 108, Color(230, 235, 240), TEXT_ALIGN_CENTER)
+        draw.RoundedBox(8, ScrW() / 2 - 260, ScrH() - 168, 520, 108, COL_DOWNED_BG)
+        draw.SimpleText("ТЯЖЁЛОЕ РАНЕНИЕ · " .. left .. " с", "DermaLarge", ScrW() / 2, ScrH() - 140, COL_WOUND, TEXT_ALIGN_CENTER)
+        draw.SimpleText(hint, "DermaDefaultBold", ScrW() / 2, ScrH() - 108, COL_DOWNED_HINT, TEXT_ALIGN_CENTER)
         if prog > 0 then
-            draw.RoundedBox(4, ScrW() / 2 - 140, ScrH() - 88, 280, 10, Color(30, 20, 24, 220))
-            draw.RoundedBox(4, ScrW() / 2 - 140, ScrH() - 88, 280 * prog, 10, Color(240, 180, 70))
+            draw.RoundedBox(4, ScrW() / 2 - 140, ScrH() - 88, 280, 10, COL_DOWNED_BAR_BG)
+            draw.RoundedBox(4, ScrW() / 2 - 140, ScrH() - 88, 280 * prog, 10, COL_DOWNED_BAR_FILL)
         end
     end)
 

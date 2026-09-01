@@ -841,6 +841,28 @@ if SERVER then
         return true, "Колонка снята с карты и из перма"
     end
 
+    --[[ ОПЕРАЦИИ СО СТАНЦИЕЙ — таблица вместо лестницы `elseif op ==`.
+         Покупка и продажа отличались от «купить всю заправку» одним
+         булевым аргументом, а лестница разносила их по разным веткам:
+         правку в покупке приходилось повторять дважды. Контракт
+         обработчика: (ply, ent) → ok, msg. ]]
+    local STATION_OPS = {
+        buy = function(ply, ent) return F.BuyPump(ply, ent, false) end,
+        buyall = function(ply, ent) return F.BuyPump(ply, ent, true) end,
+        sell = function(ply, ent) return F.SellPump(ply, ent, false) end,
+        sellall = function(ply, ent) return F.SellPump(ply, ent, true) end,
+        -- Цена читается из того же пакета: порядок чтения важен, поэтому
+        -- ReadFloat остаётся внутри обработчика операции.
+        price = function(ply, ent) return F.SetStationPrice(ply, ent, net.ReadFloat()) end,
+        cash = function(ply, ent) return F.Withdraw(ply, ent) end,
+        del = function(ply, ent)
+            if not (F.IsOwner(ply, ent) or ply:IsSuperAdmin()) then
+                return false, "Нельзя снять чужую колонку"
+            end
+            return F.DeletePump(ply, ent)
+        end,
+    }
+
     net.Receive("GRM_Fuel_Station", function(_, ply)
         if not IsValid(ply) then return end
         ply._grmFuelMenu = ply._grmFuelMenu or 0
@@ -849,20 +871,9 @@ if SERVER then
         local op = string.sub(net.ReadString() or "", 1, 16)
         local ent = net.ReadEntity()
         if not (IsValid(ent) and ent:GetClass() == "grm_fuel_pump") then return end
-        local ok, msg
-        if op == "buy" then ok, msg = F.BuyPump(ply, ent, false)
-        elseif op == "buyall" then ok, msg = F.BuyPump(ply, ent, true)
-        elseif op == "sell" then ok, msg = F.SellPump(ply, ent, false)
-        elseif op == "sellall" then ok, msg = F.SellPump(ply, ent, true)
-        elseif op == "price" then ok, msg = F.SetStationPrice(ply, ent, net.ReadFloat())
-        elseif op == "cash" then ok, msg = F.Withdraw(ply, ent)
-        elseif op == "del" then
-            if not (F.IsOwner(ply, ent) or ply:IsSuperAdmin()) then
-                ok, msg = false, "Нельзя снять чужую колонку"
-            else
-                ok, msg = F.DeletePump(ply, ent)
-            end
-        else return end
+        local operation = STATION_OPS[op]
+        if not operation then return end
+        local ok, msg = operation(ply, ent)
         if GRM.Notify then GRM.Notify(ply, tostring(msg), ok and 120 or 255, ok and 220 or 140, 100) end
 
         --[[ ПЕРЕРИСОВКА МЕНЮ (заказ владельца 28.08: «кнопка после покупки

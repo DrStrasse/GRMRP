@@ -293,6 +293,35 @@ function ENT:Use(ply)
     self:SendMenu(ply)
 end
 
+--[[ ДЕЙСТВИЯ С ПРИНТЕРОМ — таблица вместо лестницы `elseif action ==`.
+     Владелец и класс энтити проверены ВЫШЕ, до диспетчеризации: право
+     проверяется один раз для всех действий, а не переписывается в каждой
+     ветке (админский сброс — отдельная проверка внутри своего действия).
+     Контракт: (ent, ply). ]]
+local PRINTER_ACTIONS = {
+    collect = function(ent, ply) ent:CollectMoney(ply) end,
+    repair = function(ent, ply) ent:Repair(ply) end,
+    cap = function(ent, ply) ent:UpgradeCapacity(ply) end,
+    rate = function(ent, ply) ent:UpgradeRate(ply) end,
+
+    toggle = function(ent, ply)
+        ent:SetActive(not ent:GetActive())
+        emit(ent, SND.toggle, 60, ent:GetActive() and 110 or 90)
+        notify(ply, ent:GetActive() and "Принтер включён" or "Принтер выключен", 150, 220, 255)
+    end,
+
+    admin_reset = function(ent, ply)
+        -- Сброс перегрева и поломки — только суперадмину: иначе владелец
+        -- чинит принтер бесплатно и обходит всю экономику ремонта.
+        if not ply:IsSuperAdmin() then return end
+        ent:SetPrinted(0)
+        ent:SetHeat(0)
+        ent:SetBroken(false)
+        ent:SetActive(true)
+        ent:SetPrinterHealth(DEFAULT.maxHealth)
+    end,
+}
+
 net.Receive("GRM_Printer_Action", function(_, ply)
     local ent = net.ReadEntity()
     local action = net.ReadString()
@@ -300,12 +329,8 @@ net.Receive("GRM_Printer_Action", function(_, ply)
     ent:ClaimIfEmpty(ply)
     if not ent:IsOwner(ply) then notify(ply, "Это не ваш принтер", 255, 100, 100) return end
 
-    if action == "collect" then ent:CollectMoney(ply)
-    elseif action == "toggle" then ent:SetActive(not ent:GetActive()); emit(ent, SND.toggle, 60, ent:GetActive() and 110 or 90); notify(ply, ent:GetActive() and "Принтер включён" or "Принтер выключен", 150, 220, 255)
-    elseif action == "repair" then ent:Repair(ply)
-    elseif action == "cap" then ent:UpgradeCapacity(ply)
-    elseif action == "rate" then ent:UpgradeRate(ply)
-    elseif action == "admin_reset" and ply:IsSuperAdmin() then ent:SetPrinted(0); ent:SetHeat(0); ent:SetBroken(false); ent:SetActive(true); ent:SetPrinterHealth(DEFAULT.maxHealth) end
+    local handler = PRINTER_ACTIONS[action]
+    if handler then handler(ent, ply) end
 
     ent:SendMenu(ply)
 end)

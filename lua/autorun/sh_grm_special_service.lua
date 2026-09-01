@@ -823,6 +823,59 @@ if SERVER then
         net.Send(ply)
     end
 
+    --[[ ОПЕРАЦИИ ПАНЕЛИ — таблица-диспетчер вместо лестницы из
+         четырнадцати `elseif act == …`.
+
+         Почему это не косметика: лестница выполняла до четырнадцати
+         сравнений строк на КАЖДЫЙ клик агента, а главное — новая
+         операция дописывалась в середину простыни, где легко было
+         промахнуться веткой (и операция молча уходила в «Неизвестная
+         операция»). Здесь имя операции — ключ: один лукап, и видно
+         сразу весь список того, что панель умеет.
+
+         Контракт обработчика: (ply, target, text, num, extra) → ok, msg.
+    ]]
+    local SS_ACTIONS = {
+        level = function(ply, target, text, num) return SS.CovertSetLevel(ply, target, num, text) end,
+        wipe = function(ply, target, text) return SS.CovertWipe(ply, target, text) end,
+        hide = function(ply, target, text, num) return SS.CovertHide(ply, target, num ~= 0, text) end,
+        charge_remove = function(ply, target, text, num) return SS.CovertRemoveCharge(ply, target, num, text) end,
+        fine_wipe = function(ply, _target, text, num) return SS.CovertWipeFine(ply, num, text) end,
+        release = function(ply, target) return SS.CovertRelease(ply, target) end,
+
+        -- Прикрытия: пустая цель означает «себе» — агент чаще всего
+        -- выписывает документ самому себе.
+        cover_issue = function(ply, target, text, _num, extra)
+            return SS.IssueCover(ply, target ~= "" and target or charKey(ply), {
+                label = extra.label or text, fullName = extra.fullName or text,
+                faction = extra.faction, role = extra.role, department = extra.department,
+                number = extra.number, coverColor = extra.coverColor, foilStyle = extra.foilStyle,
+            })
+        end,
+        cover_switch = function(ply, target, _text, num)
+            return SS.SetActiveCover(ply, target ~= "" and target or charKey(ply), num)
+        end,
+        cover_revoke = function(ply, target, _text, num)
+            return SS.RevokeCover(ply, target ~= "" and target or charKey(ply), num)
+        end,
+
+        case_save = function(ply, target, text, num, extra)
+            return SS.CaseSave(ply, target, {
+                summary = extra and extra.summary or text,
+                status  = extra and extra.status or nil,
+                threat  = extra and extra.threat or num,
+            })
+        end,
+        case_note = function(ply, target, text) return SS.CaseAddNote(ply, target, text) end,
+        case_note_del = function(ply, target, _text, num) return SS.CaseRemoveNote(ply, target, num) end,
+        case_delete = function(ply, target) return SS.CaseDelete(ply, target) end,
+
+        refresh = function(ply) SS.Send(ply) end,
+    }
+
+    -- Операции, которым нечего отвечать: они сами шлют снимок панели.
+    local SS_SILENT = { refresh = true }
+
     net.Receive(NET_ACT, function(_, ply)
         if not (IsValid(ply) and ply:IsPlayer()) then return end
         ply.GRM_SSActNext = ply.GRM_SSActNext or 0
@@ -840,48 +893,12 @@ if SERVER then
 
         if not SS.IsAgent(ply) then return result(ply, false, "Доступ запрещён") end
 
-        local ok, msg
-        if act == "level" then
-            ok, msg = SS.CovertSetLevel(ply, target, num, text)
-        elseif act == "wipe" then
-            ok, msg = SS.CovertWipe(ply, target, text)
-        elseif act == "hide" then
-            ok, msg = SS.CovertHide(ply, target, num ~= 0, text)
-        elseif act == "charge_remove" then
-            ok, msg = SS.CovertRemoveCharge(ply, target, num, text)
-        elseif act == "fine_wipe" then
-            ok, msg = SS.CovertWipeFine(ply, num, text)
-        elseif act == "release" then
-            ok, msg = SS.CovertRelease(ply, target)
-        elseif act == "cover_issue" then
-            ok, msg = SS.IssueCover(ply, target ~= "" and target or charKey(ply), {
-                label = extra.label or text, fullName = extra.fullName or text,
-                faction = extra.faction, role = extra.role, department = extra.department,
-                number = extra.number, coverColor = extra.coverColor, foilStyle = extra.foilStyle,
-            })
-        elseif act == "cover_switch" then
-            ok, msg = SS.SetActiveCover(ply, target ~= "" and target or charKey(ply), num)
-        elseif act == "cover_revoke" then
-            ok, msg = SS.RevokeCover(ply, target ~= "" and target or charKey(ply), num)
-        elseif act == "case_save" then
-            -- extra: { summary = ..., status = ..., threat = n }
-            ok, msg = SS.CaseSave(ply, target, {
-                summary = extra and extra.summary or text,
-                status  = extra and extra.status or nil,
-                threat  = extra and extra.threat or num,
-            })
-        elseif act == "case_note" then
-            ok, msg = SS.CaseAddNote(ply, target, text)
-        elseif act == "case_note_del" then
-            ok, msg = SS.CaseRemoveNote(ply, target, num)
-        elseif act == "case_delete" then
-            ok, msg = SS.CaseDelete(ply, target)
-        elseif act == "refresh" then
-            SS.Send(ply)
-            return
-        else
-            ok, msg = false, "Неизвестная операция"
-        end
+        local handler = SS_ACTIONS[act]
+        if not handler then return result(ply, false, "Неизвестная операция") end
+
+        local ok, msg = handler(ply, target, text, num, extra)
+        -- «refresh» сам отправляет снимок и ответа не имеет.
+        if SS_SILENT[act] then return end
 
         result(ply, ok, msg)
         if ok then SS.Send(ply) end

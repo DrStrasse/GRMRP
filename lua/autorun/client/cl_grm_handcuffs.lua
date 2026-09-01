@@ -114,6 +114,30 @@ local function handPos(ply, right)
     return ply:GetPos() + Vector(0, 0, 45)
 end
 
+
+--[[ Цвета кадра — создаются ОДИН раз при загрузке файла.
+     Раньше каждый из них рождался заново в каждом кадре render-хука:
+     это мусорные таблицы 60–144 раза в секунду и «рывки» сборщика
+     (§6.1.8 — не создавать таблицы в render-кадре). ]]
+local COL_PANEL_BG = Color(10, 10, 14, 210)
+local COL_PANEL_TITLE = Color(255, 190, 80)
+local COL_PANEL_TEXT = Color(235, 235, 235)
+local COL_HINT_VEHICLE = Color(200, 230, 255)
+local COL_HINT_DIM = Color(220, 220, 220)
+local COL_HINT_ACTION = Color(255, 235, 170)
+local COL_HOLD_HINT = Color(255, 255, 255)
+local COL_BAR_BG = Color(0, 0, 0, 200)
+-- Стяжка за спиной рисуется каждый кадр для каждого связанного игрока.
+local COL_ROPE = Color(90, 90, 90, 255)
+-- Верёвка конвоя подсвечивается по освещению точки: цвет меняется каждый
+-- кадр, поэтому держим ОДИН объект и правим каналы, а не создаём новый.
+local COL_ROPE_LIT = Color(255, 255, 255, 255)
+-- Повязка на глаза — постоянный серый.
+local COL_BLINDFOLD = Color(120, 120, 120, 255)
+local ROPE_UP = Vector(0, 0, 45)
+
+local COL_BAR_FILL = Color(255, 190, 70, 240)
+
 hook.Add("HUDPaint", "GRM_Handcuffs_HUD", function()
     local lp = LocalPlayer()
     if not IsValid(lp) or not lp:Alive() then return end
@@ -123,14 +147,14 @@ hook.Add("HUDPaint", "GRM_Handcuffs_HUD", function()
     if isCuffed(lp) then
         local y = sh - 170
 
-        draw.RoundedBox(8, sw / 2 - 190, y, 380, 76, Color(10, 10, 14, 210))
-        draw.SimpleText("ВЫ В НАРУЧНИКАХ", "GRM_Cuffs_Title", sw / 2, y + 18, Color(255, 190, 80), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.RoundedBox(8, sw / 2 - 190, y, 380, 76, COL_PANEL_BG)
+        draw.SimpleText("ВЫ В НАРУЧНИКАХ", "GRM_Cuffs_Title", sw / 2, y + 18, COL_PANEL_TITLE, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
         local extra = "Самостоятельно освободиться нельзя"
         if lp:GetNWBool("GRM_CuffGagged", false) then extra = extra .. " | Кляп" end
         if lp:GetNWBool("GRM_CuffBlindfolded", false) then extra = extra .. " | Повязка" end
 
-        draw.SimpleText(extra, "GRM_Cuffs_Text", sw / 2, y + 50, Color(235, 235, 235), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(extra, "GRM_Cuffs_Text", sw / 2, y + 50, COL_PANEL_TEXT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
         -- Сам задержанный не получает подсказок освобождения/ведения,
         -- потому что самостоятельно развязаться нельзя.
@@ -153,14 +177,14 @@ hook.Add("HUDPaint", "GRM_Handcuffs_HUD", function()
         local shown = false
 
         if hasDraggedCaptive() then
-            drawHintLine("E — посадить задержанного на пассажирское место", cx, y, Color(200, 230, 255))
-            drawHintLine("Водительское место не используется", cx, y + 22, Color(220, 220, 220))
+            drawHintLine("E — посадить задержанного на пассажирское место", cx, y, COL_HINT_VEHICLE)
+            drawHintLine("Водительское место не используется", cx, y + 22, COL_HINT_DIM)
             y = y + 48
             shown = true
         end
 
         if hasCuffedPassengerNear(target) then
-            drawHintLine("E — вытащить задержанного из транспорта", cx, y, Color(255, 235, 170))
+            drawHintLine("E — вытащить задержанного из транспорта", cx, y, COL_HINT_ACTION)
             shown = true
         end
 
@@ -178,12 +202,12 @@ hook.Add("HUDPaint", "GRM_Handcuffs_HUD", function()
     if hasCuffsOut then
         if targetCuffed then
             local dragging = target:GetNWEntity("GRM_CuffDragger") == lp
-            drawHintLine("ЛКМ — снять наручники", cx, cy, Color(255, 235, 170))
-            drawHintLine(dragging and "ПКМ — отпустить задержанного" or "ПКМ — взять и вести", cx, cy + 22, Color(200, 230, 255))
-            drawHintLine("R — кляп | ALT + R — повязка на глаза", cx, cy + 44, Color(220, 220, 220))
+            drawHintLine("ЛКМ — снять наручники", cx, cy, COL_HINT_ACTION)
+            drawHintLine(dragging and "ПКМ — отпустить задержанного" or "ПКМ — взять и вести", cx, cy + 22, COL_HINT_VEHICLE)
+            drawHintLine("R — кляп | ALT + R — повязка на глаза", cx, cy + 44, COL_HINT_DIM)
         else
-            drawHintLine("ЛКМ — надеть наручники", cx, cy, Color(255, 235, 170))
-            drawHintLine("Подойдите ближе и удерживайте прицел на игроке", cx, cy + 22, Color(220, 220, 220))
+            drawHintLine("ЛКМ — надеть наручники", cx, cy, COL_HINT_ACTION)
+            drawHintLine("Подойдите ближе и удерживайте прицел на игроке", cx, cy + 22, COL_HINT_DIM)
         end
     end
 
@@ -193,10 +217,10 @@ hook.Add("HUDPaint", "GRM_Handcuffs_HUD", function()
         local useKey = keyName("+use", "E")
         local y = hasCuffsOut and (cy + 78) or cy
 
-        drawHintLine("Удерживайте " .. useKey .. ", чтобы снять наручники", cx, y, Color(255, 255, 255))
+        drawHintLine("Удерживайте " .. useKey .. ", чтобы снять наручники", cx, y, COL_HOLD_HINT)
 
-        draw.RoundedBox(4, cx - 105, y + 20, 210, 18, Color(0, 0, 0, 200))
-        draw.RoundedBox(4, cx - 103, y + 22, 206 * progress, 14, Color(255, 190, 70, 240))
+        draw.RoundedBox(4, cx - 105, y + 20, 210, 18, COL_BAR_BG)
+        draw.RoundedBox(4, cx - 103, y + 22, 206 * progress, 14, COL_BAR_FILL)
     end
 end)
 
@@ -236,7 +260,10 @@ hook.Add("PostDrawOpaqueRenderables", "GRM_Handcuffs_DrawDragRope", function()
                 local p1 = handPos(dragger, true)
                 local p2 = handPos(ply, true)
                 local light = render.GetLightColor(p2) * 255
-                local col = Color(math.max(light.x, 80), math.max(light.y, 80), math.max(light.z, 80), 255)
+                local col = COL_ROPE_LIT
+                col.r = math.max(light.x, 80)
+                col.g = math.max(light.y, 80)
+                col.b = math.max(light.z, 80)
 
                 render.SetMaterial(mats.rope)
                 render.StartBeam(2)
@@ -258,7 +285,7 @@ hook.Add("PostPlayerDraw", "GRM_Handcuffs_DrawGagBlind", function(ply)
     local headPos, headAng = ply:GetBonePosition(bone)
     if not headPos or not headAng then return end
 
-    local col = Color(120, 120, 120, 255)
+    local col = COL_BLINDFOLD
     render.SetMaterial(mats.rope)
 
     local function ring(offsetForward)
@@ -284,15 +311,15 @@ end)
 hook.Add("PostPlayerDraw", "GRM_Handcuffs_DrawBehindBackCuffs", function(ply)
     if not IsValid(ply) or not isCuffed(ply) then return end
 
-    local pos = ply:GetPos() + Vector(0, 0, 45) - ply:GetForward() * 9
+    local pos = ply:GetPos() + ROPE_UP - ply:GetForward() * 9
     local right = ply:GetRight()
     local p1 = pos + right * 4
     local p2 = pos - right * 4
 
     render.SetMaterial(mats.rope)
     render.StartBeam(2)
-        render.AddBeam(p1, 3, 0, Color(90, 90, 90, 255))
-        render.AddBeam(p2, 3, 1, Color(90, 90, 90, 255))
+        render.AddBeam(p1, 3, 0, COL_ROPE)
+        render.AddBeam(p2, 3, 1, COL_ROPE)
     render.EndBeam()
 end)
 
