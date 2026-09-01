@@ -87,17 +87,31 @@ ok(spawnSrc:find("PositionSpawnPoints", 1, true) ~= nil, "у организац�
 ok(spawnSrc:find("function AddSpawnPointForPosition", 1, true) ~= nil, "точку должности можно добавить")
 ok(spawnSrc:find("function RemoveSpawnPointFromPosition", 1, true) ~= nil, "и удалить")
 ok(spawnSrc:find("function GetSpawnPointsForPosition", 1, true) ~= nil, "и прочитать")
-ok(spawnSrc:find("ПРИОРИТЕТ 0", 1, true) ~= nil,
-   "должность стоит первой в порядке выбора точки — как и у формы")
-local posIdx = spawnSrc:find("GetSpawnPointsForPosition(factionName, memberData.Position)", 1, true)
-local subIdx = spawnSrc:find("GetSpawnPointsForSubdept(factionName, memberData.Subdepartment)", 1, true)
-ok(posIdx and subIdx and posIdx < subIdx, "точка должности проверяется раньше подотдела")
+--[[ Раньше эти четыре проверки искали в исходнике конкретные строки
+     («ПРИОРИТЕТ 0», «positions = f.PositionSpawnPoints or {}»). Механику
+     осей свели в одну таблицу SPAWN_AXES, строки исчезли — и стенд
+     покраснел на работающем коде. Это ровно §10.1.4: проверять надо
+     контракт, а не буквы реализации. Поведение (приоритет, рестарт,
+     очистка) проверяется вызовами API в sim_spawn_points.lua, раздел 8;
+     здесь остаётся проводка: ось должности объявлена, стоит первой и
+     участвует в общей загрузке. ]]
+local axesBlock = spawnSrc:match("local SPAWN_AXES = %{.-\n    %}")
+ok(axesBlock ~= nil, "оси иерархии объявлены одной таблицей SPAWN_AXES")
+axesBlock = axesBlock or ""
+ok(axesBlock:find('id = "position"', 1, true) ~= nil
+   and axesBlock:find('member = "Position"', 1, true) ~= nil
+   and axesBlock:find('bundle = "positions"', 1, true) ~= nil,
+   "ось должности описана целиком (поле, участник, ключ JSON)")
+local posAt = axesBlock:find('id = "position"', 1, true)
+local subAt = axesBlock:find('id = "sub"', 1, true)
+ok(posAt and subAt and posAt < subAt,
+   "должность стоит в таблице раньше подотдела — это и есть порядок выбора точки")
 ok(spawnSrc:find("GRM.Positions.Get(f, positionID)", 1, true) ~= nil,
    "точку нельзя повесить на несуществующую должность")
-ok(spawnSrc:find("positions = f.PositionSpawnPoints or {}", 1, true) ~= nil,
-   "точки должностей сохраняются и переживают рестарт")
-ok(spawnSrc:find("istable(entry.positions) and entry.positions", 1, true) ~= nil,
-   "и читаются обратно при загрузке")
+ok(spawnSrc:find("bundle[axis.bundle] = f[axis.field]", 1, true) ~= nil,
+   "сохранение идёт по всем осям сразу (ось не забудут добавить в bundle)")
+ok(spawnSrc:find("f[axis.field] = istable(stored) and stored or {}", 1, true) ~= nil,
+   "и загрузка тоже по всем осям сразу")
 ok(spawnSrc:find("GRM_SpawnPoints_PositionGone", 1, true) ~= nil,
    "удаление должности убирает её точки спавна")
 

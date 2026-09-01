@@ -260,5 +260,94 @@ ok(pos3 ~= nil and pos3.x == 500, "гражданский получает гл�
 -- ══════════════ 7. ГЛОБАЛЬНЫЕ ТОЧКИ СОХРАНЯЮТСЯ ══════════════
 ok(files["spawn_points_global_gm_test.json"] ~= nil and files["spawn_points_global_gm_test.json"]:find("500", 1, true) ~= nil, "глобальные точки сохранены в файл")
 
+-- ══════════════ 8. ОСИ ИЕРАРХИИ: ОДНА МЕХАНИКА НА ВСЕ ЧЕТЫРЕ ══════════════
+--[[ Каждая ось (роль / должность / отдел / подотдел) обязана вести себя
+     ОДИНАКОВО во всех местах: добавление, чтение, запись в JSON, подъём
+     после рестарта и очистка. Раньше механика была скопирована на каждую
+     ось отдельно, и цена уже оплачена дважды:
+       * находка 157 — загрузчик поднимал не все оси (точки «пропадали»);
+       * ось v5 «должность» — забыли ветку в ClearSpawnPoints, точки
+         должности нельзя было очистить.
+     Проверяем осями в цикле: если у новой оси забыли одно из мест,
+     красным станет именно её строка, а не «что-то где-то не работает». ]]
+Factions["Полиция"].Subdepartments = { patrol_north = { name = "Север" } }
+GRM.Positions = { Get = function(f, id) return tostring(id) == "7" and { id = 7 } or nil end }
+Factions["Полиция"].SpawnPoints = nil
+Factions["Полиция"].RoleSpawnPoints = nil
+Factions["Полиция"].DepartmentSpawnPoints = nil
+Factions["Полиция"].SubdeptSpawnPoints = nil
+Factions["Полиция"].PositionSpawnPoints = nil
+files["spawn_points_factions_gm_test.json"] = nil
+reloadHook()
+
+local AXES = {
+    { id = "position", key = "7",            bundle = "positions",      member = "Position",
+      add = AddSpawnPointForPosition,   get = GetSpawnPointsForPosition,   x = 71 },
+    { id = "sub",      key = "patrol_north", bundle = "subdepartments", member = "Subdepartment",
+      add = AddSpawnPointForSubdept,    get = GetSpawnPointsForSubdept,    x = 72 },
+    { id = "role",     key = "Офицер",       bundle = "roles",          member = "Role",
+      add = AddSpawnPointForRole,       get = GetSpawnPointsForRole,       x = 73 },
+    { id = "dept",     key = "Патруль",      bundle = "departments",    member = "Department",
+      add = AddSpawnPointForDepartment, get = GetSpawnPointsForDepartment, x = 74 },
+}
+
+for _, axis in ipairs(AXES) do
+    local added = axis.add("Полиция", axis.key, Vector(axis.x, 0, 0), Angle(0, 0, 0))
+    ok(added == true, ("ось %s: точка добавляется"):format(axis.id))
+
+    local points = axis.get("Полиция", axis.key)
+    ok(istable(points) and #points == 1 and points[1].pos.x == axis.x,
+        ("ось %s: точка читается обратно"):format(axis.id))
+
+    local raw = files["spawn_points_factions_gm_test.json"] or ""
+    ok(raw:find('"' .. axis.bundle .. '"', 1, true) ~= nil,
+        ("ось %s: попадает в JSON под ключом %s"):format(axis.id, axis.bundle))
+end
+
+-- Рестарт: ВСЕ оси обязаны подняться из файла (находка 157).
+for _, axis in ipairs(AXES) do
+    Factions["Полиция"][({ position = "PositionSpawnPoints", sub = "SubdeptSpawnPoints",
+        role = "RoleSpawnPoints", dept = "DepartmentSpawnPoints" })[axis.id]] = nil
+end
+reloadHook()
+for _, axis in ipairs(AXES) do
+    local points = axis.get("Полиция", axis.key)
+    ok(istable(points) and #points == 1 and points[1].pos.x == axis.x,
+        ("ось %s: пережила рестарт"):format(axis.id))
+end
+
+-- Приоритет: должность точнее подотдела, подотдел — роли, роль — отдела.
+Factions["Полиция"].Members[CopSid] = {
+    Role = "Офицер", Department = "Патруль",
+    Subdepartment = "patrol_north", Position = "7",
+}
+local narrow = mkPly(CopSid, "76561198000000002")
+local pPos = GetSpawnPointForPlayer(narrow)
+ok(pPos ~= nil and pPos.x == 71, "приоритет: должность выигрывает у подотдела/роли/отдела")
+
+Factions["Полиция"].Members[CopSid].Position = nil
+ok(GetSpawnPointForPlayer(narrow).x == 72, "приоритет: подотдел выигрывает у роли/отдела")
+Factions["Полиция"].Members[CopSid].Subdepartment = nil
+ok(GetSpawnPointForPlayer(narrow).x == 73, "приоритет: роль выигрывает у отдела")
+Factions["Полиция"].Members[CopSid].Role = nil
+ok(GetSpawnPointForPlayer(narrow).x == 74, "приоритет: остаётся отдел")
+
+-- Очистка узла работает для КАЖДОЙ оси (для должности раньше не работала).
+for _, axis in ipairs(AXES) do
+    local cleared = ClearSpawnPoints(axis.id, "Полиция", axis.key)
+    ok(cleared == true, ("ось %s: ClearSpawnPoints принимает раздел"):format(axis.id))
+    ok(#axis.get("Полиция", axis.key) == 0, ("ось %s: точки узла действительно очищены"):format(axis.id))
+end
+
+local badScope, badErr = ClearSpawnPoints("несуществующая", "Полиция", "x")
+ok(badScope == false and badErr == "Неизвестный раздел", "неизвестный раздел отвергается с причиной")
+
+-- Валидация узла: несуществующий ключ не создаёт мусорных точек.
+local badAdd, badAddErr = AddSpawnPointForSubdept("Полиция", "нет_такого", Vector(1, 1, 1), Angle(0, 0, 0))
+ok(badAdd == false and isstring(badAddErr) and badAddErr:find("Подотдел", 1, true) ~= nil,
+    "несуществующий подотдел отвергается с человеческой причиной")
+local badPos = AddSpawnPointForPosition("Полиция", "999", Vector(1, 1, 1), Angle(0, 0, 0))
+ok(badPos == false, "несуществующая должность отвергается")
+
 print(("SPAWN POINTS: %d/%d failures=%d"):format(pass, pass + fail, fail))
 if fail > 0 then os.exit(1) end

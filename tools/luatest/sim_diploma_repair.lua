@@ -171,6 +171,9 @@ _G.GRM.Documents = {
     Registry = { passports = { [GRAD_KEY] = { fullName = GRAD_FULL, status = "active" } } },
 }
 
+-- Ядро грузится первым и на живом сервере (sh_01_grm_core.lua), и здесь:
+-- модули ниже берут из него канон GRM.CharKey (§5.2.6, одна реализация).
+assert(loadfile("lua/autorun/sh_01_grm_core.lua"))()
 dofile("lua/autorun/sh_00_grm_ui.lua")
 dofile("lua/autorun/sh_grm_services.lua")
 dofile("lua/autorun/sh_grm_diplomas.lua")

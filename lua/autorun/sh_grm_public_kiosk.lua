@@ -18,14 +18,9 @@ local NET_ACT  = "GRM_PublicKiosk_Act"
 local NET_DATA = "GRM_PublicKiosk_Data"
 local NET_RES  = "GRM_PublicKiosk_Result"
 
-local function charKey(v)
-    if GRM.Services and isfunction(GRM.Services.CharKey) then return GRM.Services.CharKey(v) end
-    if IsValid(v) and v:IsPlayer() then
-        if GRM.Identity and isfunction(GRM.Identity.CharacterKey) then return GRM.Identity.CharacterKey(v) end
-        return tostring(v:SteamID64()) .. ":char1"
-    end
-    return tostring(v or "")
-end
+-- Ключ персонажа — канон ядра (§5.2.6): одна реализация на проект,
+-- ранняя привязка безопасна, sh_01_grm_core.lua грузится первым.
+local charKey = GRM.CharKey
 
 local function rpName(ply)
     if not IsValid(ply) then return "" end

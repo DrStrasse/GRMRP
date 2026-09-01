@@ -174,6 +174,9 @@ GRM.Estate = { ZoneCenter = function(r)
 end }
 GRM.Identity = { CharacterKey = function(p) return p._key end }
 
+-- Ядро грузится первым и на живом сервере (sh_01_grm_core.lua), и здесь:
+-- модули ниже берут из него канон GRM.CharKey (§5.2.6, одна реализация).
+assert(loadfile("lua/autorun/sh_01_grm_core.lua"))()
 assert(loadfile("lua/autorun/sh_grm_housing.lua"))()
 local HS = GRM.Housing
 
@@ -183,6 +186,10 @@ local function mkPly(o)
     return {
         _valid = true, _key = o.key or "1:char1", _admin = o.admin == true,
         _caps = o.caps or {}, _pos = o.pos or Vector(0, 0, 0),
+        -- Настоящий игрок GMod всегда отвечает на :IsPlayer(); без этого
+        -- мок не проходит проверку канона GRM.CharKey и ключ уезжает
+        -- в строковую ветку — стенд врал бы про владение жильём.
+        IsPlayer = function() return true end,
         SteamID64 = function() return "1" end,
         GetPos = function(s) return s._pos end,
         EyeAngles = function() return Angle(0, 33, 0) end,

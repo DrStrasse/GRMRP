@@ -198,6 +198,9 @@ _G.GRM.Documents = {
     },
 }
 
+-- Ядро грузится первым и на живом сервере (sh_01_grm_core.lua), и здесь:
+-- модули ниже берут из него канон GRM.CharKey (§5.2.6, одна реализация).
+assert(loadfile("lua/autorun/sh_01_grm_core.lua"))()
 dofile("lua/autorun/sh_grm_services.lua")
 dofile("lua/autorun/sh_grm_diplomas.lua")
 dofile("lua/autorun/sh_grm_education.lua")

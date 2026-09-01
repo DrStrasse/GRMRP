@@ -62,12 +62,9 @@ HS.SpawnLift = 6
 --- Как далеко от двери искать пол комнаты.
 HS.DoorInset = 48
 
-local function charKey(ply)
-    if GRM.Identity and GRM.Identity.CharacterKey then
-        return tostring(GRM.Identity.CharacterKey(ply) or "")
-    end
-    return IsValid(ply) and (ply:SteamID64() .. ":char1") or ""
-end
+-- Ключ персонажа — канон ядра (§5.2.6): одна реализация на проект,
+-- ранняя привязка безопасна, sh_01_grm_core.lua грузится первым.
+local charKey = GRM.CharKey
 HS.CharKey = charKey
 
 --[[ ЕДИНОЕ ОПРЕДЕЛЕНИЕ ЖИЛЬЯ.

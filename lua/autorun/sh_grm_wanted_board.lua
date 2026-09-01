@@ -42,18 +42,9 @@ B.Cooldown  = 1.0    -- секунд между запросами одного 
 -----------------------------------------------------------------------
 -- Общие хелперы
 -----------------------------------------------------------------------
-local function charKey(v)
-    if IsValid(v) and v:IsPlayer() then
-        if GRM.Identity and isfunction(GRM.Identity.CharacterKey) then
-            return GRM.Identity.CharacterKey(v)
-        end
-        return tostring(v:SteamID64()) .. ":char1"
-    end
-    local s = tostring(v or "")
-    if s:match(":char[1-3]$") then return s end
-    if s:match("^%d+$") then return s .. ":char1" end
-    return s
-end
+-- Ключ персонажа — канон ядра (§5.2.6): одна реализация на проект,
+-- ранняя привязка безопасна, sh_01_grm_core.lua грузится первым.
+local charKey = GRM.CharKey
 B.CharKey = charKey
 
 --- Человеческое название юрисдикции.

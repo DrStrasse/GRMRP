@@ -173,6 +173,9 @@ GRM.Identity = {
     ResolveCharacter=function(k) return ONLINE[k] end,
 }
 
+-- Ядро грузится первым и на живом сервере (sh_01_grm_core.lua), и здесь:
+-- модули ниже берут из него канон GRM.CharKey (§5.2.6, одна реализация).
+assert(loadfile("lua/autorun/sh_01_grm_core.lua"))()
 assert(loadfile("lua/autorun/sh_grm_housing.lua"))()
 assert(loadfile("lua/autorun/sh_grm_housing_search.lua"))()
 local HS, SR = GRM.Housing, GRM.HousingSearch

@@ -852,12 +852,18 @@ if SERVER then
     -- синк фракций падал при каждом заходе игрока.
     local sendFactionDataTo
 
+    -- §5.1: одно имя хука — один владелец. Раньше ниже по файлу висела
+    -- ВТОРАЯ регистрация PlayerInitialSpawn/"Factions_SyncOnJoin" (только
+    -- broadcastFactionData): GMod молча заменяет обработчик с тем же
+    -- идентификатором, поэтому побеждала нижняя — и зашедший игрок НЕ
+    -- получал ни свой снимок фракций (sendFactionDataTo), ни NW-поля
+    -- (syncPlayerFactionNW). Обе задачи сведены сюда, в один обработчик.
     hook.Add("PlayerInitialSpawn", "Factions_SyncOnJoin", function(ply)
         timer.Simple(1.0, function()
-            if IsValid(ply) then
-                sendFactionDataTo(ply)
-                syncPlayerFactionNW(ply)
-            end
+            if not IsValid(ply) then return end
+            sendFactionDataTo(ply)
+            syncPlayerFactionNW(ply)
+            broadcastFactionData()
         end)
     end)
 
@@ -1981,9 +1987,9 @@ if SERVER then
         net.Broadcast()
     end)
 
-    hook.Add("PlayerInitialSpawn", "Factions_SyncOnJoin", function(ply)
-        timer.Simple(1, function() if IsValid(ply) then broadcastFactionData() end end)
-    end)
+    -- Регистрация PlayerInitialSpawn живёт выше (Factions_SyncOnJoin) и
+    -- делает всё: снимок фракций, NW-поля и общую рассылку. Здесь была её
+    -- копия, которая затирала оригинал (см. §5.1) — удалена.
 
     -- ============================================================
     -- ЧАТ-КОМАНДА /factions (для суперадмина и лидера)

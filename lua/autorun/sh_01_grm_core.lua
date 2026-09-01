@@ -43,6 +43,51 @@ function C.Rule(id, fallback)
     return value == nil and fallback or value
 end
 
+--[[ Ключ персонажа — ЕДИНСТВЕННАЯ реализация на проект.
+
+     Правило §2.1: весь RP-стат принадлежит персонажу, ключ = `SteamID64:charN`.
+     Правило §5.2.6: одна каноническая функция на сущность.
+
+     Было: локальная `charKey` скопирована в 36 файлов в 25 разных редакциях.
+     Редакции разошлись по поведению, и это не косметика, а класс потери
+     данных: одни возвращали для строкового ключа `""` (запись уходила в
+     пустой ключ), другие — голый `SteamID64` без слота (второй персонаж
+     видел чужое имущество), третьи — `nil` при невалидном игроке (падение
+     в конкатенации). Один ключ на одни данные — иначе «прогресс пропал».
+
+     Контракт (расширять только здесь):
+       игрок           → GRM.Identity.CharacterKey (слот из NW/GRM.Char),
+                         при отсутствии Identity — SteamID64:char1;
+       "…:charN"       → возвращается как есть (уже ключ персонажа);
+       "76561…"        → достраивается слотом char1 (legacy-ключ аккаунта);
+       прочая строка   → как есть (имя backend-а, служебный ключ);
+       nil/невалидный  → "" (никогда не nil: ключ уходит в конкатенации).
+
+     Живёт в ядре, а не в Identity, осознанно: `sh_01_grm_core.lua` грузится
+     раньше всех модулей по алфавиту, поэтому модулю достаточно ранней
+     привязки `local charKey = GRM.CharKey`. Слотами по-прежнему владеет
+     Identity — ядро только делегирует.
+]]
+local CHAR_KEY_SUFFIX = ":char[1-3]$"
+local ACCOUNT_ONLY = "^%d+$"
+
+function GRM.CharKey(value)
+    if IsValid(value) and value.IsPlayer and value:IsPlayer() then
+        local identity = GRM.Identity
+        if identity and isfunction(identity.CharacterKey) then
+            local key = identity.CharacterKey(value)
+            if isstring(key) and key ~= "" then return key end
+        end
+        return tostring(value:SteamID64() or value:SteamID() or "") .. ":char1"
+    end
+
+    local text = isstring(value) and value or tostring(value or "")
+    if text == "" then return "" end
+    if text:match(CHAR_KEY_SUFFIX) then return text end
+    if text:match(ACCOUNT_ONLY) then return text .. ":char1" end
+    return text
+end
+
 -- Localization is deliberately data-only: gameplay logic must never compare
 -- translated labels. Stable IDs remain English dotted identifiers.
 GRM.Lang = GRM.Lang or {}

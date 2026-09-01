@@ -147,6 +147,9 @@ _G.GRM.FormatMoney = function(v) return tostring(v) .. " R" end
 files["grm_wanted/database.json"] = nil
 files["grm_wanted/catalog.json"] = nil
 
+-- Ядро грузится первым и на живом сервере (sh_01_grm_core.lua), и здесь:
+-- модули ниже берут из него канон GRM.CharKey (§5.2.6, одна реализация).
+assert(loadfile("lua/autorun/sh_01_grm_core.lua"))()
 dofile("lua/autorun/sh_grm_wanted_config.lua")
 dofile("lua/autorun/server/sv_grm_wanted.lua")
 local W = GRM.Wanted

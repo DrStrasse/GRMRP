@@ -70,12 +70,8 @@ if SERVER then
     util.AddNetworkString(DL.NET.OPEN)
     util.AddNetworkString(DL.NET.ACT)
 
-    local function charKey(ply)
-        if GRM.Identity and GRM.Identity.CharacterKey then
-            return tostring(GRM.Identity.CharacterKey(ply) or "")
-        end
-        return IsValid(ply) and (ply:SteamID64() .. ":char1") or ""
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6): одна реализация на проект.
+    local charKey = GRM.CharKey
 
     local function tell(ply, msg, good)
         if GRM.Notify then

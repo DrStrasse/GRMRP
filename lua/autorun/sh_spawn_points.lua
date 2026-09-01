@@ -130,27 +130,60 @@ if SERVER then
         return true
     end
 
-    --- Убедиться, что у фракции есть таблицы точек (общие/роли/отделы)
+    --[[ ОСИ ИЕРАРХИИ ФРАКЦИИ — одна таблица вместо четырёх копий механики.
+
+         Раньше каждая ось (роль / должность / отдел / подотдел) была
+         размазана по ШЕСТИ местам: своя таблица в ensure, своё поле в
+         bundle, своя строка в загрузчике, свои Add/Remove/Get и своя
+         ветка в ClearSpawnPoints. Цена такой схемы уже оплачена дважды:
+           * находка 157 — загрузчик восстанавливал не все оси, после
+             рестарта половина точек «пропадала»;
+           * ось v5 «должность» — добавили в Add/Remove/Get, но забыли
+             ветку в ClearSpawnPoints: очистить точки должности из меню
+             было нельзя.
+         Обе ошибки одного класса: «добавил ось — забыл одно из мест».
+
+         Теперь ось описывается ОДНОЙ строкой, механика общая:
+           id     — ключ раздела в командах и в ClearSpawnPoints;
+           field  — где точки лежат в таблице фракции;
+           bundle — имя оси в JSON (единый формат, находка 157);
+           member — поле карточки участника, по которому ищется его точка;
+           label  — как ось зовётся в сообщениях админу;
+           valid  — существует ли такой узел во фракции (nil = не проверяем);
+           norm   — приведение ключа (у должностей ключ числовой в UI).
+         Порядок строк = порядок приоритета при выборе точки спавна:
+         должность точнее подотдела, подотдел — роли, роль — отдела.
+    ]]
+    local SPAWN_AXES = {
+        { id = "position", field = "PositionSpawnPoints",   bundle = "positions",
+          member = "Position",      label = "Должность", norm = tostring },
+        { id = "sub",      field = "SubdeptSpawnPoints",    bundle = "subdepartments",
+          member = "Subdepartment", label = "Подотдел" },
+        { id = "role",     field = "RoleSpawnPoints",       bundle = "roles",
+          member = "Role",          label = "Роль" },
+        { id = "dept",     field = "DepartmentSpawnPoints", bundle = "departments",
+          member = "Department",    label = "Отдел" },
+    }
+
+    local AXIS = {}
+    for _, axis in ipairs(SPAWN_AXES) do AXIS[axis.id] = axis end
+
+    --- Убедиться, что у фракции есть таблицы точек (общие + все оси)
     local function ensureFactionSpawnPoints(f)
         if not istable(f.SpawnPoints) then f.SpawnPoints = {} end
-        if not istable(f.RoleSpawnPoints) then f.RoleSpawnPoints = {} end
-        if not istable(f.DepartmentSpawnPoints) then f.DepartmentSpawnPoints = {} end
-        if not istable(f.SubdeptSpawnPoints) then f.SubdeptSpawnPoints = {} end
-        -- Точки должностей (ось v5): начальник появляется в кабинете,
-        -- а не в общей раздевалке вместе с подчинёнными.
-        if not istable(f.PositionSpawnPoints) then f.PositionSpawnPoints = {} end
+        for _, axis in ipairs(SPAWN_AXES) do
+            if not istable(f[axis.field]) then f[axis.field] = {} end
+        end
     end
 
-    -- Полный bundle фракции: points + roles + departments (единый формат)
+    -- Полный bundle фракции: общие точки + все оси (единый формат)
     local function factionBundle(f)
         ensureFactionSpawnPoints(f)
-        return {
-            points = f.SpawnPoints or {},
-            roles = f.RoleSpawnPoints or {},
-            departments = f.DepartmentSpawnPoints or {},
-            subdepartments = f.SubdeptSpawnPoints or {},
-            positions = f.PositionSpawnPoints or {},
-        }
+        local bundle = { points = f.SpawnPoints or {} }
+        for _, axis in ipairs(SPAWN_AXES) do
+            bundle[axis.bundle] = f[axis.field] or {}
+        end
+        return bundle
     end
 
     -- Сохранить ВСЕ фракционные точки единым форматом
@@ -213,26 +246,16 @@ if SERVER then
                 if istable(entry) then
                     -- МИГРАЦИЯ старого формата: entry — голый массив точек
                     -- (так писал AddSpawnPointForFaction до находки 157).
-                    if entry.points == nil and entry.roles == nil and entry.departments == nil then
-                        f.SpawnPoints = entry
-                        f.RoleSpawnPoints = {}
-                        f.DepartmentSpawnPoints = {}
-                        f.SubdeptSpawnPoints = {}
-                        f.PositionSpawnPoints = {}
-                        needResave = true
-                    else
-                        f.SpawnPoints = istable(entry.points) and entry.points or {}
-                        f.RoleSpawnPoints = istable(entry.roles) and entry.roles or {}
-                        f.DepartmentSpawnPoints = istable(entry.departments) and entry.departments or {}
-                        f.SubdeptSpawnPoints = istable(entry.subdepartments) and entry.subdepartments or {}
-                        f.PositionSpawnPoints = istable(entry.positions) and entry.positions or {}
+                    local legacy = entry.points == nil and entry.roles == nil and entry.departments == nil
+                    f.SpawnPoints = legacy and entry or (istable(entry.points) and entry.points or {})
+                    for _, axis in ipairs(SPAWN_AXES) do
+                        local stored = not legacy and entry[axis.bundle] or nil
+                        f[axis.field] = istable(stored) and stored or {}
                     end
+                    if legacy then needResave = true end
                 else
                     f.SpawnPoints = {}
-                    f.RoleSpawnPoints = {}
-                    f.DepartmentSpawnPoints = {}
-                    f.SubdeptSpawnPoints = {}
-                    f.PositionSpawnPoints = {}
+                    for _, axis in ipairs(SPAWN_AXES) do f[axis.field] = {} end
                 end
             end
         end
@@ -418,9 +441,11 @@ if SERVER then
         return Factions[factionName].SpawnPoints
     end
 
-    -- === ТОЧКИ ДЛЯ РОЛЕЙ ===
-    -- Валидация роли по реальному списку из factions.json (Factions.Roles).
-    -- Если у фракции роли не заданы — разрешаем (легаси-точки), иначе строго.
+    --[[ ВАЛИДАТОРЫ УЗЛОВ — по одному на ось, всё остальное общее.
+         Роль/отдел: если список у фракции пуст, разрешаем (легаси-точки
+         старых сборок иначе стали бы неудаляемыми). Подотдел/должность —
+         строго по реестру: их ключи генерируются, «свободного» имени быть
+         не может. ]]
     local function isValidRole(f, roleName)
         if not istable(f.Roles) or #f.Roles == 0 then return true end
         if roleName == f.LeaderRoleName then return true end
@@ -438,147 +463,136 @@ if SERVER then
         return false
     end
 
-    function AddSpawnPointForRole(factionName, roleName, pos, ang)
-        if not Factions or not Factions[factionName] then return false, "Фракция не найдена" end
-        local f = Factions[factionName]
-        if not isValidRole(f, roleName) then
-            return false, "Роль «" .. tostring(roleName) .. "» не существует во фракции «" .. factionName .. "»"
-        end
-        ensureFactionSpawnPoints(f)
-        if not f.RoleSpawnPoints[roleName] then f.RoleSpawnPoints[roleName] = {} end
-        table.insert(f.RoleSpawnPoints[roleName], { pos = vecToTable(pos), ang = angToTable(ang) })
-        saveAllFactionSpawnPoints()
-        return true
-    end
-
-    function RemoveSpawnPointFromRole(factionName, roleName, index)
-        if not Factions or not Factions[factionName] then return false end
-        local f = Factions[factionName]
-        if not f.RoleSpawnPoints or not f.RoleSpawnPoints[roleName] then return false end
-        table.remove(f.RoleSpawnPoints[roleName], index)
-        if #f.RoleSpawnPoints[roleName] == 0 then f.RoleSpawnPoints[roleName] = nil end
-        saveAllFactionSpawnPoints()
-        return true
-    end
-
-    -- === ТОЧКИ ДЛЯ ДОЛЖНОСТЕЙ (ось v5) ===
-    function AddSpawnPointForPosition(factionName, positionID, pos, ang)
-        if not Factions or not Factions[factionName] then return false, "Фракция не найдена" end
-        local f = Factions[factionName]
-        if not (GRM.Positions and GRM.Positions.Get and GRM.Positions.Get(f, positionID)) then
-            return false, "Должность «" .. tostring(positionID) .. "» не существует во фракции «" .. factionName .. "»"
-        end
-        ensureFactionSpawnPoints(f)
-        positionID = tostring(positionID)
-        if not f.PositionSpawnPoints[positionID] then f.PositionSpawnPoints[positionID] = {} end
-        table.insert(f.PositionSpawnPoints[positionID], { pos = vecToTable(pos), ang = angToTable(ang) })
-        saveAllFactionSpawnPoints()
-        return true
-    end
-
-    function RemoveSpawnPointFromPosition(factionName, positionID, index)
-        if not Factions or not Factions[factionName] then return false end
-        local f = Factions[factionName]
-        positionID = tostring(positionID)
-        if not f.PositionSpawnPoints or not f.PositionSpawnPoints[positionID] then return false end
-        table.remove(f.PositionSpawnPoints[positionID], index)
-        if #f.PositionSpawnPoints[positionID] == 0 then f.PositionSpawnPoints[positionID] = nil end
-        saveAllFactionSpawnPoints()
-        return true
-    end
-
-    function GetSpawnPointsForPosition(factionName, positionID)
-        if not Factions or not Factions[factionName] then return {} end
-        local f = Factions[factionName]
-        positionID = tostring(positionID or "")
-        if not f.PositionSpawnPoints or not f.PositionSpawnPoints[positionID] then return {} end
-        return f.PositionSpawnPoints[positionID]
-    end
-
-    --[[ Должность удалили — её точки спавна больше некому использовать. ]]
-    hook.Add("GRM_FactionPositionChanged", "GRM_SpawnPoints_PositionGone",
-        function(factionName, positionID, _, kind)
-            if kind ~= "delete" then return end
-            local f = Factions and Factions[factionName]
-            if not (istable(f) and istable(f.PositionSpawnPoints) and f.PositionSpawnPoints[positionID]) then return end
-            f.PositionSpawnPoints[positionID] = nil
-            saveAllFactionSpawnPoints()
-        end)
-
-    function GetSpawnPointsForRole(factionName, roleName)
-        if not Factions or not Factions[factionName] then return {} end
-        local f = Factions[factionName]
-        if not f.RoleSpawnPoints or not f.RoleSpawnPoints[roleName] then return {} end
-        return f.RoleSpawnPoints[roleName]
-    end
-
-    -- === ТОЧКИ ДЛЯ ОТДЕЛОВ ===
-    function AddSpawnPointForDepartment(factionName, deptName, pos, ang)
-        if not Factions or not Factions[factionName] then return false, "Фракция не найдена" end
-        local f = Factions[factionName]
-        if not isValidDepartment(f, deptName) then
-            return false, "Отдел «" .. tostring(deptName) .. "» не существует во фракции «" .. factionName .. "»"
-        end
-        ensureFactionSpawnPoints(f)
-        if not f.DepartmentSpawnPoints[deptName] then f.DepartmentSpawnPoints[deptName] = {} end
-        table.insert(f.DepartmentSpawnPoints[deptName], { pos = vecToTable(pos), ang = angToTable(ang) })
-        saveAllFactionSpawnPoints()
-        return true
-    end
-
-    function RemoveSpawnPointFromDepartment(factionName, deptName, index)
-        if not Factions or not Factions[factionName] then return false end
-        local f = Factions[factionName]
-        if not f.DepartmentSpawnPoints or not f.DepartmentSpawnPoints[deptName] then return false end
-        table.remove(f.DepartmentSpawnPoints[deptName], index)
-        if #f.DepartmentSpawnPoints[deptName] == 0 then f.DepartmentSpawnPoints[deptName] = nil end
-        saveAllFactionSpawnPoints()
-        return true
-    end
-
-    function GetSpawnPointsForDepartment(factionName, deptName)
-        if not Factions or not Factions[factionName] then return {} end
-        local f = Factions[factionName]
-        if not f.DepartmentSpawnPoints or not f.DepartmentSpawnPoints[deptName] then return {} end
-        return f.DepartmentSpawnPoints[deptName]
-    end
-
-    -- === ТОЧКИ ДЛЯ ПОДОТДЕЛОВ ===
-    -- Подотдел валидируется по f.Subdepartments (ключ подотдела, а не название).
     local function isValidSubdept(f, subKey)
         if not istable(f.Subdepartments) then return false end
         return istable(f.Subdepartments[subKey])
     end
 
-    function AddSpawnPointForSubdept(factionName, subKey, pos, ang)
-        if not Factions or not Factions[factionName] then return false, "Фракция не найдена" end
-        local f = Factions[factionName]
-        if not isValidSubdept(f, subKey) then
-            return false, "Подотдел «" .. tostring(subKey) .. "» не существует во фракции «" .. factionName .. "»"
+    local function isValidPosition(f, positionID)
+        return GRM.Positions ~= nil and isfunction(GRM.Positions.Get)
+            and GRM.Positions.Get(f, positionID) ~= nil
+    end
+
+    AXIS.role.valid = isValidRole
+    AXIS.dept.valid = isValidDepartment
+    AXIS.sub.valid = isValidSubdept
+    AXIS.position.valid = isValidPosition
+
+    --[[ ОБЩАЯ МЕХАНИКА ТОЧЕК ОСИ.
+         Три функции на все четыре оси: раньше это были двенадцать почти
+         одинаковых тел, различавшихся именем поля и текстом ошибки. ]]
+    local function axisFaction(factionName)
+        if not Factions or not Factions[factionName] then return nil end
+        return Factions[factionName]
+    end
+
+    local function axisKey(axis, key)
+        return axis.norm and axis.norm(key or "") or key
+    end
+
+    local function axisAdd(axis, factionName, key, pos, ang)
+        local f = axisFaction(factionName)
+        if not f then return false, "Фракция не найдена" end
+        key = axisKey(axis, key)
+        if axis.valid and not axis.valid(f, key) then
+            return false, axis.label .. " «" .. tostring(key) .. "» не существует во фракции «"
+                .. factionName .. "»"
         end
         ensureFactionSpawnPoints(f)
-        if not f.SubdeptSpawnPoints[subKey] then f.SubdeptSpawnPoints[subKey] = {} end
-        table.insert(f.SubdeptSpawnPoints[subKey], { pos = vecToTable(pos), ang = angToTable(ang) })
+        local points = f[axis.field]
+        if not points[key] then points[key] = {} end
+        table.insert(points[key], { pos = vecToTable(pos), ang = angToTable(ang) })
         saveAllFactionSpawnPoints()
         return true
+    end
+
+    local function axisRemove(axis, factionName, key, index)
+        local f = axisFaction(factionName)
+        if not f then return false end
+        key = axisKey(axis, key)
+        local points = f[axis.field]
+        if not istable(points) or not points[key] then return false end
+        table.remove(points[key], index)
+        -- Пустой узел удаляем целиком: иначе в JSON копятся пустые ключи,
+        -- а меню показывает разделы без единой точки.
+        if #points[key] == 0 then points[key] = nil end
+        saveAllFactionSpawnPoints()
+        return true
+    end
+
+    local function axisPoints(axis, factionName, key)
+        local f = axisFaction(factionName)
+        if not f then return {} end
+        key = axisKey(axis, key)
+        local points = f[axis.field]
+        if not istable(points) or not istable(points[key]) then return {} end
+        return points[key]
+    end
+
+    --[[ Публичные имена — часть контракта (их зовут админ-меню и чат-команды),
+         поэтому остаются как были; тела сведены к одной строке. ]]
+    function AddSpawnPointForRole(factionName, roleName, pos, ang)
+        return axisAdd(AXIS.role, factionName, roleName, pos, ang)
+    end
+
+    function RemoveSpawnPointFromRole(factionName, roleName, index)
+        return axisRemove(AXIS.role, factionName, roleName, index)
+    end
+
+    function GetSpawnPointsForRole(factionName, roleName)
+        return axisPoints(AXIS.role, factionName, roleName)
+    end
+
+    function AddSpawnPointForDepartment(factionName, deptName, pos, ang)
+        return axisAdd(AXIS.dept, factionName, deptName, pos, ang)
+    end
+
+    function RemoveSpawnPointFromDepartment(factionName, deptName, index)
+        return axisRemove(AXIS.dept, factionName, deptName, index)
+    end
+
+    function GetSpawnPointsForDepartment(factionName, deptName)
+        return axisPoints(AXIS.dept, factionName, deptName)
+    end
+
+    function AddSpawnPointForSubdept(factionName, subKey, pos, ang)
+        return axisAdd(AXIS.sub, factionName, subKey, pos, ang)
     end
 
     function RemoveSpawnPointFromSubdept(factionName, subKey, index)
-        if not Factions or not Factions[factionName] then return false end
-        local f = Factions[factionName]
-        if not f.SubdeptSpawnPoints or not f.SubdeptSpawnPoints[subKey] then return false end
-        table.remove(f.SubdeptSpawnPoints[subKey], index)
-        if #f.SubdeptSpawnPoints[subKey] == 0 then f.SubdeptSpawnPoints[subKey] = nil end
-        saveAllFactionSpawnPoints()
-        return true
+        return axisRemove(AXIS.sub, factionName, subKey, index)
     end
 
     function GetSpawnPointsForSubdept(factionName, subKey)
-        if not Factions or not Factions[factionName] then return {} end
-        local f = Factions[factionName]
-        if not f.SubdeptSpawnPoints or not f.SubdeptSpawnPoints[subKey] then return {} end
-        return f.SubdeptSpawnPoints[subKey]
+        return axisPoints(AXIS.sub, factionName, subKey)
     end
+
+    function AddSpawnPointForPosition(factionName, positionID, pos, ang)
+        return axisAdd(AXIS.position, factionName, positionID, pos, ang)
+    end
+
+    function RemoveSpawnPointFromPosition(factionName, positionID, index)
+        return axisRemove(AXIS.position, factionName, positionID, index)
+    end
+
+    function GetSpawnPointsForPosition(factionName, positionID)
+        return axisPoints(AXIS.position, factionName, positionID)
+    end
+
+    --[[ Узел удалили — его точки больше некому использовать. Один хук на
+         все оси: раньше уборка была написана только для должностей, и
+         удалённый отдел оставлял за собой мёртвые точки в JSON. ]]
+    hook.Add("GRM_FactionPositionChanged", "GRM_SpawnPoints_PositionGone",
+        function(factionName, positionID, _, kind)
+            if kind ~= "delete" then return end
+            local f = Factions and Factions[factionName]
+            if not istable(f) then return end
+            local points = f[AXIS.position.field]
+            local key = axisKey(AXIS.position, positionID)
+            if not (istable(points) and points[key]) then return end
+            points[key] = nil
+            saveAllFactionSpawnPoints()
+        end)
 
     -- === ОЧИСТКА ВСЕХ ТОЧЕК УЗЛА (организация / отдел / подотдел / должность) ===
     function ClearSpawnPoints(scope, factionName, key)
@@ -587,19 +601,18 @@ if SERVER then
             saveGlobalSpawnPoints(GlobalSpawnPoints)
             return true
         end
-        if not Factions or not Factions[factionName] then return false, "Фракция не найдена" end
-        local f = Factions[factionName]
+        local f = Factions and Factions[factionName]
+        if not f then return false, "Фракция не найдена" end
         ensureFactionSpawnPoints(f)
         if scope == "faction" then
             f.SpawnPoints = {}
-        elseif scope == "role" then
-            f.RoleSpawnPoints[key] = nil
-        elseif scope == "dept" then
-            f.DepartmentSpawnPoints[key] = nil
-        elseif scope == "sub" then
-            f.SubdeptSpawnPoints[key] = nil
         else
-            return false, "Неизвестный раздел"
+            -- Раздел ищем в реестре осей: раньше здесь была лестница
+            -- if/elseif, и ось «должность» в неё просто не попала —
+            -- её точки нельзя было очистить из меню.
+            local axis = AXIS[scope]
+            if not axis then return false, "Неизвестный раздел" end
+            f[axis.field][axisKey(axis, key)] = nil
         end
         saveAllFactionSpawnPoints()
         return true
@@ -641,54 +654,34 @@ if SERVER then
             return nil
         end
 
-        --[[ ПРИОРИТЕТ 0: Точки ДОЛЖНОСТИ — самый узкий уровень (ось v5).
-             Тот же порядок, что и у формы: должность точнее подотдела. ]]
-        if memberData and tostring(memberData.Position or "") ~= "" then
-            local posPoints = GetSpawnPointsForPosition(factionName, memberData.Position)
-            if #posPoints > 0 then
-                local point = posPoints[math.random(1, #posPoints)]
-                return tableToVec(point.pos), tableToAng(point.ang)
+        --[[ ВЫБОР ТОЧКИ — от самой узкой оси к самой широкой.
+             Порядок задан таблицей SPAWN_AXES (должность → подотдел →
+             роль → отдел), а не четырьмя одинаковыми блоками подряд:
+             раньше добавление оси требовало вставить сюда пятый блок,
+             и «должность» какое-то время спавнила по подотделу. ]]
+        if memberData then
+            for _, axis in ipairs(SPAWN_AXES) do
+                local nodeKey = tostring(memberData[axis.member] or "")
+                if nodeKey ~= "" then
+                    local points = axisPoints(axis, factionName, nodeKey)
+                    if #points > 0 then
+                        local point = points[math.random(1, #points)]
+                        return tableToVec(point.pos), tableToAng(point.ang)
+                    end
+                end
             end
         end
 
-        -- ПРИОРИТЕТ 1: Точки подотдела (самый узкий уровень)
-        if memberData and memberData.Subdepartment and memberData.Subdepartment ~= "" then
-            local subPoints = GetSpawnPointsForSubdept(factionName, memberData.Subdepartment)
-            if #subPoints > 0 then
-                local point = subPoints[math.random(1, #subPoints)]
-                return tableToVec(point.pos), tableToAng(point.ang)
-            end
-        end
-
-        -- ПРИОРИТЕТ 2: Точки роли
-        if memberData and memberData.Role then
-            local rolePoints = GetSpawnPointsForRole(factionName, memberData.Role)
-            if #rolePoints > 0 then
-                local point = rolePoints[math.random(1, #rolePoints)]
-                return tableToVec(point.pos), tableToAng(point.ang)
-            end
-        end
-
-        -- ПРИОРИТЕТ 3: Точки отдела
-        if memberData and memberData.Department then
-            local deptPoints = GetSpawnPointsForDepartment(factionName, memberData.Department)
-            if #deptPoints > 0 then
-                local point = deptPoints[math.random(1, #deptPoints)]
-                return tableToVec(point.pos), tableToAng(point.ang)
-            end
-        end
-
-        -- ПРИОРИТЕТ 4: Точки организации
+        -- Точки организации, затем глобальные — общий фолбэк.
         local factionPoints = GetSpawnPointsForFaction(factionName)
         if #factionPoints > 0 then
             local point = factionPoints[math.random(1, #factionPoints)]
             return tableToVec(point.pos), tableToAng(point.ang)
         end
 
-        -- Фолбэк: глобальные точки
-        local globalPoints = GetGlobalSpawnPoints()
-        if #globalPoints > 0 then
-            local point = globalPoints[math.random(1, #globalPoints)]
+        local globalFallback = GetGlobalSpawnPoints()
+        if #globalFallback > 0 then
+            local point = globalFallback[math.random(1, #globalFallback)]
             return tableToVec(point.pos), tableToAng(point.ang)
         end
 

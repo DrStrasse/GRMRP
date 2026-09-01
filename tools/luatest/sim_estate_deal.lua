@@ -213,6 +213,9 @@ GRM.Persistence = { LoadJSON = function(_,d) return d end, SaveJSON = function()
 GRM.Utf8Sub = function(s,n) return string.sub(s,1,n) end
 Factions = {}
 
+-- Ядро грузится первым и на живом сервере (sh_01_grm_core.lua), и здесь:
+-- модули ниже берут из него канон GRM.CharKey (§5.2.6, одна реализация).
+assert(loadfile("lua/autorun/sh_01_grm_core.lua"))()
 assert(loadfile("lua/autorun/sh_grm_property.lua"))()
 local P = GRM.Property
 
