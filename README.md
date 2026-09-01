@@ -11,8 +11,10 @@
 > (единственный свод: рендер, дублирование, оптимизация, сеть, UI, данные,
 > стенды; чеклист нового модуля, справочник «симптом → причина → правило»).
 >
-> Чистая выкладка для сервера: ветка **`release/GRMRP`**.
-> Рабочая сессия Arena: `arena/01a05ba4-drstrasse`. **Master не использовать.**
+> **Дом проекта — репозиторий [`DrStrasse/GRMRP`](https://github.com/DrStrasse/GRMRP).**
+> Проект перенесён сюда 01.09.2026 из `DrStrasse/DrStrasse`
+> (ветка `arena/01a05ba4-drstrasse`, коммит `d2326ff`) — старый репозиторий
+> считать архивом, новую работу вести только здесь.
 
 ## Состав репозитория
 
@@ -33,10 +35,10 @@
 ## Установка
 
 Основной аддон: `garrysmod/addons/grm/` из архива  
-https://github.com/DrStrasse/DrStrasse/raw/arena/01a05ba4-drstrasse/dist/grm_single_addon.zip  
+https://github.com/DrStrasse/GRMRP/raw/arena/01a05de8-grmrp/dist/grm_single_addon.zip  
 
 Студия аддона — **отдельный аддон**: `garrysmod/addons/grm_addon_studio/` из архива  
-https://github.com/DrStrasse/DrStrasse/raw/arena/01a05ba4-drstrasse/dist/grm_addon_studio.zip  
+https://github.com/DrStrasse/GRMRP/raw/arena/01a05de8-grmrp/dist/grm_addon_studio.zip  
 В `grm_single_addon.zip` её нет (в `lua/` файлы студии не входят). Без
 основного GRM студия открывается, но сохранение проектов откажет
 (`no_grm_persistence`) — нужен установленный GRM.
