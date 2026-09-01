@@ -1420,6 +1420,104 @@ A.WidgetDefaults = {
     panel = { caption = "Панель" },
 }
 
+--[[ РЕЕСТР ВИДОВ ВИДЖЕТА — одна строка на вид, вместо лестниц в трёх файлах.
+
+     Знание «что такое кнопка» было размазано по шести местам: список
+     видов, значения по умолчанию, поля инспектора, ветка в генераторе
+     кода (sh_), ветка выбора VGUI-класса и ветка настройки виджета (cl_).
+     Добавление вида требовало шести правок в двух файлах — забыл одну,
+     и виджет либо не рисуется в редакторе, либо не попадает в
+     сгенерированный код, либо теряет свойства при «ТЕСТ ОКНА».
+
+     Здесь у вида есть всё, что нужно обеим сторонам:
+       class    — VGUI-класс;
+       var      — имя локальной переменной в генерируемом коде;
+       w, h     — размеры по умолчанию;
+       code     — как вид дописывает себя в сгенерированный код;
+       setup    — что сделать с живым виджетом сразу после создания
+                  (клиент читает это поле, сервер — нет).
+     Значения по умолчанию и поля инспектора остаются в своих таблицах:
+     они данные, а не поведение.
+]]
+A.WidgetSpec = {
+    button = { class = "DButton", var = "b", w = 100, h = 30,
+        code = function(out, w, v, q)
+            out[#out + 1] = "    " .. v .. ":SetText(" .. q(w.label or "") .. ")"
+            out[#out + 1] = "    " .. v .. ".DoClick = function() -- действие "
+                .. tostring(w.target or "(не задано)") .. " end"
+        end },
+    label = { class = "DLabel", var = "l", w = 100, h = 20,
+        code = function(out, w, v, q)
+            out[#out + 1] = "    " .. v .. ":SetText(" .. q(w.text or "") .. ")"
+        end },
+    entry = { class = "DTextEntry", var = "e", w = 160, h = 24,
+        code = function(out, w, v, q)
+            out[#out + 1] = "    " .. v .. ":SetPlaceholderText(" .. q(w.placeholder or "") .. ")"
+        end },
+    textarea = { class = "DTextEntry", var = "t", w = 240, h = 80, multiline = true,
+        code = function(out, w, v, q)
+            out[#out + 1] = "    " .. v .. ":SetMultiline(true)"
+            out[#out + 1] = "    " .. v .. ":SetPlaceholderText(" .. q(w.placeholder or "") .. ")"
+        end },
+    check = { class = "DCheckBox", var = "c", w = 120, h = 24,
+        code = function(out, w, v, q)
+            out[#out + 1] = "    " .. v .. ":SetText(" .. q(w.label or "") .. ")"
+        end },
+    slider = { class = "DSlider", var = "s", w = 240, h = 24,
+        code = function(out, w, v, _q, num)
+            out[#out + 1] = "    " .. v .. ":SetMinMax(" .. num(tonumber(w.min) or 0)
+                .. ", " .. num(tonumber(w.max) or 100) .. ")"
+            out[#out + 1] = "    " .. v .. ":SetValue(" .. num(tonumber(w.value) or 50) .. ")"
+        end },
+    select = { class = "DComboBox", var = "c", w = 160, h = 24,
+        code = function(out, w, v, q)
+            for opt in tostring(w.options or ""):gmatch("[^;]+") do
+                out[#out + 1] = "    " .. v .. ":AddChoice(" .. q(string.Trim(opt)) .. ")"
+            end
+        end },
+    list = { class = "DListView", var = "l", w = 240, h = 120, column = "Вариант",
+        code = function(out, w, v, q)
+            out[#out + 1] = "    " .. v .. ":AddColumn(\"Вариант\")"
+            for opt in tostring(w.options or ""):gmatch("[^;]+") do
+                out[#out + 1] = "    " .. v .. ":AddLine(" .. q(string.Trim(opt)) .. ")"
+            end
+        end },
+    image = { class = "DImage", var = "img", w = 120, h = 90,
+        code = function(out, w, v)
+            if tostring(w.material or "") ~= "" then
+                out[#out + 1] = "    " .. v .. ":SetMaterial(Material(\""
+                    .. string.gsub(tostring(w.material), "\\", "/") .. "\"))"
+            end
+        end },
+    model = { class = "DModelPanel", var = "m", w = 180, h = 180,
+        code = function(out, w, v, _q, num)
+            out[#out + 1] = "    " .. v .. ":SetFOV(" .. num(tonumber(w.fov) or 30) .. ")"
+            if tostring(w.model or "") ~= "" then
+                out[#out + 1] = "    " .. v .. ":SetModel(\""
+                    .. string.gsub(tostring(w.model), "\\", "/") .. "\")"
+                out[#out + 1] = "    " .. v .. ":SetAnimated(true)"
+            end
+        end },
+    progress = { class = "DProgress", var = "p", w = 240, h = 18,
+        code = function(out, w, v, _q, num)
+            local minV, maxV = tonumber(w.min) or 0, tonumber(w.max) or 100
+            local frac = (tonumber(w.value) or minV) - minV
+            if maxV > minV then frac = frac / (maxV - minV) end
+            out[#out + 1] = "    " .. v .. ":SetFraction(" .. num(math.Clamp(frac, 0, 1)) .. ")"
+        end },
+    -- Панель — она же запасной вариант для неизвестного вида: лучше
+    -- пустая заглушка нужного размера, чем пропущенный виджет.
+    panel = { class = "DPanel", var = "c", w = 100, h = 30,
+        code = function(out, _w, v)
+            out[#out + 1] = "    " .. v .. ":SetPaintBackground(false)"
+        end },
+}
+
+--- Описание вида виджета. Неизвестный вид — панель-заглушка.
+function A.Widget(kind)
+    return A.WidgetSpec[tostring(kind or "")] or A.WidgetSpec.panel
+end
+
 --- Поля, которые инспектор макета показывает для вида виджета.
 function A.WidgetFields(kind)
     local by = {
@@ -1560,86 +1658,19 @@ function A.LayoutToCode(layout, proj)
         "    root:SetPaintBackground(false)",
     }
     for _, w in ipairs(layout.widgets) do
+        -- Общая часть одинакова для всех видов; специфика — в spec.code
+        -- (реестр A.WidgetSpec). Раньше здесь была лестница из
+        -- одиннадцати веток, где первые три строки повторялись дословно.
+        local spec = A.Widget(w.kind)
         local x, y = numberToString(tonumber(w.x) or 0), numberToString(tonumber(w.y) or 0)
+        local quote = function(value) return string.format("%q", tostring(value)) end
         out[#out + 1] = ""
-        if w.kind == "button" then
-            out[#out + 1] = "    local b = vgui.Create(\"DButton\", root)"
-            out[#out + 1] = "    b:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    b:SetSize(" .. numberToString(tonumber(w.w) or 100) .. ", " .. numberToString(tonumber(w.h) or 30) .. ")"
-            out[#out + 1] = "    b:SetText(" .. string.format("%q", tostring(w.label or "")) .. ")"
-            out[#out + 1] = "    b.DoClick = function() -- действие " .. tostring(w.target or "(не задано)") .. " end"
-        elseif w.kind == "label" then
-            out[#out + 1] = "    local l = vgui.Create(\"DLabel\", root)"
-            out[#out + 1] = "    l:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    l:SetSize(" .. numberToString(tonumber(w.w) or 100) .. ", " .. numberToString(tonumber(w.h) or 20) .. ")"
-            out[#out + 1] = "    l:SetText(" .. string.format("%q", tostring(w.text or "")) .. ")"
-        elseif w.kind == "entry" then
-            out[#out + 1] = "    local e = vgui.Create(\"DTextEntry\", root)"
-            out[#out + 1] = "    e:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    e:SetSize(" .. numberToString(tonumber(w.w) or 160) .. ", " .. numberToString(tonumber(w.h) or 24) .. ")"
-            out[#out + 1] = "    e:SetPlaceholderText(" .. string.format("%q", tostring(w.placeholder or "")) .. ")"
-        elseif w.kind == "textarea" then
-            out[#out + 1] = "    local t = vgui.Create(\"DTextEntry\", root)"
-            out[#out + 1] = "    t:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    t:SetSize(" .. numberToString(tonumber(w.w) or 240) .. ", " .. numberToString(tonumber(w.h) or 80) .. ")"
-            out[#out + 1] = "    t:SetMultiline(true)"
-            out[#out + 1] = "    t:SetPlaceholderText(" .. string.format("%q", tostring(w.placeholder or "")) .. ")"
-        elseif w.kind == "check" then
-            out[#out + 1] = "    local c = vgui.Create(\"DCheckBox\", root)"
-            out[#out + 1] = "    c:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    c:SetSize(" .. numberToString(tonumber(w.w) or 120) .. ", " .. numberToString(tonumber(w.h) or 24) .. ")"
-            out[#out + 1] = "    c:SetText(" .. string.format("%q", tostring(w.label or "")) .. ")"
-        elseif w.kind == "slider" then
-            out[#out + 1] = "    local s = vgui.Create(\"DSlider\", root)"
-            out[#out + 1] = "    s:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    s:SetSize(" .. numberToString(tonumber(w.w) or 240) .. ", " .. numberToString(tonumber(w.h) or 24) .. ")"
-            out[#out + 1] = "    s:SetMinMax(" .. numberToString(tonumber(w.min) or 0) .. ", " .. numberToString(tonumber(w.max) or 100) .. ")"
-            out[#out + 1] = "    s:SetValue(" .. numberToString(tonumber(w.value) or 50) .. ")"
-        elseif w.kind == "select" then
-            out[#out + 1] = "    local c = vgui.Create(\"DComboBox\", root)"
-            out[#out + 1] = "    c:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    c:SetSize(" .. numberToString(tonumber(w.w) or 160) .. ", " .. numberToString(tonumber(w.h) or 24) .. ")"
-            for opt in tostring(w.options or ""):gmatch("[^;]+") do
-                out[#out + 1] = "    c:AddChoice(" .. string.format("%q", string.Trim(opt)) .. ")"
-            end
-        elseif w.kind == "list" then
-            out[#out + 1] = "    local l = vgui.Create(\"DListView\", root)"
-            out[#out + 1] = "    l:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    l:SetSize(" .. numberToString(tonumber(w.w) or 240) .. ", " .. numberToString(tonumber(w.h) or 120) .. ")"
-            out[#out + 1] = "    l:AddColumn(\"Вариант\")"
-            for opt in tostring(w.options or ""):gmatch("[^;]+") do
-                out[#out + 1] = "    l:AddLine(" .. string.format("%q", string.Trim(opt)) .. ")"
-            end
-        elseif w.kind == "image" then
-            out[#out + 1] = "    local img = vgui.Create(\"DImage\", root)"
-            out[#out + 1] = "    img:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    img:SetSize(" .. numberToString(tonumber(w.w) or 120) .. ", " .. numberToString(tonumber(w.h) or 90) .. ")"
-            if tostring(w.material or "") ~= "" then
-                out[#out + 1] = '    img:SetMaterial(Material("' .. string.gsub(tostring(w.material), "\\", "/") .. '"))'
-            end
-        elseif w.kind == "model" then
-            out[#out + 1] = "    local m = vgui.Create(\"DModelPanel\", root)"
-            out[#out + 1] = "    m:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    m:SetSize(" .. numberToString(tonumber(w.w) or 180) .. ", " .. numberToString(tonumber(w.h) or 180) .. ")"
-            out[#out + 1] = "    m:SetFOV(" .. numberToString(tonumber(w.fov) or 30) .. ")"
-            if tostring(w.model or "") ~= "" then
-                out[#out + 1] = '    m:SetModel("' .. string.gsub(tostring(w.model), "\\", "/") .. '")'
-                out[#out + 1] = "    m:SetAnimated(true)"
-            end
-        elseif w.kind == "progress" then
-            out[#out + 1] = "    local p = vgui.Create(\"DProgress\", root)"
-            out[#out + 1] = "    p:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    p:SetSize(" .. numberToString(tonumber(w.w) or 240) .. ", " .. numberToString(tonumber(w.h) or 18) .. ")"
-            local minV, maxV = tonumber(w.min) or 0, tonumber(w.max) or 100
-            local frac = (tonumber(w.value) or minV) - minV
-            if maxV > minV then frac = frac / (maxV - minV) end
-            out[#out + 1] = "    p:SetFraction(" .. numberToString(math.Clamp(frac, 0, 1)) .. ")"
-        else
-            out[#out + 1] = "    local c = vgui.Create(\"DPanel\", root)"
-            out[#out + 1] = "    c:SetPos(" .. x .. ", " .. y .. ")"
-            out[#out + 1] = "    c:SetSize(" .. numberToString(tonumber(w.w) or 100) .. ", " .. numberToString(tonumber(w.h) or 30) .. ")"
-            out[#out + 1] = "    c:SetPaintBackground(false)"
-        end
+        out[#out + 1] = "    local " .. spec.var .. " = vgui.Create(\"" .. spec.class .. "\", root)"
+        out[#out + 1] = "    " .. spec.var .. ":SetPos(" .. x .. ", " .. y .. ")"
+        out[#out + 1] = "    " .. spec.var .. ":SetSize("
+            .. numberToString(tonumber(w.w) or spec.w) .. ", "
+            .. numberToString(tonumber(w.h) or spec.h) .. ")"
+        if spec.code then spec.code(out, w, spec.var, quote, numberToString) end
     end
     out[#out + 1] = "    return root"
     out[#out + 1] = "end"

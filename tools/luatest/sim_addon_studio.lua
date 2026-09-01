@@ -487,5 +487,52 @@ ok(not inMainSh and not inMainCl and not inMainSv,
     "аддон: в lua/autorun файлов студии нет (не дублируется в основной сборке)")
 ok(has("no_grm_persistence", serverSrc or ""), "аддон: без GRM.Persistence — честный отказ, не nil")
 
+-- ══════════════ 14. РЕЕСТР ВИДОВ ВИДЖЕТА (без лестниц) ══════════════
+--[[ Вид виджета описан ОДНОЙ строкой A.WidgetSpec, и это знание общее
+     для генератора кода (sh_) и редактора (cl_). Раньше знание было
+     размазано по шести местам: список видов, значения по умолчанию,
+     поля инспектора, ветка в генераторе, ветка выбора VGUI-класса и
+     ветка настройки виджета. Добавить вид = шесть правок в двух файлах;
+     забытая правка означала «виджет есть в редакторе, но не попадает в
+     сгенерированный код» — и это замечали уже на готовом аддоне.
+
+     Проверяем ЦИКЛОМ по всем видам: у каждого есть класс, переменная,
+     размеры и генератор кода, каждый реально попадает в вывод, и на
+     каждый настраиваемый вид есть обработчик в клиентском диспетчере. ]]
+-- clientSrc уже прочитан выше (раздел 13) — второй раз не читаем.
+
+ok(istable(A.WidgetSpec) and isfunction(A.Widget), "реестр A.WidgetSpec и A.Widget на месте")
+ok(clientSrc:find("WIDGET_APPLY", 1, true) ~= nil,
+    "клиент настраивает виджеты таблицей-диспетчером WIDGET_APPLY")
+ok(clientSrc:find('if w.kind == "button" then', 1, true) == nil,
+    "лестница `if w.kind ==` в клиенте не вернулась")
+
+-- Виды, у которых нет настраиваемых свойств, обработчика не требуют.
+local NO_APPLY = { panel = true }
+
+for _, kindRow in ipairs(A.WidgetKinds) do
+    local id = kindRow.id
+    local spec = A.Widget(id)
+    ok(istable(spec) and isstring(spec.class) and spec.class ~= "",
+        ("вид %s: задан VGUI-класс"):format(id))
+    ok(isstring(spec.var) and tonumber(spec.w) and tonumber(spec.h),
+        ("вид %s: заданы переменная и размеры по умолчанию"):format(id))
+    ok(isfunction(spec.code), ("вид %s: умеет дописать себя в код"):format(id))
+
+    local code = table.concat(A.LayoutToCode({ w = 400, h = 300,
+        widgets = { { kind = id, x = 10, y = 10 } } }, {}), "\n")
+    ok(code:find('vgui.Create("' .. spec.class .. '"', 1, true) ~= nil,
+        ("вид %s: попадает в сгенерированный код как %s"):format(id, spec.class))
+
+    if not NO_APPLY[id] then
+        ok(clientSrc:find("    " .. id .. " = function(ctrl, w)", 1, true) ~= nil,
+            ("вид %s: есть обработчик в клиентском диспетчере"):format(id))
+    end
+end
+
+-- Неизвестный вид не должен ронять генератор и не должен исчезать молча.
+local fallback = A.Widget("выдуманный_вид")
+ok(fallback == A.WidgetSpec.panel, "неизвестный вид сводится к панели-заглушке")
+
 print(string.format("\nADDON STUDIO: %d/%d, провалов: %d", total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

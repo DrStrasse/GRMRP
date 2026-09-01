@@ -1102,51 +1102,82 @@ end
      (тот же код — значит, дизайн работоспособен, а не «нарисован») и
      окно предпросмотра. Углы/рёбра тащатся чистыми A.GrowRect /
      A.MoveRect — стенд проверяет геометрию без Derma. ]]
-local function widgetCtrl(w, ctrl)
-    if not ctrl then return end
-    if w.kind == "button" then ctrl:SetText(tostring(w.label or "Кнопка"))
-    elseif w.kind == "label" then ctrl:SetText(tostring(w.text or "Текст"))
-    elseif w.kind == "entry" then ctrl:SetPlaceholderText(tostring(w.placeholder or "Ввод…"))
-    elseif w.kind == "textarea" then ctrl:SetPlaceholderText(tostring(w.placeholder or "Текст…"))
-    elseif w.kind == "check" then ctrl:SetText(tostring(w.label or "Галка"))
-    elseif w.kind == "slider" then
+--[[ Настройка живого виджета — таблица вместо лестницы `if w.kind ==`.
+     Вид виджета описан в общем реестре A.WidgetSpec (sh_-файл): оттуда
+     берутся VGUI-класс и размеры, отсюда — что задать созданному виджету.
+     Диспетчер даёт три вещи: один лукап вместо одиннадцати сравнений на
+     каждый виджет, невозможность «потерять» вид при добавлении нового и
+     очевидное место, куда его дописывать. ]]
+local WIDGET_APPLY = {
+    button = function(ctrl, w) ctrl:SetText(tostring(w.label or "Кнопка")) end,
+    label = function(ctrl, w) ctrl:SetText(tostring(w.text or "Текст")) end,
+    entry = function(ctrl, w) ctrl:SetPlaceholderText(tostring(w.placeholder or "Ввод…")) end,
+    textarea = function(ctrl, w) ctrl:SetPlaceholderText(tostring(w.placeholder or "Текст…")) end,
+    check = function(ctrl, w) ctrl:SetText(tostring(w.label or "Галка")) end,
+    slider = function(ctrl, w)
         ctrl:SetMinMax(tonumber(w.min) or 0, tonumber(w.max) or 100)
         ctrl:SetValue(tonumber(w.value) or 50)
-    elseif w.kind == "select" then
+    end,
+    select = function(ctrl, w)
         for opt in tostring(w.options or ""):gmatch("[^;]+") do ctrl:AddChoice(string.Trim(opt)) end
-    elseif w.kind == "list" then
+    end,
+    list = function(ctrl, w)
         for opt in tostring(w.options or ""):gmatch("[^;]+") do ctrl:AddLine(string.Trim(opt)) end
-    elseif w.kind == "progress" then
+    end,
+    progress = function(ctrl, w)
         local minV, maxV = tonumber(w.min) or 0, tonumber(w.max) or 100
         local frac = (tonumber(w.value) or minV) - minV
         if maxV > minV then frac = frac / (maxV - minV) end
         ctrl:SetFraction(math.Clamp(frac, 0, 1))
-    elseif w.kind == "image" then
-        local ok, m = pcall(Material, tostring(w.material or ""))
-        if ok then ctrl:SetMaterial(m) end
-    elseif w.kind == "model" then
+    end,
+    image = function(ctrl, w)
+        -- Material() на кривом пути кидает ошибку и рвёт сборку окна.
+        local ok, mat = pcall(Material, tostring(w.material or ""))
+        if ok then ctrl:SetMaterial(mat) end
+    end,
+    model = function(ctrl, w)
         ctrl:SetFOV(tonumber(w.fov) or 30)
+        -- Модель проверяем в каталоге ДО SetModel: иначе панель пустая.
         if scanHasModel(tostring(w.model or "")) then
             ctrl:SetModel(tostring(w.model))
             ctrl:SetAnimated(true)
         end
-    end
+    end,
+}
+
+local function widgetCtrl(w, ctrl)
+    if not ctrl then return end
+    local apply = WIDGET_APPLY[w.kind]
+    if apply then apply(ctrl, w) end
 end
 
-local function widgetPaint(w, self, ww, hh)
-    --[[ Реальные виджеты (кнопка, текст, поле, слайдер, список…) рисуют
-         себя сами — оборачивать их Paint нельзя. Здесь только заглушки
-         для пустых картинок/моделей и кастомная панель. ]]
-    if w.kind == "panel" then
-        draw.RoundedBox(4, 0, 0, ww, hh, Color(30, 40, 54))
+--[[ Заглушки: реальные виджеты (кнопка, поле, слайдер…) рисуют себя
+     сами — их Paint трогать нельзя. Рисуем только то, чего ещё нет:
+     пустую картинку, ненайденную модель и кастомную панель. ]]
+local PLACEHOLDER_BG = Color(30, 40, 54)
+
+local WIDGET_PLACEHOLDER = {
+    panel = function(w, ww, hh)
+        draw.RoundedBox(4, 0, 0, ww, hh, PLACEHOLDER_BG)
         draw.SimpleText(tostring(w.caption or "Панель"), "AS_Tiny", 4, 2, COL.dim)
-    elseif w.kind == "model" and not scanHasModel(tostring(w.model or "")) then
-        draw.RoundedBox(4, 0, 0, ww, hh, Color(30, 40, 54))
-        draw.SimpleText("модель не найдена в каталоге", "AS_Tiny", ww / 2, hh / 2, COL.dim, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    elseif w.kind == "image" and tostring(w.material or "") == "" then
-        draw.RoundedBox(4, 0, 0, ww, hh, Color(30, 40, 54))
-        draw.SimpleText("нет материала", "AS_Tiny", ww / 2, hh / 2, COL.dim, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    end
+    end,
+    model = function(w, ww, hh)
+        if scanHasModel(tostring(w.model or "")) then return end
+        draw.RoundedBox(4, 0, 0, ww, hh, PLACEHOLDER_BG)
+        draw.SimpleText("модель не найдена в каталоге", "AS_Tiny", ww / 2, hh / 2, COL.dim,
+            TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end,
+    image = function(w, ww, hh)
+        if tostring(w.material or "") ~= "" then return end
+        draw.RoundedBox(4, 0, 0, ww, hh, PLACEHOLDER_BG)
+        draw.SimpleText("нет материала", "AS_Tiny", ww / 2, hh / 2, COL.dim,
+            TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end,
+}
+
+local function widgetPaint(w, _self, ww, hh)
+    local placeholder = WIDGET_PLACEHOLDER[w.kind]
+    if placeholder then placeholder(w, ww, hh) end
 end
 
 local function edgeAt(mx, my, w, h)
@@ -1190,23 +1221,13 @@ renderLayoutWidgets = function(layout, parent, interactive)
     for i, wgt in ipairs(layout.widgets) do
         local w, h = tonumber(wgt.w) or 100, tonumber(wgt.h) or 30
         local x, y = tonumber(wgt.x) or 8, tonumber(wgt.y) or 8
-        local ctrl
-        if wgt.kind == "button" then ctrl = vgui.Create("DButton", box)
-        elseif wgt.kind == "label" then ctrl = vgui.Create("DLabel", box)
-        elseif wgt.kind == "entry" then ctrl = vgui.Create("DTextEntry", box)
-        elseif wgt.kind == "textarea" then
-            ctrl = vgui.Create("DTextEntry", box)
-            ctrl:SetMultiline(true)
-        elseif wgt.kind == "check" then ctrl = vgui.Create("DCheckBox", box)
-        elseif wgt.kind == "slider" then ctrl = vgui.Create("DSlider", box)
-        elseif wgt.kind == "select" then ctrl = vgui.Create("DComboBox", box)
-        elseif wgt.kind == "list" then
-            ctrl = vgui.Create("DListView", box)
-            ctrl:AddColumn("Вариант")
-        elseif wgt.kind == "image" then ctrl = vgui.Create("DImage", box)
-        elseif wgt.kind == "model" then ctrl = vgui.Create("DModelPanel", box)
-        elseif wgt.kind == "progress" then ctrl = vgui.Create("DProgress", box)
-        else ctrl = vgui.Create("DPanel", box) end
+        -- Класс и «что сделать сразу после создания» берём из общего
+        -- реестра видов (A.WidgetSpec): редактор, «ТЕСТ ОКНА» и
+        -- генератор кода обязаны создавать ОДИН И ТОТ ЖЕ виджет.
+        local spec = A.Widget(wgt.kind)
+        local ctrl = vgui.Create(spec.class, box)
+        if spec.multiline then ctrl:SetMultiline(true) end
+        if spec.column then ctrl:AddColumn(spec.column) end
         widgetCtrl(wgt, ctrl)
         ctrl:SetPos(0, 0)
         ctrl:SetSize(w, h)
