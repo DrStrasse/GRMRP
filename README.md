@@ -27,6 +27,7 @@
 | `addons/grm_fire/` | Отдельный пожарный аддон (vFire, рукава, гидранты, насосы) |
 | `addons/grm_textscreens/` | 3D2D Textscreens (сторонний, только пакуется) |
 | `tools/` | Скрипты сборки (`build_dist.py`), стиль (`lua_style.py`), аудит, luatest |
+| `tools/gmodkit/` | **GMODKIT** — парсеры карт `.bsp`/`.vmf` и моделей `.mdl`/`.smd`, экспорт в данные GRM ([docs/GMODKIT.md](docs/GMODKIT.md)) |
 | `dist/` | Готовые архивы для установки |
 
 Правила кода и порядок проверки правки — [CODE_STYLE.md](CODE_STYLE.md),

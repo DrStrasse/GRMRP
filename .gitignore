@@ -10,3 +10,7 @@ addons/system_prone/
 # этот шаблон, так как перечислены явно.
 tools/luatest/data/grm_inventory_corrupt_*.json
 tools/luatest/data/grm_inventories.json
+
+# Выгрузки gmodkit (JSON для garrysmod/data) — воспроизводятся командой.
+tools/gmodkit/out/
+tools/gmodkit/__pycache__/
