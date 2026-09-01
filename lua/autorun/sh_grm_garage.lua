@@ -179,10 +179,9 @@ if SERVER then
     local function audit(action, actor, target, details)
         if GRM.Audit and GRM.Audit.Write then GRM.Audit.Write("garage", action, actor, target or {}, details or {}) end
     end
-    local function charKey(ply)
-        return (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(ply))
-            or (IsValid(ply) and ply:SteamID64() .. ":char1") or ""
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+    -- копия канона.
+    local charKey = GRM.CharKey
     local function makeID(prefix)
         return prefix .. "_" .. util.CRC(table.concat({ game.GetMap(), SysTime(), math.random() }, ":"))
     end

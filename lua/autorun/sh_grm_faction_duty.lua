@@ -17,10 +17,8 @@ local NET_ADMIN_SAVE = "GRM_FactionDuty_AdminSave"
 local NET_TOOL_REQ = "GRM_FactionDuty_ToolFactionsReq"
 local NET_TOOL_DATA = "GRM_FactionDuty_ToolFactionsData"
 
-local function characterKey(ply)
-    if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(ply) end
-    return IsValid(ply) and (ply:SteamID64() .. ":char1") or ""
-end
+-- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана: копия канона.
+local characterKey = GRM.CharKey
 
 local function factionOf(ply)
     if not IsValid(ply) or not istable(Factions) then return nil end

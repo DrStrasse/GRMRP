@@ -80,6 +80,9 @@ GRM = {
   Identity = { CharacterKey = function(ply) return ply.sid64 .. ":char1" end },
 }
 
+
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 -- ── мок энтити ──
 local entClasses = {}
 local EMT = {}

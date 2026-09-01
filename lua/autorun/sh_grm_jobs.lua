@@ -1478,16 +1478,10 @@ if CLIENT then
     end)
 
     -- Меню терминала --------------------------------------------------------
+    -- Кнопка — общая фабрика GRM.UI (§5.4): копии в четырёх модулях
+    -- различались только шрифтом и создавали по два Color() на кадр.
     local function mkBtn(p, txt, col)
-        local b = vgui.Create("DButton", p)
-        b:SetText(txt) b:SetFont("GRMJobs_Sub") b:SetTextColor(color_white)
-        b.Paint = function(self, pw, ph)
-            local cc = col or C.acc
-            if not self:IsEnabled() then cc = Color(60, 65, 75)
-            elseif self:IsHovered() then cc = Color(math.min(255, cc.r + 25), math.min(255, cc.g + 25), math.min(255, cc.b + 25)) end
-            draw.RoundedBox(6, 0, 0, pw, ph, cc)
-        end
-        return b
+        return GRM.UI.Button(p, txt, "GRMJobs_Sub", col or C.acc)
     end
 
     -- NB: «goto» — ключевое слово Lua 5.2+/LuaJIT, поэтому ключ закавычен.

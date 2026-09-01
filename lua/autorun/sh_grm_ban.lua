@@ -119,11 +119,8 @@ if SERVER then
 
     -- Серверный бан — RP-наказание конкретного персонажа. SteamID64 нужен
     -- только для legacy-миграции и глобального аккаунтного бана.
-    local function characterKey(ply)
-        if not IsValid(ply) then return "" end
-        if GRM.Identity and GRM.Identity.CharacterKey then return tostring(GRM.Identity.CharacterKey(ply) or "") end
-        return tostring(ply:SteamID64() or "") .. ":char1"
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана: копия канона.
+    local characterKey = GRM.CharKey
     local function accountKey(ply) return IsValid(ply) and tostring(ply:SteamID64() or "") or "" end
 
     -- Диск — через общую очередь: бан пишется в момент действия, а не пачкой.

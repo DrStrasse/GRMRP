@@ -15,22 +15,6 @@ local CC = {
     dim     = Color(150, 158, 175),
 }
 
-function ENT:Draw()
-    self:DrawModel()
-
-    local pos = self:GetPos() + self:GetUp() * 24 + self:GetForward() * 2
-    local ang = self:GetAngles()
-    ang:RotateAroundAxis(ang:Up(), 90)
-    ang:RotateAroundAxis(ang:Forward(), 90)
-
-    cam.Start3D2D(pos, ang, 0.08)
-        draw.RoundedBox(6, -150, -50, 300, 100, Color(20, 20, 32, 240))
-        draw.SimpleText("ЮСТИЦИЯ", "DermaDefaultBold", 0, -24, Color(200, 170, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Суд и прокуратура", "DermaDefault", 0, -4, Color(225, 230, 235), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Нажмите [E] для входа", "DermaDefault", 0, 20, Color(165, 175, 185), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    cam.End3D2D()
-end
-
 local function money(v)
     v = tonumber(v) or 0
     local s = tostring(math.floor(v))

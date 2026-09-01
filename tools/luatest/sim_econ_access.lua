@@ -122,6 +122,8 @@ local super = mkPly("Главный", "STEAM_0:1:99", "76561198000000099", true)
 player = { GetAll = function() return { super, leader, deputy, cashier, janitor } end }
 
 -- ══════════════ ЗАГРУЗКА ЭКОНОМИКИ ══════════════
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/sh_grm_economy.lua")
 ok(GRM.Economy ~= nil, "экономика загружена")
 ok(GRM.Economy.CanManageEconomy ~= nil, "E.CanManageEconomy определён")

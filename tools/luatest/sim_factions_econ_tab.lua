@@ -170,6 +170,8 @@ Factions = { Polizei = { Members = {}, Leader = "STEAM_0:1:100", Roles = { "Offi
 _G.__players = {}
 
 -- ══════════════ ЗАГРУЗКА (как на клиенте) ══════════════
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/sh_grm_economy.lua")
 dofile("lua/autorun/sh_grm_feco_admin.lua")
 dofile("lua/autorun/sh_faction_fixes.lua")

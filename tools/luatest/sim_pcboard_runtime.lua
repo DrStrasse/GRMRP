@@ -188,6 +188,8 @@ GRM.Property.Records = { pr1 = { ownerType = "character", ownerKey = TKEY, name 
 GRM.Documents.Registry.coverBadges[TKEY] = nil
 
 -- Реестр номеров подключаем настоящий: справка обязана печатать ГР-номер.
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_registry.lua"))()
 local R = GRM.Registry
 

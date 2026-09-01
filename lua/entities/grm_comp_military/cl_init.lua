@@ -15,22 +15,6 @@ local CC = {
     gold    = Color(245, 205, 80),
 }
 
-function ENT:Draw()
-    self:DrawModel()
-
-    local pos = self:GetPos() + self:GetUp() * 24 + self:GetForward() * 2
-    local ang = self:GetAngles()
-    ang:RotateAroundAxis(ang:Up(), 90)
-    ang:RotateAroundAxis(ang:Forward(), 90)
-
-    cam.Start3D2D(pos, ang, 0.08)
-        draw.RoundedBox(6, -150, -50, 300, 100, Color(14, 20, 14, 240))
-        draw.SimpleText("ВОЕННЫЙ КОМИССАРИАТ", "DermaDefaultBold", 0, -25, Color(110, 210, 120), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Учёт, призыв и военные билеты", "DermaDefault", 0, -5, Color(220, 240, 220), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Нажмите [E] для входа в систему", "DermaDefault", 0, 20, Color(150, 185, 155), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    cam.End3D2D()
-end
-
 net.Receive("GRM_CompMilitary_Open", function()
     local ent          = net.ReadEntity()
     local onlineList   = net.ReadTable() or {}

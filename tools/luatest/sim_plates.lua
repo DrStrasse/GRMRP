@@ -298,6 +298,8 @@ GRM.Notify = function(_, msg) LASTNOTIFY = tostring(msg) end
 GRM.Perf = { Entities = function(cls) return ents.FindByClass(cls) end, Players = function() return PLAYERS or {} end }
 GRM.Audit = { Write = function() end }
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_plates.lua"))()
 local PL = GRM.Plates
 

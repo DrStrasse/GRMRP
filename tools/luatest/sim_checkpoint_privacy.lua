@@ -138,6 +138,8 @@ _G.CreateConVar = function() return { GetInt = function() return 0 end, GetFloat
 _G.GetConVar = _G.CreateConVar
 FCVAR_ARCHIVE, HUD_PRINTTALK = 1, 3
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_quests.lua"))()
 local Q = GRM.Quests
 ok(isfunction(Q.ReachCheckpoint), "модуль квестов загружен")

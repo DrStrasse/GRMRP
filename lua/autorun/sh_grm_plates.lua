@@ -705,12 +705,9 @@ if SERVER then
     -- (ловушка Lua, которую ловит sim_forward_locals).
     local renderCommand
 
-    local function charKey(ply)
-        if isstring(ply) then return ply end
-        if not IsValid(ply) then return "" end
-        if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(ply) end
-        return tostring(ply:SteamID64() or "0") .. ":char1"
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+    -- копия канона.
+    local charKey = GRM.CharKey
     PL.CharKey = charKey
 
     local function notify(ply, text, good)

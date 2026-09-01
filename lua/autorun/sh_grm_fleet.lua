@@ -402,11 +402,9 @@ if SERVER then
         end
     end
 
-    local function charKey(ply)
-        if not IsValid(ply) then return "" end
-        if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(ply) end
-        return tostring(ply:SteamID64() or "0") .. ":char1"
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+    -- копия канона.
+    local charKey = GRM.CharKey
 
     local function factionOf(ply)
         local raw = IsValid(ply) and ply:GetNWString("GRM_Faction", "") or ""

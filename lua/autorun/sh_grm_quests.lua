@@ -23,11 +23,8 @@ local function trim(value, limit)
     if GRM.Utf8Sub then return GRM.Utf8Sub(value, limit or 128) end
     return string.sub(value, 1, limit or 128)
 end
-local function characterKey(ply)
-    if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(ply) end
-    if GRM.Char and GRM.Char.GetActiveKey then return GRM.Char.GetActiveKey(ply) end
-    return tostring(ply:SteamID64()) .. ":char1"
-end
+-- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана: ветка GRM.Char.GetActiveKey — API в проекте не существует.
+local characterKey = GRM.CharKey
 Q.CharacterKey = characterKey
 
 --[[--------------------------------------------------------------------

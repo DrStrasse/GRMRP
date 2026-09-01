@@ -165,3 +165,45 @@ function GRM.Utf8Ellipsis(s, maxChars)
     if GRM.Utf8Len(s) <= maxChars then return s end
     return GRM.Utf8Sub(s, math.max(1, maxChars - 1)) .. "…"
 end
+
+--[[ Кнопка в стиле GRM — одна фабрика на проект.
+
+     Была четырьмя дословными копиями (доска объявлений, вещание, F4-меню,
+     работы), различавшимися ТОЛЬКО именем шрифта.
+
+     Кроме дублирования копии стоили кадров: `Paint` создавал по два
+     `Color()` каждый кадр наведения (§6.1.8 — не создавать таблицы в
+     render-кадре). На экране десятки кнопок, кадр 60 Гц — это мусор
+     сборщику на ровном месте. Здесь оба цвета считаются ОДИН раз при
+     создании кнопки, в кадре остаётся только выбор готового.
+]]
+local BTN_DISABLED = Color(60, 65, 75)
+local BTN_RADIUS = 6
+
+--- Создать кнопку GRM.
+-- @param parent панель-родитель
+-- @param text   подпись
+-- @param font   шрифт модуля (у каждого модуля свой размерный набор)
+-- @param color  базовый цвет; наведение осветляется на +25 по каналу
+function GRM.UI.Button(parent, text, font, color)
+    local btn = vgui.Create("DButton", parent)
+    btn:SetText(text)
+    btn:SetFont(font or "DermaDefaultBold")
+    btn:SetTextColor(color_white)
+
+    local base = color or Color(48, 204, 255)
+    local hover = Color(math.min(255, base.r + 25), math.min(255, base.g + 25),
+        math.min(255, base.b + 25))
+
+    btn.Paint = function(self, w, h)
+        local fill = base
+        if not self:IsEnabled() then
+            fill = BTN_DISABLED
+        elseif self:IsHovered() then
+            fill = hover
+        end
+        draw.RoundedBox(BTN_RADIUS, 0, 0, w, h, fill)
+    end
+
+    return btn
+end

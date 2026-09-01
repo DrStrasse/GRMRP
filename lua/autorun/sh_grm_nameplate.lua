@@ -88,13 +88,8 @@ end
 function NP.GovNames() return cvarNumber("grm_nameplate_gov_names", 0) >= 1 end
 function NP.IntroDist() return math.Clamp(cvarNumber("grm_nameplate_intro_dist", 200), 50, 1000) end
 
-local function charKeyOf(v)
-    if IsValid(v) and v.IsPlayer and v:IsPlayer() then
-        if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(v) end
-        return tostring(v:SteamID64() or "") .. ":char1"
-    end
-    return tostring(v or "")
-end
+-- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана: копия канона.
+local charKeyOf = GRM.CharKey
 NP.CharKey = charKeyOf
 
 --[[ Единое правило видимости имени. Одна функция и на сервере (проверки
@@ -554,10 +549,8 @@ if CLIENT then
         return lines
     end
 
-    local function charKeyClient(ply)
-        if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(ply) end
-        return tostring(ply:SteamID64() or "") .. ":char1"
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана: та же копия ещё раз, на клиенте.
+    local charKeyClient = GRM.CharKey
 
     local function factionColor(name)
         local data = FactionsData or {}

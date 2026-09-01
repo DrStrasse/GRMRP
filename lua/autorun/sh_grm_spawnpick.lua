@@ -55,15 +55,9 @@ SP.Kinds = {
     { id = "last",    title = "ГДЕ ВЫШЕЛ", icon = "icon16/flag_blue.png" },
 }
 
-local function charKey(ply)
-    if GRM.Identity and GRM.Identity.CharacterKey then
-        return tostring(GRM.Identity.CharacterKey(ply) or "")
-    end
-    if GRM.Char and GRM.Char.GetActiveKey then
-        return tostring(GRM.Char.GetActiveKey(ply) or "")
-    end
-    return IsValid(ply) and (ply:SteamID64() .. ":char1") or ""
-end
+-- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+-- ветка GRM.Char.GetActiveKey — API не существует.
+local charKey = GRM.CharKey
 SP.CharKey = charKey
 
 -----------------------------------------------------------------------

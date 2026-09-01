@@ -419,14 +419,8 @@ if SERVER then
     end
 
     -- ── Владение, права, квоты ──────────────────────────────
-    local function charKeyOf(ply)
-        if not IsValid(ply) then return "" end
-        if GRM.Identity and GRM.Identity.CharacterKey then
-            local okK, k = pcall(GRM.Identity.CharacterKey, ply)
-            if okK and isstring(k) and k ~= "" then return k end
-        end
-        return tostring(ply.SteamID64 and ply:SteamID64() or "")
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана: копия канона с лишним pcall вокруг своего же кода.
+    local charKeyOf = GRM.CharKey
 
     local function rpNameOf(ply)
         if not IsValid(ply) then return "" end

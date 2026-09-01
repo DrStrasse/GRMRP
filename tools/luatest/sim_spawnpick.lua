@@ -40,6 +40,8 @@ net = setmetatable({}, { __index = function() return function() return "" end en
 player = { GetAll = function() return {} end }
 GRM = {}
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_spawnpick.lua"))()
 local SP = GRM.SpawnPick
 
@@ -49,6 +51,9 @@ local function mkPly(opts)
     local nw = opts.nw or {}
     return {
         _valid = true, _key = opts.key or "1:char1", _pos = opts.pos or Vector(10, 20, 30),
+        -- Настоящий игрок GMod всегда отвечает на :IsPlayer();
+        -- без этого мок не проходит канон GRM.CharKey.
+        IsPlayer = function() return true end,
         SteamID64 = function() return "1" end,
         GetPos = function(s) return s._pos end,
         EyeAngles = function() return Angle(0, 90, 0) end,

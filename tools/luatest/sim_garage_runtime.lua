@@ -221,6 +221,8 @@ function VD.StoreRecord(ply, id)
     return true, "Транспорт убран в гараж"
 end
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_garage.lua"))()
 local G = GRM.Garage
 

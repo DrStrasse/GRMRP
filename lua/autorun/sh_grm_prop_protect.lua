@@ -103,15 +103,9 @@ local SERVER_CLASSES = {
     grm_roomtap_terminal     = true,
 }
 
-local function charKey(ply)
-    if IsValid(ply) and ply:IsPlayer() then
-        if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(ply) end
-        local sid = ply:SteamID64() or ply:SteamID() or "0"
-        local slot = (ply.GetNWString and ply:GetNWString("GRM_CharacterID", "char1")) or "char1"
-        return sid .. ":" .. slot
-    end
-    return tostring(ply or "")
-end
+-- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+-- свой разбор слота — этим владеет GRM.Identity.ActiveSlot.
+local charKey = GRM.CharKey
 
 local function ownerOf(ent)
     if not IsValid(ent) then return "" end

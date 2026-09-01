@@ -40,6 +40,8 @@ _G.string.Trim = function(s, char)
     return (s:gsub("^%s*(.-)%s*$", "%1"))
 end
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/sh_00_grm_ui.lua")
 
 --- Строка является валидным UTF-8 (нет оборванных последовательностей).

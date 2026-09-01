@@ -36,10 +36,9 @@ SD.Directions = {
     up     = "Вверх",
 }
 
-local function charKey(ply)
-    if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(ply) end
-    return tostring(ply:SteamID64()) .. ":char1"
-end
+-- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+-- копия канона.
+local charKey = GRM.CharKey
 
 -- Применить механизм раздвижной двери к пропу
 function SD.Apply(ply, ent, opts)

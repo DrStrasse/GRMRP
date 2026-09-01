@@ -25,6 +25,8 @@ SERVER=true CLIENT=false
 GRM={Identity={CharacterKey=function(p)return p._key end},Notify=function()end,Economy={StateBudgetGet=function()return H.state end,StateBudgetAdd=function(v)H.state=H.state+v return H.state end},MedicalFull={IsMedic=function(p)return p._medic==true end}}
 Factions={}
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/sh_grm_jobs_config.lua")
 local JB=GRM.Jobs
 local fails=0

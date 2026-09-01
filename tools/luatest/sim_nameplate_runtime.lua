@@ -146,6 +146,8 @@ GRM.FactionDuty = { IsOnDuty = function(p) return p.nwb.GRM_FactionOnDuty == tru
 GRM.Audit = { Write = function() end }
 GRM.Notify = function() end
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_nameplate.lua"))()
 local NP = GRM.Nameplate
 
@@ -246,7 +248,12 @@ NP.SetMarks(civ, "  Шрам   через  левую бровь  ")
 ok(NP.Marks(CIV) == "Шрам через левую бровь", "приметы сохраняются без лишних пробелов", NP.Marks(CIV))
 local long = string.rep("а", 400)
 NP.SetMarks(civ, long)
-ok(#NP.Marks(CIV) <= NP.MaxMarks, "длина примет ограничена", #NP.Marks(CIV))
+--[[ Лимит примет — в СИМВОЛАХ, а не в байтах: кириллица занимает по два
+     байта, и проверка `#строка` раньше проходила лишь потому, что стенд
+     грузился без sh_00_grm_ui.lua и обрезка падала на string.sub (байты).
+     На живом сервере GRM.Utf8Sub есть всегда — меряем как игрок видит. ]]
+local marksLen = GRM.Utf8Len and GRM.Utf8Len(NP.Marks(CIV)) or #NP.Marks(CIV)
+ok(marksLen <= NP.MaxMarks, "длина примет ограничена (в символах)", marksLen)
 NP.SetMarks(civ, "")
 ok(NP.Marks(CIV) == "", "приметы можно стереть")
 

@@ -74,9 +74,9 @@ if SERVER then
     end
     loadFitness()
 
-    local function charKey(ply)
-        return (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(ply)) or ply:SteamID64()
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+    -- возвращал SteamID64 БЕЗ слота; данные только в памяти, миграция не нужна.
+    local charKey = GRM.CharKey
 
     local function clampMax(v)
         local cfg = GRM.Movement.Config

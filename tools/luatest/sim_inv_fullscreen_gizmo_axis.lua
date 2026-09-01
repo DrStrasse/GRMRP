@@ -85,6 +85,8 @@ surface = { SetFont = function() end, GetTextSize = function() return 40, 12 end
 draw = { RoundedBox = function() end, SimpleText = function() end }
 GRM = {}
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/client/cl_grm_gizmo.lua"))()
 local G = GRM.Gizmo
 

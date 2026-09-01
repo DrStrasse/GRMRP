@@ -137,6 +137,8 @@ GRM = GRM or {}
 GRM.Notify = function(ply, msg) notifyLog[#notifyLog + 1] = tostring(msg) end
 
 -- ═══ 1. ROOT GUARD (реальный сервер) ═══
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/sh_grm_rootguard.lua")
 ok(GRM.Root ~= nil and GRM.Root.IsRoot ~= nil, "Root Guard загружен")
 ok(GRM.Root.IsRoot(Root) == true, "владелец распознан root'ом по зашитому SteamID")

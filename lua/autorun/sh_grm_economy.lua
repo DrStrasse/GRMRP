@@ -226,21 +226,8 @@ if SERVER then
 
     local function money(n) return GRM.Format and GRM.Format(n) or (tostring(n) .. " GRM") end
 
-    local function characterKeyOf(value)
-        if IsValid(value) and value:IsPlayer() then
-            if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(value) end
-            return tostring(value:SteamID64() or "") .. ":char1"
-        end
-        local raw = tostring(value or "")
-        if raw:match(":char[1-3]$") then return raw end
-        if player and player.GetAll then
-            for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
-                if IsValid(p) and (p:SteamID() == raw or p:SteamID64() == raw) then return characterKeyOf(p) end
-            end
-        end
-        if raw:match("^%d+$") then return raw .. ":char1" end
-        return raw
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана: копия разрешения ключа, общая с валютой.
+    local characterKeyOf = GRM.CharKeyResolve
 
     local function persistedCharacterKey(value)
         local raw = tostring(value or "")

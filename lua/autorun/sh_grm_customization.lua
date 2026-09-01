@@ -211,11 +211,9 @@ if SERVER then
         net.Send(ply)
     end
 
-    local function charKey(ply)
-        if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(ply) end
-        if GRM.Char and GRM.Char.GetActiveKey then return GRM.Char.GetActiveKey(ply) end
-        return tostring(ply:SteamID64()) .. ":char1"
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+    -- ветка GRM.Char.GetActiveKey — API в проекте не существует.
+    local charKey = GRM.CharKey
 
     local function loadData()
         C.Catalog = {}

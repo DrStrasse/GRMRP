@@ -213,9 +213,9 @@ if SERVER then
     end
 
     JB.TaxiFares = JB.TaxiFares or {}
-    local function charKey(ply)
-        return (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(ply)) or (ply:SteamID64() .. ":char1")
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+    -- падал на невалидном игроке (ply:SteamID64 без проверки).
+    local charKey = GRM.CharKey
     function JB.GetTaxiFare(ply, fallback)
         local fare = JB.TaxiFares[charKey(ply)] or JB.WorkConfig.taxiDefault or fallback
         return math.floor(clamp(fare, JB.WorkConfig.taxiMin, JB.WorkConfig.taxiMax))

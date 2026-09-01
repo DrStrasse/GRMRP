@@ -107,6 +107,9 @@ local function mkPly(opts)
         _pos = opts.pos or Vector(10, 20, 30),
         _move = MOVETYPE_WALK, _nodraw = false, _solid = true,
         _frozen = false, _god = false, _stripped = 0,
+        -- Настоящий игрок GMod всегда отвечает на :IsPlayer();
+        -- без этого мок не проходит канон GRM.CharKey.
+        IsPlayer = function() return true end,
         SteamID64 = function() return (opts.key or "1:char1"):match("^(%d+)") end,
         SteamID = function() return "STEAM_0:0:1" end,
         Nick = function() return "tester" end,
@@ -308,6 +311,8 @@ end
 print("\n=== E. ИСПРАВЛЕНО: «где вышел» реально сохраняется ===")
 
 GRM.Identity = { CharacterKey = function(p) return p._key end }
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_spawnpick.lua"))()
 local SP = GRM.SpawnPick
 

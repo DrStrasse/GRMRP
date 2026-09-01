@@ -9,23 +9,6 @@ util.AddNetworkString("GRM_CompMedical_Open")
 util.AddNetworkString("GRM_CompMedical_SaveCard")
 util.AddNetworkString("GRM_CompMedical_IssuePhysical")
 
-function ENT:Initialize()
-    local mdl = self.Model
-    if not util.IsValidModel(mdl) then mdl = self.ModelFallback end
-    self:SetModel(mdl)
-    self:PhysicsInit(SOLID_VPHYSICS)
-    self:SetMoveType(MOVETYPE_VPHYSICS)
-    self:SetSolid(SOLID_VPHYSICS)
-    self:SetUseType(SIMPLE_USE)
-
-    if self:GetComputerName() == "" then
-        self:SetComputerName("МЕДИЦИНСКАЯ СЛУЖБА • ГОСПИТАЛЬ И ВВК")
-    end
-
-    local phys = self:GetPhysicsObject()
-    if IsValid(phys) then phys:Wake() phys:EnableMotion(false) end
-end
-
 local function legacyCanManage(ply)
     if not (IsValid(ply) and ply:IsPlayer()) then return false end
     if ply:IsSuperAdmin() then return true end

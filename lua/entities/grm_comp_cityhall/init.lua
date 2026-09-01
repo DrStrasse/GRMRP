@@ -7,23 +7,6 @@ include("shared.lua")
 
 util.AddNetworkString("GRM_CityHall_Open")
 
-function ENT:Initialize()
-    local mdl = self.Model
-    if not util.IsValidModel(mdl) then mdl = self.ModelFallback end
-    self:SetModel(mdl)
-    self:PhysicsInit(SOLID_VPHYSICS)
-    self:SetMoveType(MOVETYPE_VPHYSICS)
-    self:SetSolid(SOLID_VPHYSICS)
-    self:SetUseType(SIMPLE_USE)
-
-    if self:GetComputerName() == "" then
-        self:SetComputerName("МЭРИЯ • ГОРОДСКАЯ АДМИНИСТРАЦИЯ")
-    end
-
-    local phys = self:GetPhysicsObject()
-    if IsValid(phys) then phys:Wake() phys:EnableMotion(false) end
-end
-
 local function looksLikeAdminFaction(fName)
     fName = string.lower(tostring(fName or ""))
     if fName == "" then return false end

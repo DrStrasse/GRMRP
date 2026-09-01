@@ -89,6 +89,9 @@ steamworks = { RequestPlayerInfo = function(_, cb) cb("Игрок") end }
 local function mkPly(sid, sa)
   return {
     SteamID = function() return sid end,
+    -- Настоящий игрок GMod всегда отвечает на :IsPlayer();
+    -- без этого мок не проходит канон GRM.CharKey.
+    IsPlayer = function() return true end,
     SteamID64 = function() return "765" .. tostring(sid):gsub("%D", "") end,
     IsSuperAdmin = function() return sa and true or false end,
     PrintMessage = function() end,
@@ -99,6 +102,8 @@ end
 -- ════ ЧАСТЬ A (server): «Основной» не воскресает + дефолт первого отдела ════
 print("== sh_factions.lua SERVER: удалённый «Основной» не воскресает ==")
 SERVER, CLIENT = true, false
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/sh_factions.lua")
 ok(type(H.netrecv["Factions_Action"]) == "function" and type(_G.FactionsAPI) == "table",
    "сервер фракций загружен (actions + FactionsAPI)")

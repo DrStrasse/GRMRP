@@ -9,23 +9,6 @@ util.AddNetworkString("GRM_CompFire_Open")
 util.AddNetworkString("GRM_CompFire_Calls")
 util.AddNetworkString("GRM_CompFire_CallsData")
 
-function ENT:Initialize()
-    local mdl = self.Model
-    if not util.IsValidModel(mdl) then mdl = self.ModelFallback end
-    self:SetModel(mdl)
-    self:PhysicsInit(SOLID_VPHYSICS)
-    self:SetMoveType(MOVETYPE_VPHYSICS)
-    self:SetSolid(SOLID_VPHYSICS)
-    self:SetUseType(SIMPLE_USE)
-
-    if self:GetComputerName() == "" then
-        self:SetComputerName("ПОЖАРНАЯ СЛУЖБА • ДИСПЕТЧЕРСКАЯ")
-    end
-
-    local phys = self:GetPhysicsObject()
-    if IsValid(phys) then phys:Wake() phys:EnableMotion(false) end
-end
-
 -- Кто вправе пользоваться станцией: суперадмин, бойцы (FightPro), диспетчеры.
 function ENT:CanManage(ply)
     if GRM.CompAccess and GRM.CompAccess.GetRaw(self) ~= "" then

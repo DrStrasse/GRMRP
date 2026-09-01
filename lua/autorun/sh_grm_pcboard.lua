@@ -242,13 +242,8 @@ if SERVER then
         if not file.IsDir(DIR, "DATA") then file.CreateDir(DIR) end
     end
 
-    local function charKeyOf(v)
-        if IsValid(v) and v:IsPlayer() then
-            if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(v) end
-            return tostring(v:SteamID64() or "") .. ":char1"
-        end
-        return tostring(v or "")
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана: копия канона.
+    local charKeyOf = GRM.CharKey
 
     local function playerByCharKey(key)
         key = tostring(key or "")

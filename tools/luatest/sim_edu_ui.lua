@@ -244,8 +244,17 @@ local entInit = readFile("lua/entities/grm_comp_education/init.lua")
 ok(entInit:find("GRM%.Education%.Open"), "ENT:Use должен открывать рабочее место")
 ok(entInit:find("PoweredOn"), "компьютер должен уважать электропитание")
 
-local entCl = readFile("lua/entities/grm_comp_education/cl_init.lua")
-ok(entCl:find("GetComputerName"), "табличка должна показывать заданный инструментом заголовок")
+--[[ Табличка станции рисуется общей базой grm_comp_base, а подписи
+     станция задаёт данными; динамический заголовок школы («ГИМНАЗИЯ №1»)
+     живёт в CompLabels её shared.lua. Раньше проверка искала
+     GetComputerName в cl_init.lua — после сведения одиннадцати копий
+     Draw в базу это стало проверкой места, а не поведения (§10.1.4).
+     Поведение CompLabels проверяет sim_comp_base.lua. ]]
+local entShared = readFile("lua/entities/grm_comp_education/shared.lua")
+ok(entShared:find("grm_comp_base", 1, true) ~= nil,
+    "станция образования наследует общую базу компьютеров")
+ok(entShared:find("function ENT:CompLabels") and entShared:find("GetComputerName"),
+    "табличка должна показывать заданный инструментом заголовок")
 
 -- Банкомат выписку больше не ведёт
 local atm = readFile("lua/autorun/sh_grm_atm.lua")

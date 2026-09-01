@@ -15,22 +15,6 @@ local CC = {
     gold    = Color(245, 205, 80),
 }
 
-function ENT:Draw()
-    self:DrawModel()
-
-    local pos = self:GetPos() + self:GetUp() * 24 + self:GetForward() * 2
-    local ang = self:GetAngles()
-    ang:RotateAroundAxis(ang:Up(), 90)
-    ang:RotateAroundAxis(ang:Forward(), 90)
-
-    cam.Start3D2D(pos, ang, 0.08)
-        draw.RoundedBox(6, -150, -50, 300, 100, Color(12, 18, 30, 240))
-        draw.SimpleText("ПОЛИЦИЯ ПОРЯДКА", "DermaDefaultBold", 0, -25, Color(80, 160, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("OrdnungPolizei Terminal", "DermaDefault", 0, -5, Color(220, 230, 245), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Нажмите [E] для входа в систему", "DermaDefault", 0, 20, Color(150, 170, 200), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    cam.End3D2D()
-end
-
 net.Receive("GRM_CompPolice_Open", function()
     local ent          = net.ReadEntity()
     local onlineList   = net.ReadTable() or {}

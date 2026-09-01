@@ -160,6 +160,8 @@ function Entity() return nil end
 function IsFirstTimePredicted() return true end
 GRM = { Perf = { Players = function() return {} end } }
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_estate.lua"))()
 local ES = GRM.Estate
 
@@ -263,7 +265,9 @@ ok(hudBlock:find("if not zone.onDoor then", 1, true) ~= nil,
 print("\n=== 4. ПОДПИСЬ ТОРГОВОГО АВТОМАТА ===")
 
 local vend = readf("lua/autorun/client/cl_grm_vending_gui.lua")
-local comp = readf("lua/entities/grm_comp_police/cl_init.lua")
+-- Разворот плашки теперь живёт в общей базе компьютеров (grm_comp_base):
+-- одиннадцать копий Draw сведены в одну, и эталон приёма — там.
+local comp = readf("lua/entities/grm_comp_base/cl_init.lua")
 
 ok(vend:find("Vector(0, 0, 82)", 1, true) == nil,
    "ИСПРАВЛЕНО: надпись больше не висит на 82 юнита над автоматом")

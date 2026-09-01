@@ -24,6 +24,8 @@ local p={_key="100:char1",_member=true,_nw={}}
 function p:IsPlayer()return true end function p:IsSuperAdmin()return false end function p:SteamID64()return"100"end function p:SteamID()return"STEAM_0:0:50"end function p:Nick()return"Офицер"end
 function p:GetNWBool(k,d)local v=self._nw[k]if v==nil then return d end return v end function p:SetNWBool(k,v)self._nw[k]=v end function p:SetNWString()end
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/sh_grm_faction_duty.lua")
 local FD=GRM.FactionDuty; local fails=0
 local function check(n,c)if c then print("[SIM] OK: "..n)else fails=fails+1 print("[SIM] FAIL: "..n)end end

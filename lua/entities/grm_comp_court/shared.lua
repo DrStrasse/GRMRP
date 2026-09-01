@@ -9,7 +9,7 @@
     военные дела остаются за Feldgendarmerie (grm_comp_military_police).
 ----------------------------------------------------------------------]]
 ENT.Type          = "anim"
-ENT.Base          = "base_gmodentity"
+ENT.Base          = "grm_comp_base"
 ENT.PrintName     = "Компьютер юстиции (суд)"
 ENT.Author        = "GRM"
 ENT.Category      = "GRM — RP"
@@ -20,6 +20,15 @@ ENT.RenderGroup   = RENDERGROUP_BOTH
 ENT.Model         = "models/props_lab/monitor02.mdl"
 ENT.ModelFallback = "models/props/cs_office/computer.mdl"
 
-function ENT:SetupDataTables()
-    self:NetworkVar("String", 0, "ComputerName")
-end
+--[[ Станция описывается данными, механика — в grm_comp_base:
+     Initialize (модель/физика/имя), Draw (табличка), SetupDataTables. ]]
+ENT.DefaultComputerName = "ЮСТИЦИЯ • СУД И ПРОКУРАТУРА"
+ENT.CompTitle    = "ЮСТИЦИЯ"
+ENT.CompSubtitle = "Суд и прокуратура"
+ENT.CompHint     = "Нажмите [E] для входа"
+ENT.CompColors = {
+    bg    = Color(20, 20, 32, 240),
+    title = Color(200, 170, 255),
+    sub   = Color(225, 230, 235),
+    hint  = Color(165, 175, 185),
+}

@@ -88,6 +88,41 @@ function GRM.CharKey(value)
     return text
 end
 
+--[[ Разрешение ключа по «сырому» идентификатору.
+
+     Отличается от GRM.CharKey одним: строку, похожую на SteamID/SteamID64,
+     пытается сопоставить с ОНЛАЙН-игроком и взять его активный слот.
+     Нужно там, куда ключ приходит из чата, консоли или чужого модуля
+     (экономика, валюта): игрок в консоли пишет SteamID, а деньги лежат
+     на ключе персонажа — без разрешения перевод уходил бы «в никуда»
+     на ключ `SteamID64:char1`, даже если человек играет вторым персонажем.
+
+     Была двумя одинаковыми копиями в sh_grm_currency.lua и
+     sh_grm_economy.lua — то есть в двух модулях, работающих с деньгами.
+
+     Обход игроков стоит дорого, поэтому он ПОСЛЕДНИЙ: сначала готовый
+     ключ персонажа, потом онлайн-поиск, потом legacy-достройка слота.
+]]
+function GRM.CharKeyResolve(value)
+    if IsValid(value) and value.IsPlayer and value:IsPlayer() then
+        return GRM.CharKey(value)
+    end
+
+    local raw = isstring(value) and value or tostring(value or "")
+    if raw == "" then return "" end
+    if raw:match(CHAR_KEY_SUFFIX) then return raw end
+
+    local players = (GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players()
+        or (player and player.GetAll and player.GetAll()) or {}
+    for _, ply in ipairs(players) do
+        if IsValid(ply) and (ply:SteamID() == raw or ply:SteamID64() == raw) then
+            return GRM.CharKey(ply)
+        end
+    end
+
+    return GRM.CharKey(raw)
+end
+
 -- Localization is deliberately data-only: gameplay logic must never compare
 -- translated labels. Stable IDs remain English dotted identifiers.
 GRM.Lang = GRM.Lang or {}

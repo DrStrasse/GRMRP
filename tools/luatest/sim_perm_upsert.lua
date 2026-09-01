@@ -57,6 +57,8 @@ player = { GetAll = function() return {} end }
 GRM = { Notify = function() end }
 
 -- перм-класс отмывщика + Extract/Apply (как в init.lua отмывщика)
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/sh_grm_perm_entities.lua")
 
 local function mkEnt(cls, idx, x, y, z)

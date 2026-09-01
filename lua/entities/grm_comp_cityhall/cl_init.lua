@@ -15,22 +15,6 @@ local CC = {
     gold    = Color(245, 200, 70),
 }
 
-function ENT:Draw()
-    self:DrawModel()
-
-    local pos = self:GetPos() + self:GetUp() * 24 + self:GetForward() * 2
-    local ang = self:GetAngles()
-    ang:RotateAroundAxis(ang:Up(), 90)
-    ang:RotateAroundAxis(ang:Forward(), 90)
-
-    cam.Start3D2D(pos, ang, 0.08)
-        draw.RoundedBox(6, -150, -50, 300, 100, Color(16, 28, 30, 240))
-        draw.SimpleText("ГОРОДСКАЯ АДМИНИСТРАЦИЯ", "DermaDefaultBold", 0, -24, Color(80, 200, 200), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Компьютер мэрии", "DermaDefault", 0, -4, Color(225, 230, 235), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Нажмите [E] для входа", "DermaDefault", 0, 20, Color(165, 175, 185), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    cam.End3D2D()
-end
-
 local function mkBtn(parent, text, col, doClick)
     local b = vgui.Create("DButton", parent)
     b:SetText("")

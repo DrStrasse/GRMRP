@@ -122,6 +122,9 @@ if AD then
     local function fakePlayer(group, super)
         return {
             __valid = true, __entity = true, isPlayer = true,
+            -- Настоящий игрок GMod всегда отвечает на :IsPlayer();
+            -- без этого мок не проходит канон GRM.CharKey.
+            IsPlayer = function() return true end,
             SteamID64 = function() return "76561198000000001" end,
             SteamID = function() return "STEAM_0:1:1" end,
             Nick = function() return "Тест" end,

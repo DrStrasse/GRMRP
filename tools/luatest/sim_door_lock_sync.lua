@@ -169,6 +169,8 @@ GRM.Identity = { CharacterKey = function(p) return IsValid(p) and (p:SteamID64()
 GRM.Notify = function() end
 GRM.Audit = { Log = function() end }
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_doors.lua"))()
 local D = GRM.Doors
 

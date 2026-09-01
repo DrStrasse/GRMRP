@@ -73,6 +73,7 @@ end
 local function loadHelpers(withUtf8)
     _G.utf8 = withUtf8 and makeUtf8() or nil
     _G.GRM = {}
+    dofile("tools/luatest/lib_grm_core.lua")()
     local f = loadfile("lua/autorun/sh_00_grm_ui.lua") or loadfile("../../lua/autorun/sh_00_grm_ui.lua")
     if not f then return nil end
     f()

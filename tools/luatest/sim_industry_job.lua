@@ -182,6 +182,8 @@ local function load(p)
     local chunk = assert(loadfile(p))
     chunk()
 end
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 load("lua/autorun/sh_grm_industry_core.lua")
 load("lua/autorun/sh_grm_industry_container.lua")
 load("lua/autorun/server/sv_grm_industry.lua")

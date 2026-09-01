@@ -115,13 +115,9 @@ local function accountKey(value)
     return base or raw
 end
 
-local function charKey(value)
-    if IsValid(value) and value.IsPlayer and value:IsPlayer() then
-        return (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(value))
-            or (tostring(value:SteamID64() or "") .. ":char1")
-    end
-    return tostring(value or "")
-end
+-- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+-- копия канона.
+local charKey = GRM.CharKey
 
 R.AccountKeyOf, R.CharKeyOf = accountKey, charKey
 

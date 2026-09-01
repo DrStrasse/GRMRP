@@ -72,6 +72,8 @@ GRM.Identity.CharacterKey = function(p)
 end
 GRM.Identity.IsCharacterKey = function(v) return isstring(v) and v:match("^%d+:char[1-3]$") ~= nil end
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_registry.lua"))()
 local R = GRM.Registry
 

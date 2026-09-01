@@ -30,11 +30,16 @@ player={GetAll=function()return{}end}
 net={Start=function(n)net.name=n end,WriteTable=function()end,WriteBool=function()end,WriteString=function()end,WriteFloat=function()end,Send=function()end,Receive=function()end,ReadString=function()return""end,ReadTable=function()return{}end}
 local ply={valid=true,money=0,items={},pos=Vector(0,0,0)}
 function ply:SteamID64()return"76561198000000999"end
+-- Настоящий игрок GMod всегда отвечает на :IsPlayer(); без этого мок
+-- не проходит канон GRM.CharKey и прогресс уходит под мусорный ключ.
+function ply:IsPlayer()return true end
 function ply:IsSuperAdmin()return true end
 function ply:Alive()return true end
 function ply:GetPos()return self.pos end
 GRM={Identity={CharacterKey=function()return"76561198000000999:char2"end},GiveMoney=function(p,n)p.money=p.money+n;return true end,Inventory={AddItem=function(p,id,n)p.items[id]=(p.items[id]or 0)+n;return 0 end,CountItem=function(p,id)return p.items[id]or 0 end,RemoveItem=function(p,id,n)p.items[id]=math.max(0,(p.items[id]or 0)-n);return true end}}
 local achRec={u={}};GRM.Ach={Defs={},Register=function(d)GRM.Ach.Defs[d.id]=d end,RecOf=function()return achRec end,Unlock=function(_,d,r)r.u[d.id]=true end,ResetUnlock=function(_,id)achRec.u[id]=nil;return true end}
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 local chunk,err=loadfile("lua/autorun/sh_grm_quests.lua");ok(chunk~=nil,"real quest core parses: "..tostring(err));if not chunk then os.exit(1)end
 local ran,rerr=pcall(chunk);ok(ran,"real quest core executes in server sandbox: "..tostring(rerr));local Q=GRM.Quests
 local def,why=Q.NormalizeDefinition({id=" Intro Lore ",title="Введение",enabled=true,steps={{type="event",event="factory_produce",target="gpu_basic",count=2,title="GPU"}},rewards={money=500,items={badge=1}},cutscene={accept={{pos={x=1,y=2,z=3},ang={p=0,y=90,r=0},fov=999,duration=0}}}})

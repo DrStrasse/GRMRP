@@ -929,16 +929,9 @@ if SERVER then
         net.Start(NET_INFO) net.WriteString(tostring(msg or "")) net.Send(ply)
     end
 
-    local function charKey(v)
-        if IsValid(v) and v.IsPlayer and v:IsPlayer() then
-            if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(v) end
-            return tostring(v:SteamID64() or "") .. ":char1"
-        end
-        local s = tostring(v or "")
-        if s:match(":char[1-3]$") then return s end
-        if s:match("^%d+$") then return s .. ":char1" end
-        return s
-    end
+    -- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+    -- полная копия канона.
+    local charKey = GRM.CharKey
 
     local function utf8cut(s, n)
         if GRM.Utf8Sub then return GRM.Utf8Sub(s, n) end

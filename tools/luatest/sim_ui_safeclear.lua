@@ -62,6 +62,8 @@ end
 
 function IsValid(v) return istable(v) and v._valid ~= false end
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_00_grm_ui.lua"))()
 
 local function newFrame()

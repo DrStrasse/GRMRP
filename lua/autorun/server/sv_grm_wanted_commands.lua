@@ -48,12 +48,9 @@ local function money(v)
     return tostring(math.floor(tonumber(v) or 0)) .. " GRM"
 end
 
-local function charKey(v)
-    local F = GRM.Wanted.Fines
-    if F and isfunction(F.CharKey) then return F.CharKey(v) end
-    if IsValid(v) and v:IsPlayer() then return v:SteamID64() .. ":char1" end
-    return tostring(v or "")
-end
+-- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+-- делегировал в Fines.CharKey, а тот теперь сам канон.
+local charKey = GRM.CharKey
 
 --- Поиск цели: ник, часть ника, RP-имя, SteamID64 или CharacterKey.
 -- Д11: цель может быть офлайн, поэтому если среди игроков не нашли,

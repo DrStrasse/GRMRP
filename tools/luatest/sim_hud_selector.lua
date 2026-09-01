@@ -139,6 +139,8 @@ local ply = {
 function LocalPlayer() return ply end
 
 GRM = {}
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/client/cl_grm_hud.lua")
 
 local bind = H.PlayerBindPress and H.PlayerBindPress.GRM_HUD_Selector

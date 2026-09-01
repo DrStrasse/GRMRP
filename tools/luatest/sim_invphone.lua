@@ -228,6 +228,8 @@ os.remove(DATA .. "/grm_inventories_write_tmp.json")
 
 local traces = {}
 
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/autorun/sh_grm_inventory.lua")
 GRM.Trace = traces -- отладка (не мешает модулю)
 

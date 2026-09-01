@@ -253,6 +253,8 @@ end
 print("== stools/ffd_keypad.lua: BuildCPanel (SetDock-краш + поле PIN) ==")
 TOOL = { ClientConVar = {} }
 SERVER, CLIENT = false, false
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 dofile("lua/weapons/gmod_tool/stools/ffd_keypad.lua")
 ok(type(TOOL.BuildCPanel) == "function", "TOOL.BuildCPanel объявлен")
 

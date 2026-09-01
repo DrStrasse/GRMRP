@@ -52,14 +52,9 @@ local function notify(ply, message, ok)
 end
 I.Notify = notify
 
-local function charKey(ply)
-    if not IsValid(ply) then return "" end
-    if GRM.Char and GRM.Char.GetActiveKey then
-        local ok, key = pcall(GRM.Char.GetActiveKey, ply)
-        if ok and key and tostring(key) ~= "" and tostring(key) ~= "0" then return tostring(key) end
-    end
-    return tostring(ply:SteamID64() or "")
-end
+-- Ключ персонажа — канон ядра (§5.2.6). Локальная копия убрана:
+-- вся функция висела на несуществующем GRM.Char.GetActiveKey.
+local charKey = GRM.CharKey
 I.CharKey = charKey
 
 --[[ ФРАКЦИЯ УЗЛА (пункт 8 из списка вопросов владельца). Раньше поле

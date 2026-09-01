@@ -260,6 +260,8 @@ end
 -----------------------------------------------------------------------
 -- ЗАГРУЗКА МОДУЛЕЙ (как на сервере)
 -----------------------------------------------------------------------
+-- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_entry.lua"))()
 assert(loadfile("lua/autorun/sh_grm_spawnpick.lua"))()
 local E, SP = GRM.Entry, GRM.SpawnPick
