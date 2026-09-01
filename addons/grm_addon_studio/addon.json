@@ -1,0 +1,10 @@
+{
+	"title": "GRM Addon Studio",
+	"type": "servercontent",
+	"tags": [ "roleplay", "devtool" ],
+	"ignore": [
+		"*.md",
+		".git*",
+		"*.zip"
+	]
+}

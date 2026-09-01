@@ -1,0 +1,8 @@
+-- GRM Door Admin Tool v1.1 (Doors v3.0.0)
+TOOL.Category = "GRM";TOOL.Name = "#tool.grm_door_admin.name";TOOL.Command=nil;TOOL.ConfigName=""
+if CLIENT then language.Add("tool.grm_door_admin.name", "GRM Двери");language.Add("tool.grm_door_admin.desc","Единая настройка физических дверей");language.Add("tool.grm_door_admin.0","ЛКМ: меню двери • ПКМ: приватизация да/нет • R: пересобрать ID")end
+local function door(e)return GRM.Doors and GRM.Doors.IsDoor and GRM.Doors.IsDoor(e)end
+function TOOL:LeftClick(tr)if CLIENT then return true end;local p=self:GetOwner();if not p:IsSuperAdmin()or not door(tr.Entity)then return false end;GRM.Doors.OpenDoorMenu(p);return true end
+function TOOL:RightClick(tr)if CLIENT then return true end;local p,e=self:GetOwner(),tr.Entity;if not p:IsSuperAdmin()or not door(e)then return false end;local r=GRM.Doors.GetRecord and select(1,GRM.Doors.GetRecord(e));if not r then return false end;r.ownable=not(r.ownable~=false);GRM.Doors.SaveDoors();GRM.Notify(p,"Приватизация двери: "..(r.ownable and"разрешена"or"запрещена"),100,200,255);return true end
+function TOOL:Reload(tr)if CLIENT then return true end;local p=self:GetOwner();if not p:IsSuperAdmin()then return false end;GRM.Doors.RebuildDoorIdentityCache();GRM.Doors.LoadDoors();GRM.Notify(p,"Канонические ID дверей пересобраны, дубли склеены",100,220,130);return true end
+if CLIENT then function TOOL.BuildCPanel(p)p:AddControl("Header",{Description="Работает с GRM Doors v3.0.0: одна физическая дверь = одна запись, без двойного HUD"});p:Help("ЛКМ — открыть единое GRM-меню\nПКМ — включить/выключить приватизацию\nR — пересобрать идентичность дверей и перечитать базу")end end

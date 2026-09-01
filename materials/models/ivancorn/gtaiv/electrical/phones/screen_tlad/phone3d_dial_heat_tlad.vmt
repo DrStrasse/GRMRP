@@ -1,0 +1,10 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models\ivancorn\gtaiv\electrical\phones\screen_tlad\phone3d_dial_heat_tlad"
+
+	$phong 1
+	$phongfresnelranges "[0.8 0.55 0.25]"
+	$phongexponent "15"	
+	$phongalbedotint 1
+	$phongboost 15
+} 

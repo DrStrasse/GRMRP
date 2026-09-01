@@ -1,0 +1,23 @@
+-- Contracts for dual faction names: registration key + public Russian display name.
+local function read(p)local f=assert(io.open(p,"rb"));local s=f:read("*a");f:close();return s end
+local fac=read("lua/autorun/sh_factions.lua");local fixes=read("lua/autorun/sh_faction_fixes.lua");local roster=read("lua/autorun/sh_grm_faction_roster.lua");local tab=read("lua/autorun/sh_grm_tab_menu.lua");local char=read("lua/autorun/sh_grm_character.lua");local duty=read("lua/entities/grm_duty_npc/cl_init.lua");local tool=read("lua/weapons/gmod_tool/stools/grm_duty_npc.lua");local q=read("lua/autorun/sh_grm_qmenu.lua")
+local fail,n=0,0;local function ok(v,msg)n=n+1;if v then print("  ok  "..msg)else fail=fail+1;print("  FAIL "..msg)end end
+ok(fac:find("function GRM.Factions.DisplayName",1,true),"shared display-name resolver exists")
+ok(fac:find("function GRM.Factions.RegistrationName",1,true),"registration-name resolver exists")
+ok(fac:find("function GRM.Factions.PlayerDisplayName",1,true),"player display helper exists")
+ok(fac:find("f.DisplayName=display",1,true)and fac:find("factionNameMigrationChanged",1,true),"legacy factions migrate display name from registration key")
+ok(fac:find("DisplayName    = displayName",1,true),"new faction persists public name")
+ok(fac:find('action=="createFactionV2"',1,true)and fac:find('action=="setDisplayName"',1,true),"network actions create and edit dual names")
+ok(fac:find("GetDisplayName=function",1,true)and fac:find("SetDisplayName=function",1,true),"public FactionsAPI exports dual-name methods")
+ok(fac:find('SetNWString("GRM_FactionDisplay"',1,true),"player NW carries public faction name separately")
+ok(fac:find('Регистрационное имя:',1,true)and fac:find('Публичное имя (RU):',1,true),"admin UI clearly separates both fields")
+ok(fac:find('AddColumn("Публичное имя")',1,true)and fac:find('AddColumn("Регистрационное имя")',1,true),"admin list displays both names")
+ok(fac:find("GRM.Factions.ChannelTag(",1,true)and fac:find("GRM.Factions.DisplayName(factionName))",1,true),"department waves use public name (+ department tags)")
+ok(fixes:find("GRM.Factions.DisplayName(factionName)",1,true),"government news uses public name")
+ok(roster:find("displayFaction",1,true)and roster:find("GetRegistrationName",1,true),"roster prints public name but resolves system key")
+ok(tab:find("GRM.Factions.DisplayName(getPlayerFaction(ply))",1,true),"TAB displays public faction name")
+ok(char:find("GRM.Factions.DisplayName(payload.factionName)",1,true),"character menu displays public faction name")
+ok(duty:find("GRM.Factions.DisplayName(fac)",1,true),"duty terminal sign displays public faction name")
+ok(tool:find("public~=name",1,true)and q:find("public~=name",1,true),"tool selectors show public label while retaining registration data")
+ok(not fac:find('ply:SetNWString("GRM_Faction", GRM.Factions.DisplayName',1,true),"logic NW key remains registration name")
+print(("FACTION DISPLAY NAMES: %d/%d failures=%d"):format(n-fail,n,fail));os.exit(fail==0 and 0 or 1)

@@ -1,0 +1,11 @@
+{
+	"title": "GRM Fire Addon",
+	"type": "servercontent",
+	"tags": [ "roleplay", "realism" ],
+	"ignore": [
+		"*.md",
+		"*.psd",
+		".git*",
+		"*.zip"
+	]
+}

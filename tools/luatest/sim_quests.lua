@@ -1,0 +1,73 @@
+-- GRM Quest Ecosystem contracts.
+local function read(path)local f=assert(io.open(path,"rb"));local s=f:read("*a");f:close();return s end
+local core=read("lua/autorun/sh_grm_quests.lua")
+local client=read("lua/autorun/client/cl_grm_quests.lua")
+local tool=read("lua/weapons/gmod_tool/stools/grm_quest_tool.lua")
+local npc=read("lua/entities/grm_quest_npc/init.lua")
+local inv=read("lua/autorun/sh_grm_inventory.lua")
+local mining=read("lua/entities/grm_ore_node.lua")
+local factory=read("lua/autorun/server/sv_grm_industry.lua")
+local hub=read("lua/autorun/server/sv_grm_persistence_hub.lua")
+local qmenu=read("lua/autorun/sh_grm_qmenu.lua")
+local achievements=read("lua/autorun/sh_grm_achievements.lua")
+local pass,fail=0,0
+local function has(s,n)return s:find(n,1,true)~=nil end
+local function ok(v,n)if v then pass=pass+1;print("  ok  "..n)else fail=fail+1;print("  FAIL "..n)end end
+ok(has(core,'Q.Version = "1.5.0"'),"quest ecosystem version 1.5")
+ok(has(core,"function Q.NormalizeDefinition")and has(core,"STEP_TYPES"),"server normalizes closed objective types")
+ok(has(core,"visit=true")and has(core,"event=true")and has(core,"talk=true")and has(core,"item=true"),"visit event talk and inventory objectives")
+ok(has(core,"function Q.Event")and has(core,"function Q.Talk"),"generic event and NPC conversation APIs")
+ok(has(core,"function Q.Start")and has(core,"finishQuest")and has(core,"reward"),"authoritative lifecycle and rewards")
+ok(has(core,"GRM.GiveMoney")and has(core,"GRM.Inventory.AddItem"),"money and item rewards integrate with GRM economy")
+ok(has(core,"CharacterKey")and has(core,'Q.ProgressFile')and has(core,'version=1,records=records'),"progress persists by CharacterKey in array records")
+ok(has(core,'util.JSONToTable, file.Read(path, "DATA") or "", false, true'),"64-bit safe JSON loader")
+ok(has(core,'file.Read(path, "DATA") ~= raw')and has(core,'path .. ".backup"'),"persistence uses read-back and backup")
+ok(has(core,"autoStart")and has(core,"prerequisites")and has(core,"repeatable"),"newcomer autostart prerequisites and repeatability")
+ok(has(core,"normalizeCutscene")and has(core,"caption")and has(core,"sound")and has(core,"image"),"cutscene nodes support camera captions audio and images")
+ok(has(core,"normalizeAchievement")and has(core,"unlockQuestAchievement")and has(core,"GRM.Ach.Register")and has(achievements,"function AC.ResetUnlock"),"quest completion registers custom achievements and reset clears their unlock")
+ok(has(core,"normalizeNotification")and has(core,"questNotice")and has(client,"GRM_Quest_CompletionNotice"),"start step and completion notifications are configurable")
+ok(has(core,"normalizeDialoguePhase")and has(core,"choices")and has(core,"speaker"),"server normalizes sequential dialogue graphs and choices")
+ok(has(core,"function Q.OpenNPC")and has(npc,"GRM.Quests.OpenNPC"),"world NPC opens quest dialogue")
+ok(has(client,"ВИЗУАЛЬНЫЙ КОНСТРУКТОР")and has(client,"DPropertySheet")and has(client,"БЫСТРЫЙ СТАРТ"),"modern in-game visual admin studio")
+ok(has(client,"addDarkLine")and has(client,"column:SetTextColor(C.text)")and has(client,"self:IsSelected()"),"dark lists render readable light text and selected rows")
+ok(has(client,"saveWork=function")and has(client,"Сохранение черновика без этапов")and has(client,'net.WriteString("save")'),"save button persists both unfinished drafts and complete quests")
+ok(has(client,'work[k]=c:GetChecked()')and has(client,'c:SetValue(work[k]and 1 or 0)'),"enabled repeatable and autoStart checkboxes round-trip through the visual editor")
+ok(has(client,'work.achievement={enabled=rw.achEnabled:GetChecked()')and has(client,'hidden=rw.achHidden:GetChecked()'),"custom achievement enabled and hidden checkboxes are functional")
+ok(has(client,'enabled=cfg.enabled:GetChecked()')and has(client,'banner=cfg.banner:GetChecked()'),"notification enabled/banner checkboxes are functional")
+ok(has(core,"local draft=raw.draft==true or #steps==0")and has(core,"Квест пока является черновиком"),"server stores empty drafts but never offers them to players")
+ok(has(core,"function Q.ResetProgress")and has(core,'op=="reset_progress"')and has(client,"Сбросить засчёт"),"superadmin can reset quest credit for self player or everyone")
+ok(has(core,'op=="restart"')and has(client,"Начать квест заново"),"completed repeatable quests can be started again")
+ok(has(client,"[НОВЫЙ]")and has(client,"questList:SelectItem(line)")and has(client,"Derma_Query"),"new drafts appear immediately and deletion requires confirmation")
+ok(has(client,"ПОСЛЕДОВАТЕЛЬНОСТЬ ЭТАПОВ")and has(client,"Настроить зону этим тулом"),"stages are edited and ordered without JSON")
+ok(has(client,"Тест диалога")and has(client,"Принять квест")and has(client,"Следующий ID"),"dialogue graph has visual nodes choices transitions and test")
+ok(has(client,"▶ Эта точка")and has(client,"▶ Вся связка")and has(client,"Точка из текущего взгляда"),"each cutscene point and full linked sequence can be previewed")
+ok(has(client,"Первая точка — явная стартовая камера")and has(client,'phase="hold"')and not has(client,"fromPos=EyePos()"),"scene starts exactly at camera one without flying from player")
+ok(has(client,"linkedCutsceneNodes")and has(client,"Следующая камера")and has(client,"Сделать стартовой"),"camera points support explicit links and start selection")
+ok(has(core,"moveDuration")and has(core,'node.transition=="move"')and has(core,"next=trim(node.next"),"server persists links plus cut and smooth-move transitions")
+ok(has(core,"GRM_Quest_CutscenePreview")and has(core,"SetupPlayerVisibility")and has(core,"AddOriginToPVS(vec(node.pos))"),"server networks full world PVS around every cutscene camera")
+ok(has(client,"zfar=32768")and has(client,"znear=2"),"cutscene camera uses full map render range")
+ok(has(client,"ЖУРНАЛ ЗАДАНИЙ")and has(client,"GRM_Quest_Tracker")and has(client,"target:ToScreen()"),"player journal, live tracker and visit waypoint")
+ok(has(client,"GRM_Quest_CutsceneView")and has(client,"LerpVector")and has(client,"LerpAngle"),"smooth cinematic camera")
+ok(has(client,"GRM_Quest_CutsceneLock")and has(client,"GRM_Quest_CutsceneDeath"),"cutscene locks input and exits on death")
+ok(has(tool,"mode=\"npc\"")and has(tool,"mode==\"zone\"")and has(tool,"mode==\"cutscene\""),"single tool handles NPC zones and camera nodes")
+ok(has(tool,"SetVisitZone")and has(tool,"AddCutsceneNode")and has(tool,"SpawnNPC"),"tool writes through authoritative quest API")
+ok(has(tool,"GRM_QuestTool_Preview")and has(tool,"DrawWireframeBox")and has(tool,"DrawWireframeSphere")and has(tool,"models/dav0r/camera.mdl"),"tool previews zones and visible camera models for every cutscene point")
+ok(has(core,'ply:IsSuperAdmin()')and has(core,'GRM_Quest_AdminOp'),"admin mutations require superadmin")
+ok(has(core,"table.sort(defs")and has(core,"Q.SaveDefinitions();adminOpen(ply)"),"saved quests return in a stable visible admin list")
+ok(has(inv,'"inventory_gain"')and has(mining,'"mining"')and has(factory,'"factory_produce"'),"inventory mining and factory integrations emit quest events")
+ok(has(hub,"quests =")and has(hub,'"quests"'),"persistence hub includes quest ecosystem")
+ok(has(qmenu,'id = "grm_quest_tool"'),"Q-menu exposes quest constructor")
+ok(has(core,'"/quests"')and has(core,'"/квесты"')and has(core,'"/grm_quests_admin"'),"player and admin commands registered")
+ok(not has(client,"GRM.GiveMoney")and not has(client,"Q.Progress["),"client cannot grant rewards or author progress")
+
+-- Behavioral miniature: event target/count semantics used by the real core.
+local step={type="event",event="factory_produce",target="gpu_basic",count=10}
+local p={count=0,step=1,status="active"}
+local function event(name,target,amount)
+ if step.type=="event"and step.event==name and(step.target==""or step.target==target)then p.count=math.min(step.count,p.count+amount);if p.count>=step.count then p.step=2;p.count=0 end end
+end
+event("factory_produce","gpu_mid",7);ok(p.count==0 and p.step==1,"wrong event target cannot progress")
+event("factory_produce","gpu_basic",6);event("factory_produce","gpu_basic",4);ok(p.step==2 and p.count==0,"matching production completes exact count objective")
+local cameras={{id="start",next="finish",pos={x=100}},{id="unused",pos={x=999}},{id="finish",transition="move",pos={x=200}}};local byID={};for i,n in ipairs(cameras)do byID[n.id]=i end;local order,seen,index={}, {},1;while cameras[index]and not seen[index]do seen[index]=true;order[#order+1]=cameras[index];index=byID[cameras[index].next]or(index+1)end
+ok(#order==2 and order[1].pos.x==100 and order[2].id=="finish","linked camera graph begins at explicit start and follows next ID")
+print(("QUEST ECOSYSTEM: %d/%d failures=%d"):format(pass,pass+fail,fail));if fail>0 then os.exit(1)end

@@ -1,0 +1,16 @@
+{
+	"title": "3D2D Textscreens",
+	"type":	"tool",
+	"tags":	[
+		"fun",
+		"roleplay"
+	],
+	"ignore": [
+		".github/*",
+		".gitignore",
+		".glualint.json",
+		"LICENSE",
+		"*.exe",
+		"*.md"
+	]
+}

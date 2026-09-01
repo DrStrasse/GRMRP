@@ -1,0 +1,23 @@
+-- Static contracts for the conservative performance-hardening pass.
+local function read(p)local f=assert(io.open(p,"rb"));local s=f:read("*a");f:close();return s end
+local aug=read("lua/autorun/sh_grm_augmentation_chips.lua")
+local cctv=read("lua/autorun/server/sv_grm_cctv.lua")
+local narc=read("lua/autorun/sh_grm_narcotics.lua")
+local med=read("lua/autorun/sh_grm_medical_full.lua")
+local cuffs=read("lua/autorun/client/cl_grm_handcuffs.lua")
+local alarm=read("lua/autorun/server/sv_grm_alarm.lua")
+local move=read("lua/autorun/sh_grm_movement.lua")
+local char=read("lua/autorun/sh_grm_character.lua")
+local q=read("lua/autorun/sh_grm_qmenu.lua")
+local fail,n=0,0;local function ok(v,msg)n=n+1;if v then print("  ok  "..msg)else fail=fail+1;print("  FAIL "..msg)end end
+ok(aug:find("CHIPS._hackedDoors",1,true)and not aug:match('GRM_AugChip_DoorHackCleanup.-ents%.GetAll'),"door-hack cleanup uses active registry")
+ok(aug:find("CHIPS._doorHackCleanupAt=now+.5",1,true),"door-hack cleanup is throttled")
+ok(cctv:find("CCTV._viewGuardAt=now+.2",1,true),"CCTV fail-safe guard is capped at 5 Hz")
+ok(narc:find("NARC._tickAt=now+.25",1,true),"narcotics state tick is capped at 4 Hz")
+ok(med:find("MED._tickAt=now+.25",1,true),"medical state tick is capped at 4 Hz")
+ok(not cuffs:find('hook.Add("Think", "GRM_Handcuffs_BehindBackPose"',1,true)and cuffs:find("timer.Simple(0",1,true),"disabled cuff pose resets once, not every frame")
+ok(alarm:find("now-lastSpeakerWatch>=1",1,true),"alarm speaker reconciliation is separated from sensor cadence")
+ok(move:find("data.nextSync=now+.25",1,true)and move:find("data.lastSynced",1,true),"stamina network sync is throttled and change-driven")
+ok(char:find("CH._foreignMenuCheckAt=now+.1",1,true),"character foreign-menu guard is throttled")
+ok(q:find("local job = table.remove(q)",1,true)and not q:find("local job = table.remove(q, 1)",1,true),"Q icon queue pops in O(1)")
+print(("PERFORMANCE GUARDS: %d/%d failures=%d"):format(n-fail,n,fail));os.exit(fail==0 and 0 or 1)

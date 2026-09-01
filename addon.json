@@ -1,0 +1,14 @@
+{
+	"title": "GRM RolePlay",
+	"type": "servercontent",
+	"tags": [ "roleplay", "realism", "build" ],
+	"ignore": [
+		"*.md",
+		"*.psd",
+		".git*",
+		"*.zip",
+		"tools",
+		"dist",
+		"addons"
+	]
+}

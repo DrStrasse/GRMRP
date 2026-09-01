@@ -1,0 +1,18 @@
+"VertexLitGeneric"
+{
+	"$basetexture"					"models\ivancorn\gtaiv\electrical\phones\cj_blue_glit"
+	"$phongexponenttexture"			"models\ivancorn\gtaiv\electrical\phones\cj_blue_glit_s"
+	
+	"$blendtintbybasealpha"	"1"
+
+	"$phong"	"1"
+	"$phongexponent"	"2"
+	"$phongalbedotint"	"1"
+	"$phongboost"	"0.38"
+	"$phongfresnelranges"	"[1 1 1]"
+
+//	"$envmap"	"env_cubemap"
+//	"$normalmapalphaenvmapmask"	"1"
+//	"$envmapcontrast"	"[1 1 1]"
+//	"$envmaptint" "[0.15 0.15 0.15]"
+}

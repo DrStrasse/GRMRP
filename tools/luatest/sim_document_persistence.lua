@@ -1,0 +1,22 @@
+-- Inventory/document persistence contract and recovery of lost physical blanks.
+local function read(p)local f=assert(io.open(p,"rb"));local s=f:read("*a");f:close();return s end
+local inv=read("lua/autorun/sh_grm_inventory.lua");local docs=read("lua/autorun/sh_grm_documents.lua");local physical=read("lua/autorun/sh_grm_physical_documents.lua");local ctx=read("lua/autorun/sh_grm_ctx.lua");local npc=read("lua/entities/grm_duty_npc/init.lua");local duty=read("lua/autorun/sh_grm_faction_duty.lua")
+local fail,n=0,0;local function ok(c,s)n=n+1;if c then print("  ok  "..s)else fail=fail+1;print("  FAIL "..s)end end
+ok(inv:find("grm_inventories_backup.json",1,true)and inv:find("grm_inventories_write_tmp.json",1,true),"inventory has temp/main/backup chain")
+ok(inv:find("decodeInventories",1,true)and inv:find("verifiedWrite",1,true),"inventory verifies serialization and read-back")
+ok(inv:find("_grm_meta",1,true)and inv:find("inventoryScore",1,true)and inv:find("bestRevision",1,true),"inventory chooses newest/fullest valid source")
+ok(inv:find("quarantineInventory",1,true)and inv:find("SAVE BLOCKED",1,true),"corrupt inventory is quarantined and never overwritten empty")
+ok(inv:find("GRM.Inventory.SaveNow",1,true)and inv:find("GRM_Inv_CharacterSave",1,true),"documents and character switching can force immediate save")
+ok(docs:find("grm_documents_backup.json",1,true)and docs:find("grm_documents_write_tmp.json",1,true),"document registry has temp/main/backup chain")
+ok(docs:find("quarantineRegistry",1,true)and docs:find("RegistryHealthy",1,true),"corrupt registry fails closed with quarantine")
+ok(docs:find("registryScore",1,true)and docs:find("RegistryRevision",1,true)and docs:find("bestRevision",1,true),"document registry selects newest/fullest valid source")
+ok(physical:find("generation=tonumber(rec.physicalGeneration)or 1",1,true),"physical copy stores registry generation")
+ok(physical:find("copyGeneration~=currentGeneration",1,true),"replaced physical copies become invalid")
+ok(physical:find("GRM.Inventory.SaveNow",1,true)and physical:find("removeCopyByID",1,true),"issuance rolls back if inventory cannot persist")
+ok(physical:find("function DOC.RestorePhysicalDocument",1,true)and physical:find("lastPhysicalRestore",1,true),"missing own document can be restored with cooldown")
+ok(physical:find('low=="/docrestore"',1,true)and physical:find('string.lower(arg)=="all"',1,true),"restore command supports one type or all")
+ok(physical:find("MissingPhysicalTypes",1,true)and ctx:find("missingPhysicalCount",1,true)and ctx:find("doc_restore",1,true),"missing documents are announced and recoverable from C-menu")
+ok(npc:find("function ENT:RefreshIdle",1,true)and npc:find("idle_all_01",1,true),"duty NPC explicitly selects a valid idle sequence")
+ok(npc:find("reference",1,true)and npc:find("function ENT:OnRestore",1,true)and not npc:find("FrameAdvance(FrameTime",1,true),"duty NPC restores idle pose without AI/frame double-processing")
+ok(duty:find("ent:RefreshIdle(true)",1,true),"admin and persistence model changes refresh NPC animation")
+print(("DOCUMENT PERSISTENCE/NPC: %d checks, failures=%d"):format(n,fail));os.exit(fail==0 and 0 or 1)

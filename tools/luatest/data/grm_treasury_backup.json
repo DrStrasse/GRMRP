@@ -1,0 +1,52 @@
+{
+	"factions": {
+		"Polizei": {
+			"nextPay": 1786565951,
+			"finePerms": {
+				"enabled": false,
+				"allRoles": false,
+				"ownFaction": true,
+				"otherFactions": false,
+				"civilians": true,
+				"maxAmount": 0,
+				"statePercent": 0,
+				"roles": {}
+			},
+			"budget": 250000,
+			"taxRate": 0.05,
+			"baseSalary": 0,
+			"salaryInterval": 600,
+			"payFromBudget": true,
+			"roleSalaries": {},
+			"departmentSalaries": {},
+			"history": [
+				{
+					"t": 1786565351,
+					"s": "тестовый взнос"
+				}
+			]
+		}
+	},
+	"state": {
+		"budget": 0,
+		"history": {}
+	},
+	"version": 2,
+	"log": [
+		{
+			"t": 1786565351,
+			"s": "Alexander Von Groenner +499 200 GRM (баланс: 500 200 GRM) | тест"
+		},
+		{
+			"t": 1786565351,
+			"s": "Alexander Von Groenner -200 000 GRM (баланс: 300 200 GRM) | Банкомат: взнос на счёт"
+		}
+	],
+	"accounts": {
+		"76561199385153957:char1": {
+			"name": "Alexander Von Groenner",
+			"balance": 200000
+		}
+	},
+	"config": {}
+}
