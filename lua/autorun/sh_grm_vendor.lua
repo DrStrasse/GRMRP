@@ -473,16 +473,50 @@ if SERVER then
     local function message(ply, ok, text)
         if GRM.Notify then GRM.Notify(ply,text,ok and 100 or 255,ok and 220 or 120,ok and 130 or 90) else ply:ChatPrint("[Торгаши] "..text) end
     end
+    --[[ АДМИНСКИЕ КОМАНДЫ ТОРГАШЕЙ — таблица вместо лестницы `elseif cmd ==`.
+         Права проверяются ОДИН раз до диспетчеризации: раньше проверка
+         жила снаружи лестницы, но каждую новую команду приходилось
+         вписывать внутрь простыни, и легко было добавить её мимо
+         проверки. Контракт: (ply, argument). ]]
+    local VENDOR_COMMANDS = {
+        save = function(ply)
+            local ok, id = V.SaveVendor(aimVendor(ply))
+            message(ply, ok, ok and ("Торгаш сохранён: " .. id) or tostring(id))
+        end,
+
+        remove = function(ply, argument)
+            -- Снять можно и по прицелу, и по ID: торгаша могло уже не быть
+            -- на карте, а запись о нём осталась.
+            local ent = aimVendor(ply)
+            local ok = IsValid(ent) and V.RemoveVendorSave(ent) or V.RemoveVendorSaveByID(argument)
+            message(ply, ok, ok and "Торгаш снят с сохранения"
+                or "Наведи на торгаша или укажи ID: /vendor_unsave vendor_...")
+        end,
+
+        save_all = function(ply)
+            local ok, text = V.SaveMapVendors()
+            message(ply, ok, text)
+        end,
+
+        load = function(ply)
+            local ok, text = V.LoadMapVendors()
+            message(ply, ok, text)
+        end,
+
+        list = function(ply)
+            local list = V.ListSavedVendors()
+            message(ply, true, "Сохранено торгашей: " .. #list)
+            for i, r in ipairs(list) do
+                print(("[GRM Vendor] #%d %s %s @ %.0f %.0f %.0f")
+                    :format(i, r.id, r.vendorType, r.pos.x, r.pos.y, r.pos.z))
+            end
+        end,
+    }
+
     local function command(ply, cmd, argument)
         if not IsValid(ply) or not ply:IsSuperAdmin() then return end
-        if cmd=="save" then local ent=aimVendor(ply); local ok,id=V.SaveVendor(ent); message(ply,ok,ok and ("Торгаш сохранён: "..id) or tostring(id))
-        elseif cmd=="remove" then
-            local ent=aimVendor(ply)
-            local ok=IsValid(ent) and V.RemoveVendorSave(ent) or V.RemoveVendorSaveByID(argument)
-            message(ply,ok,ok and "Торгаш снят с сохранения" or "Наведи на торгаша или укажи ID: /vendor_unsave vendor_...")
-        elseif cmd=="save_all" then local ok,text=V.SaveMapVendors(); message(ply,ok,text)
-        elseif cmd=="load" then local ok,text=V.LoadMapVendors(); message(ply,ok,text)
-        elseif cmd=="list" then local list=V.ListSavedVendors(); message(ply,true,"Сохранено торгашей: "..#list); for i,r in ipairs(list) do print(("[GRM Vendor] #%d %s %s @ %.0f %.0f %.0f"):format(i,r.id,r.vendorType,r.pos.x,r.pos.y,r.pos.z)) end end
+        local run = VENDOR_COMMANDS[cmd]
+        if run then run(ply, argument) end
     end
     concommand.Add("grm_vendor_save",function(p) command(p,"save") end)
     concommand.Add("grm_vendor_unsave",function(p,_,args) command(p,"remove",args[1]) end)

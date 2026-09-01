@@ -105,18 +105,25 @@ function SD.Apply(ply, ent, opts)
     return true, "Раздвижная дверь настроена"
 end
 
+--[[ НАПРАВЛЕНИЯ СДВИГА — таблица вместо лестницы `elseif dir ==`.
+     Направление приходит из конфигурации двери (и из дупликатора), а
+     значит новое направление добавляется данными, а не веткой кода.
+     Значение по умолчанию — «влево»: так вела себя дверь до реестра. ]]
+local SLIDE_AXIS = {
+    left = function(ang, d) return ang:Right() * -d end,
+    right = function(ang, d) return ang:Right() * d end,
+    forward = function(ang, d) return ang:Forward() * d end,
+    back = function(ang, d) return ang:Forward() * -d end,
+    up = function(_ang, d) return Vector(0, 0, d) end,
+}
+
 -- Смещение для конфигурации (локальные оси пропа)
 function SD.OffsetFor(ent, data)
     local dir = tostring(data.direction or "left")
     local d = tonumber(data.distance) or 100
     local ang = IsValid(ent) and ent:GetAngles() or Angle(0, 0, 0)
-    if dir == "left" then return ang:Right() * -d
-    elseif dir == "right" then return ang:Right() * d
-    elseif dir == "forward" then return ang:Forward() * d
-    elseif dir == "back" then return ang:Forward() * -d
-    elseif dir == "up" then return Vector(0, 0, d)
-    end
-    return ang:Right() * -d
+    local axis = SLIDE_AXIS[dir] or SLIDE_AXIS.left
+    return axis(ang, d)
 end
 
 function SD.IsSliding(ent)

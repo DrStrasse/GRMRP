@@ -288,15 +288,25 @@ if SERVER then
         return { flags = flags, tools = tools }
     end
 
+    --[[ Сборщики данных вкладок. Имя вкладки — ключ, а не ветка лестницы:
+         вкладка и её сборщик обязаны появляться и исчезать вместе,
+         иначе клиент просит вкладку, а сервер молча шлёт «сервер». ]]
+    local TAB_PAYLOAD = {
+        server = payloadServer,
+        access = payloadAccess,
+        jobs = payloadJobs,
+        players = payloadPlayers,
+        econ = payloadEcon,
+        tools = payloadTools,
+    }
+
     local function pushTab(ply, tab)
-        local payload = {}
-        if tab == "server" then payload = payloadServer()
-        elseif tab == "access" then payload = payloadAccess()
-        elseif tab == "jobs" then payload = payloadJobs()
-        elseif tab == "players" then payload = payloadPlayers()
-        elseif tab == "econ" then payload = payloadEcon()
-        elseif tab == "tools" then payload = payloadTools()
-        else tab = "server" payload = payloadServer() end
+        local build = TAB_PAYLOAD[tab]
+        if not build then
+            -- Незнакомая вкладка (старый клиент) — показываем сервер.
+            tab, build = "server", TAB_PAYLOAD.server
+        end
+        local payload = build()
         net.Start(NET_DATA)
             net.WriteString(tab)
             net.WriteTable(payload)
@@ -1095,6 +1105,18 @@ if CLIENT then
             end
         end
 
+        --[[ Строители вкладок: тот же набор имён, что и у сборщиков на
+             сервере. Держать оба списка таблицами — единственный способ
+             заметить рассинхрон глазами, а не по пустому окну. ]]
+        local TAB_BUILD = {
+            server = buildServer,
+            access = buildAccess,
+            jobs = buildJobs,
+            econ = buildEcon,
+            tools = buildTools,
+            players = buildPlayers,
+        }
+
         HB._activeTab = "server"
         sheet.OnActiveTabChanged = function(_, _, newPnl)
             for tab, sc in pairs(pages) do
@@ -1108,12 +1130,8 @@ if CLIENT then
             local d = net.ReadTable() or {}
             local sc = pages[tab]
             if not IsValid(sc) then return end
-            if tab == "server" then buildServer(sc, d)
-            elseif tab == "access" then buildAccess(sc, d)
-            elseif tab == "jobs" then buildJobs(sc, d)
-            elseif tab == "econ" then buildEcon(sc, d)
-            elseif tab == "tools" then buildTools(sc, d)
-            elseif tab == "players" then buildPlayers(sc, d) end
+            local build = TAB_BUILD[tab]
+            if build then build(sc, d) end
         end)
 
         if HB._econOnly then

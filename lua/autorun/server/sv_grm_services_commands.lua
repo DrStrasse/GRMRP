@@ -224,6 +224,23 @@ CMD.diploma_revoke = function(ply, args)
     else say(ply, tostring(res), 255, 140, 140) end
 end
 
+--[[ ПАРАМЕТРЫ ДОСТУПА /svc_access — таблица вместо лестницы `elseif kind ==`.
+     Заодно видно, что «включено» значит одно и то же для всех флагов:
+     раньше выражение `value ~= "0" and value ~= "off"` было переписано
+     трижды, и разойтись ему ничто не мешало. ]]
+local function flagOn(value)
+    return value ~= "0" and value ~= "off"
+end
+
+local ACCESS_FIELDS = {
+    service = function(patch, value) patch.canService = flagOn(value) end,
+    invoice = function(patch, value) patch.canInvoice = flagOn(value) end,
+    diploma = function(patch, value) patch.canDiploma = flagOn(value) end,
+    max = function(patch, value) patch.maxInvoice = tonumber(value) or 0 end,
+    -- Название учреждения — весь остаток команды: в нём бывают пробелы.
+    name = function(patch, _value, args) patch.institution = table.concat(args, " ", 3) end,
+}
+
 -- ── суперадмин ────────────────────────────────────────────
 CMD.svc_access = function(ply, args)
     if IsValid(ply) and not ply:IsSuperAdmin() then
@@ -236,12 +253,11 @@ CMD.svc_access = function(ply, args)
     end
     local faction, kind, value = args[1], string.lower(args[2]), args[3]
     local patch = {}
-    if kind == "service" then patch.canService = value ~= "0" and value ~= "off"
-    elseif kind == "invoice" then patch.canInvoice = value ~= "0" and value ~= "off"
-    elseif kind == "diploma" then patch.canDiploma = value ~= "0" and value ~= "off"
-    elseif kind == "max" then patch.maxInvoice = tonumber(value) or 0
-    elseif kind == "name" then patch.institution = table.concat(args, " ", 3)
-    else return say(ply, "Неизвестный параметр: " .. kind, 255, 140, 140) end
+    local applyPatch = ACCESS_FIELDS[kind]
+    if not applyPatch then
+        return say(ply, "Неизвестный параметр: " .. kind, 255, 140, 140)
+    end
+    applyPatch(patch, value, args)
 
     local ok, res = s.SetAccess(faction, patch)
     if ok then

@@ -99,10 +99,15 @@ ok(fixes:find("f.PositionWeapons = istable(data.PositionWeapons)", 1, true) ~= n
    "оружие читается обратно")
 
 print("\n=== 3. СЕРВЕР ПРИНИМАЕТ СОХРАНЕНИЕ ===")
-ok(fixes:find('elseif saveType == "position" then', 1, true) ~= nil,
-   "обработчик сохранения формы должности есть")
-local _, saveCount = fixes:gsub('saveType == "position"', "")
-ok(saveCount == 2, "он есть и для моделей, и для оружия", saveCount)
+--[[ Пять веток `saveType` были написаны дважды (модели и оружие) и
+     свелись в общий реестр LOADOUT_AXES + storeLoadout. Проверяем
+     контракт реестра, а не текст старой лестницы (§10.1.4). ]]
+ok(fixes:find("LOADOUT_AXES", 1, true) ~= nil, "оси снаряжения описаны реестром")
+ok(fixes:find("position = {", 1, true) ~= nil, "ось «должность» есть в реестре")
+ok(fixes:find('GRM.Positions.Get(f, key)', 1, true) ~= nil,
+   "форма должности пишется только для существующей должности")
+local _, useCount = fixes:gsub('storeLoadout%("', "")
+ok(useCount == 2, "общая запись используется и для моделей, и для оружия", useCount)
 ok(fixes:find("GRM.Positions.Get(f, key)", 1, true) ~= nil,
    "сохранение только для существующей должности — иначе набор повис бы в воздухе")
 ok(fixes:find("posList = st.posList", 1, true) ~= nil, "должности уходят в снимок редактора")

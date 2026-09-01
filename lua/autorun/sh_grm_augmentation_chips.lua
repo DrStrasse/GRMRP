@@ -282,49 +282,120 @@ function CHIPS.ImplantChip(ply, chipId)
 end
 
 -- Применение эффектов чипа
+--[[ РЕЕСТР МОДИФИКАТОРОВ ЧИПА — один список вместо трёх лестниц.
+
+     Было: `speed/health/armor/carryWeight/stamina/vision` разбирались
+     ТРИЖДЫ — в применении эффектов, в снятии и в пересчёте. Три лестницы
+     по шесть веток, и каждая новая способность требовала трёх правок в
+     разных концах файла. Классическая цена такой схемы уже видна здесь
+     же: пересчёт был скопирован в файл дважды, и Lua молча оставлял
+     вторую копию.
+
+     Теперь модификатор описан ОДНОЙ строкой:
+       apply(ply, value)      — включить эффект;
+       remove(ply, value)     — выключить (пара к apply на виду, забыть
+                                «обратную» половину теперь трудно);
+       fold(acc, value)       — как несколько чипов складываются в
+                                суммарный эффект при пересчёте.
+]]
+local CHIP_MODIFIERS = {
+    speed = {
+        apply = function(ply, value)
+            -- База 200/400 — «разгон» чипа считается от неё, а не от
+            -- текущей скорости: иначе эффекты множились бы при рестарте.
+            ply:SetWalkSpeed(200 * value)
+            ply:SetRunSpeed(400 * value)
+        end,
+        remove = function(ply)
+            ply:SetWalkSpeed((GRM.Movement and GRM.Movement.Config.WalkSpeed) or 160)
+            ply:SetRunSpeed((GRM.Movement and GRM.Movement.Config.RunSpeed) or 220)
+        end,
+        fold = function(acc, value) acc.speed = acc.speed * (tonumber(value) or 1) end,
+    },
+
+    health = {
+        apply = function(ply, value)
+            local baseMax = (GRM.Augmentations and GRM.Augmentations.Config.DefaultHealth) or 100
+            local targetMax = math.min(baseMax + value,
+                (GRM.Augmentations and GRM.Augmentations.Config.MaxHealth) or 1000)
+            ply:SetMaxHealth(targetMax)
+            ply:SetHealth(math.max(ply:Health(), targetMax))
+        end,
+        remove = function(ply, value)
+            ply:SetMaxHealth(ply:GetMaxHealth() - value)
+            ply:SetHealth(math.min(ply:Health(), ply:GetMaxHealth()))
+        end,
+        fold = function(acc, value) acc.health = acc.health + (tonumber(value) or 0) end,
+    },
+
+    armor = {
+        apply = function(ply, value) ply:SetArmor(math.min(ply:Armor() + value, 255)) end,
+        remove = function(ply, value) ply:SetArmor(math.max(0, ply:Armor() - value)) end,
+        fold = function(acc, value) acc.armor = acc.armor + (tonumber(value) or 0) end,
+    },
+
+    carryWeight = {
+        apply = function(ply, value)
+            if GRM.Inventory and GRM.Inventory.SetBonusWeight then
+                GRM.Inventory.SetBonusWeight(ply, value)
+            end
+            ply:SetNWInt("GRM_ChipCarryWeight", value)
+        end,
+        remove = function(ply)
+            if GRM.Inventory and GRM.Inventory.SetBonusWeight then
+                GRM.Inventory.SetBonusWeight(ply, 0)
+            end
+            ply:SetNWInt("GRM_ChipCarryWeight", 0)
+        end,
+        -- Несколько чипов на вес не складываются: берём лучший.
+        fold = function(acc, value) acc.weight = math.max(acc.weight, tonumber(value) or 0) end,
+    },
+
+    stamina = {
+        apply = function(ply, value)
+            if GRM.Stamina and GRM.Stamina.SetMultiplier then
+                GRM.Stamina.SetMultiplier(ply, value)
+            end
+            ply:SetNWFloat("GRM_ChipStamina", value)
+        end,
+        remove = function(ply)
+            if GRM.Stamina and GRM.Stamina.SetMultiplier then
+                GRM.Stamina.SetMultiplier(ply, 1.0)
+            end
+            ply:SetNWFloat("GRM_ChipStamina", 1.0)
+        end,
+        fold = function(acc, value) acc.stamina = math.max(acc.stamina, tonumber(value) or 1) end,
+    },
+
+    vision = {
+        -- Режим зрения включает клиент, поэтому только сообщение.
+        apply = function(ply, value)
+            if not SERVER then return end
+            net.Start("GRM_Augmentation_Update")
+            net.WriteString(value)
+            net.WriteBool(true)
+            net.Send(ply)
+        end,
+        remove = function(ply, value)
+            if not SERVER then return end
+            net.Start("GRM_Augmentation_Update")
+            net.WriteString(value)
+            net.WriteBool(false)
+            net.Send(ply)
+        end,
+        fold = function(acc, value) acc.vision = value end,
+    },
+}
+
+CHIPS.Modifiers = CHIP_MODIFIERS
+
+--- Применение эффектов чипа.
 function CHIPS.ApplyChipEffects(ply, chip)
     if not IsValid(ply) or not chip or not chip.implanted then return end
 
     for modKey, modValue in pairs(chip.modifiers or {}) do
-        if modKey == "speed" then
-            local baseSpeed = 200
-            local baseRunSpeed = 400
-            ply:SetWalkSpeed(baseSpeed * modValue)
-            ply:SetRunSpeed(baseRunSpeed * modValue)
-
-        elseif modKey == "health" then
-            local baseMax = (GRM.Augmentations and GRM.Augmentations.Config.DefaultHealth) or 100
-            local targetMax = math.min(baseMax + modValue, (GRM.Augmentations and GRM.Augmentations.Config.MaxHealth) or 1000)
-            ply:SetMaxHealth(targetMax)
-            ply:SetHealth(math.max(ply:Health(), targetMax))
-
-        elseif modKey == "armor" then
-            local currentArmor = ply:Armor()
-            ply:SetArmor(math.min(currentArmor + modValue, 255))
-
-        elseif modKey == "carryWeight" then
-            -- Интеграция с системой инвентаря (если есть)
-            if GRM.Inventory and GRM.Inventory.SetBonusWeight then
-                GRM.Inventory.SetBonusWeight(ply, modValue)
-            end
-            ply:SetNWInt("GRM_ChipCarryWeight", modValue)
-
-        elseif modKey == "stamina" then
-            -- Интеграция с системой выносливости (если есть)
-            if GRM.Stamina and GRM.Stamina.SetMultiplier then
-                GRM.Stamina.SetMultiplier(ply, modValue)
-            end
-            ply:SetNWFloat("GRM_ChipStamina", modValue)
-
-        elseif modKey == "vision" then
-            -- Интеграция с системой зрения
-            if SERVER then
-                net.Start("GRM_Augmentation_Update")
-                net.WriteString(modValue) -- infrared, nightvision, etc.
-                net.WriteBool(true)
-                net.Send(ply)
-            end
-        end
+        local mod = CHIP_MODIFIERS[modKey]
+        if mod then mod.apply(ply, modValue) end
     end
 
     if SERVER then
@@ -335,80 +406,69 @@ function CHIPS.ApplyChipEffects(ply, chip)
         net.Send(ply)
     end
 
-    if GRM.AugmentationIntegrations and GRM.AugmentationIntegrations.Apply then GRM.AugmentationIntegrations.Apply(ply, chip) end
+    if GRM.AugmentationIntegrations and GRM.AugmentationIntegrations.Apply then
+        GRM.AugmentationIntegrations.Apply(ply, chip)
+    end
 
-    -- Уведомление
+    -- Восстановленный после рестарта чип не должен «объявляться» заново.
     if SERVER and not chip._restored then
         ply:ChatPrint("[Аугментации] Эффекты чипа '" .. chip.name .. "' активированы")
     end
 end
 
--- Снятие эффектов чипа
+--- Снятие эффектов чипа.
 function CHIPS.RemoveChipEffects(ply, chip)
     if not IsValid(ply) or not chip then return end
 
     for modKey, modValue in pairs(chip.modifiers or {}) do
-        if modKey == "speed" then
-            ply:SetWalkSpeed((GRM.Movement and GRM.Movement.Config.WalkSpeed) or 160)
-            ply:SetRunSpeed((GRM.Movement and GRM.Movement.Config.RunSpeed) or 220)
-
-        elseif modKey == "health" then
-            local currentMax = ply:GetMaxHealth()
-            ply:SetMaxHealth(currentMax - modValue)
-            ply:SetHealth(math.min(ply:Health(), ply:GetMaxHealth()))
-
-        elseif modKey == "armor" then
-            local currentArmor = ply:Armor()
-            ply:SetArmor(math.max(0, currentArmor - modValue))
-
-        elseif modKey == "carryWeight" then
-            if GRM.Inventory and GRM.Inventory.SetBonusWeight then
-                GRM.Inventory.SetBonusWeight(ply, 0)
-            end
-            ply:SetNWInt("GRM_ChipCarryWeight", 0)
-
-        elseif modKey == "stamina" then
-            if GRM.Stamina and GRM.Stamina.SetMultiplier then
-                GRM.Stamina.SetMultiplier(ply, 1.0)
-            end
-            ply:SetNWFloat("GRM_ChipStamina", 1.0)
-
-        elseif modKey == "vision" then
-            if SERVER then
-                net.Start("GRM_Augmentation_Update")
-                net.WriteString(modValue)
-                net.WriteBool(false)
-                net.Send(ply)
-            end
-        end
+        local mod = CHIP_MODIFIERS[modKey]
+        if mod then mod.remove(ply, modValue) end
     end
-    if GRM.AugmentationIntegrations and GRM.AugmentationIntegrations.Remove then GRM.AugmentationIntegrations.Remove(ply, chip) end
+
+    if GRM.AugmentationIntegrations and GRM.AugmentationIntegrations.Remove then
+        GRM.AugmentationIntegrations.Remove(ply, chip)
+    end
 end
 
+--[[ Пересчёт всех эффектов «с нуля».
+
+     Нужен после снятия/выключения чипа: раздельные apply/remove
+     накапливают ошибку (снял два чипа брони — броня уехала в минус),
+     поэтому итог считается по всем активным чипам сразу. ]]
 function CHIPS.RecomputeEffects(ply)
     if not IsValid(ply) then return end
-    local baseHealth=(GRM.Augmentations and GRM.Augmentations.Config.DefaultHealth) or 100
-    local baseArmor=(GRM.Augmentations and GRM.Augmentations.Config.DefaultArmor) or 0
-    local walk=(GRM.Movement and GRM.Movement.Config.WalkSpeed) or 160
-    local run=(GRM.Movement and GRM.Movement.Config.RunSpeed) or 220
-    local healthBonus, armorBonus, weight, speed, stamina = 0,0,0,1,1
-    local vision=nil
-    for _,chip in ipairs(CHIPS.GetPlayerChips(ply)) do
+
+    local baseHealth = (GRM.Augmentations and GRM.Augmentations.Config.DefaultHealth) or 100
+    local baseArmor = (GRM.Augmentations and GRM.Augmentations.Config.DefaultArmor) or 0
+    local walk = (GRM.Movement and GRM.Movement.Config.WalkSpeed) or 160
+    local run = (GRM.Movement and GRM.Movement.Config.RunSpeed) or 220
+
+    local acc = { health = 0, armor = 0, weight = 0, speed = 1, stamina = 1, vision = nil }
+    for _, chip in ipairs(CHIPS.GetPlayerChips(ply)) do
         if chip.implanted and chip.active ~= false then
-            for key,val in pairs(chip.modifiers or {}) do
-                if key=="health" then healthBonus=healthBonus+(tonumber(val) or 0)
-                elseif key=="armor" then armorBonus=armorBonus+(tonumber(val) or 0)
-                elseif key=="carryWeight" then weight=math.max(weight,tonumber(val) or 0)
-                elseif key=="speed" then speed=speed*(tonumber(val) or 1)
-                elseif key=="stamina" then stamina=math.max(stamina,tonumber(val) or 1)
-                elseif key=="vision" then vision=val end
+            for key, value in pairs(chip.modifiers or {}) do
+                local mod = CHIP_MODIFIERS[key]
+                if mod and mod.fold then mod.fold(acc, value) end
             end
         end
     end
-    local maxHealth=math.min(baseHealth+healthBonus,(GRM.Augmentations and GRM.Augmentations.Config.MaxHealth) or 1000)
-    ply:SetMaxHealth(maxHealth); ply:SetHealth(math.min(ply:Health(),maxHealth)); ply:SetArmor(math.min(baseArmor+armorBonus,255)); ply:SetWalkSpeed(walk*speed); ply:SetRunSpeed(run*speed)
-    ply:SetNWInt("GRM_ChipCarryWeight",weight); ply:SetNWFloat("GRM_ChipStamina",stamina)
-    if vision and SERVER then net.Start("GRM_Augmentation_Update"); net.WriteString(vision); net.WriteBool(true); net.Send(ply) end
+
+    local maxHealth = math.min(baseHealth + acc.health,
+        (GRM.Augmentations and GRM.Augmentations.Config.MaxHealth) or 1000)
+    ply:SetMaxHealth(maxHealth)
+    ply:SetHealth(math.min(ply:Health(), maxHealth))
+    ply:SetArmor(math.min(baseArmor + acc.armor, 255))
+    ply:SetWalkSpeed(walk * acc.speed)
+    ply:SetRunSpeed(run * acc.speed)
+    ply:SetNWInt("GRM_ChipCarryWeight", acc.weight)
+    ply:SetNWFloat("GRM_ChipStamina", acc.stamina)
+
+    if acc.vision and SERVER then
+        net.Start("GRM_Augmentation_Update")
+        net.WriteString(acc.vision)
+        net.WriteBool(true)
+        net.Send(ply)
+    end
 end
 
 -- Извлечение чипа
@@ -636,31 +696,11 @@ if SERVER then
         GRM.Notify(ply, ok and "Чип снят: " .. msg or (msg or "Не удалось снять чип"), ok and 90 or 240, ok and 220 or 90, ok and 130 or 80)
     end)
 
-    function CHIPS.RecomputeEffects(ply)
-    if not IsValid(ply) then return end
-    local baseHealth=(GRM.Augmentations and GRM.Augmentations.Config.DefaultHealth) or 100
-    local baseArmor=(GRM.Augmentations and GRM.Augmentations.Config.DefaultArmor) or 0
-    local walk=(GRM.Movement and GRM.Movement.Config.WalkSpeed) or 160
-    local run=(GRM.Movement and GRM.Movement.Config.RunSpeed) or 220
-    local healthBonus, armorBonus, weight, speed, stamina = 0,0,0,1,1
-    local vision=nil
-    for _,chip in ipairs(CHIPS.GetPlayerChips(ply)) do
-        if chip.implanted and chip.active ~= false then
-            for key,val in pairs(chip.modifiers or {}) do
-                if key=="health" then healthBonus=healthBonus+(tonumber(val) or 0)
-                elseif key=="armor" then armorBonus=armorBonus+(tonumber(val) or 0)
-                elseif key=="carryWeight" then weight=math.max(weight,tonumber(val) or 0)
-                elseif key=="speed" then speed=speed*(tonumber(val) or 1)
-                elseif key=="stamina" then stamina=math.max(stamina,tonumber(val) or 1)
-                elseif key=="vision" then vision=val end
-            end
-        end
-    end
-    local maxHealth=math.min(baseHealth+healthBonus,(GRM.Augmentations and GRM.Augmentations.Config.MaxHealth) or 1000)
-    ply:SetMaxHealth(maxHealth); ply:SetHealth(math.min(ply:Health(),maxHealth)); ply:SetArmor(math.min(baseArmor+armorBonus,255)); ply:SetWalkSpeed(walk*speed); ply:SetRunSpeed(run*speed)
-    ply:SetNWInt("GRM_ChipCarryWeight",weight); ply:SetNWFloat("GRM_ChipStamina",stamina)
-    if vision and SERVER then net.Start("GRM_Augmentation_Update"); net.WriteString(vision); net.WriteBool(true); net.Send(ply) end
-end
+    --[[ Здесь лежала ВТОРАЯ, дословная копия CHIPS.RecomputeEffects.
+         Lua молча оставляет последнюю: правка «работающей» функции выше
+         не давала эффекта, а искать причину пришлось бы по факту
+         «поменял формулу брони — ничего не изменилось».
+         Единственная реализация — рядом с Apply/RemoveChipEffects. ]]
 
 -- Извлечение чипа
     net.Receive("GRM_AugChip_Extract", function(len, ply)

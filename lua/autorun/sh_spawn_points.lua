@@ -937,6 +937,15 @@ local function spLower(s)
     return s
 end
 
+--[[ Корзины снимка по осям. Имена совпадают с полями bundle, который
+     сервер шлёт клиенту (roles/departments/subdepartments/positions). ]]
+SP.ScopeBuckets = {
+    role = "roles",
+    dept = "departments",
+    sub = "subdepartments",
+    position = "positions",
+}
+
 --- Все точки конкретного узла.
 --  sel = { scope = "global"|"faction"|"dept"|"sub"|"role", faction = ..., key = ... }
 function SP.PointsFor(data, sel)
@@ -945,10 +954,11 @@ function SP.PointsFor(data, sel)
     local fac = istable(data.factions) and data.factions[sel.faction] or nil
     if not istable(fac) then return {} end
     if sel.scope == "faction" then return istable(fac.points) and fac.points or {} end
-    local bucket
-    if sel.scope == "role" then bucket = fac.roles
-    elseif sel.scope == "dept" then bucket = fac.departments
-    elseif sel.scope == "sub" then bucket = fac.subdepartments end
+    -- Ось → её корзина в снимке. Тот же набор осей, что и на сервере
+    -- (SPAWN_AXES): ветка на каждую ось здесь означала бы, что новая ось
+    -- появится в игре, но не появится в админ-меню.
+    local bucketField = SP.ScopeBuckets[sel.scope]
+    local bucket = bucketField and fac[bucketField] or nil
     if not istable(bucket) then return {} end
     local pts = bucket[sel.key]
     return istable(pts) and pts or {}
@@ -1181,26 +1191,27 @@ function SP.BuildTree(data, filter, expanded)
     return rows
 end
 
---- Человеческая «хлебная крошка» выбранного узла
-function SP.SelectionPath(data, sel)
-    if not istable(sel) then return "—" end
-    if sel.scope == "global" then return "Глобальные точки" end
-    local fac = istable(data) and istable(data.factions) and data.factions[sel.faction] or nil
-    local facLabel = istable(fac) and tostring(fac.displayName or sel.faction) or tostring(sel.faction or "—")
-    if sel.scope == "faction" then return facLabel .. "  →  Точки организации" end
-    if sel.scope == "role" then
-        local names = istable(fac) and istable(fac.roleNames) and fac.roleNames or {}
-        return facLabel .. "  →  Должность «" .. tostring(names[sel.key] or sel.key) .. "»"
-    end
-    if sel.scope == "dept" then
-        local names = istable(fac) and istable(fac.deptNames) and fac.deptNames or {}
-        return facLabel .. "  →  Отдел «" .. tostring(names[sel.key] or sel.key) .. "»"
-    end
-    if sel.scope == "sub" then
-        local parentLabel, subLabel = nil, tostring(sel.key)
+--[[ Подписи узлов для «хлебной крошки». Раньше это была лестница из
+     трёх ветвей, где каждая сама доставала свой словарь имён; подотдел
+     дополнительно ищет свой отдел, чтобы путь читался целиком. ]]
+local function nodeName(names, key)
+    return tostring((istable(names) and names[key]) or key)
+end
+
+local SCOPE_LABELS = {
+    role = function(fac, key)
+        local names = istable(fac) and fac.roleNames or nil
+        return "Должность «" .. nodeName(names, key) .. "»"
+    end,
+    dept = function(fac, key)
+        local names = istable(fac) and fac.deptNames or nil
+        return "Отдел «" .. nodeName(names, key) .. "»"
+    end,
+    sub = function(fac, key)
+        local subLabel, parentLabel = tostring(key), nil
         if istable(fac) and istable(fac.subList) then
             for _, sub in ipairs(fac.subList) do
-                if istable(sub) and tostring(sub.id) == tostring(sel.key) then
+                if istable(sub) and tostring(sub.id) == tostring(key) then
                     subLabel = tostring(sub.name or sub.id)
                     local dn = istable(fac.deptNames) and fac.deptNames[tostring(sub.parent)] or nil
                     parentLabel = tostring(dn or sub.parent or "")
@@ -1209,10 +1220,21 @@ function SP.SelectionPath(data, sel)
             end
         end
         if parentLabel and parentLabel ~= "" then
-            return facLabel .. "  →  Отдел «" .. parentLabel .. "»  →  Подотдел «" .. subLabel .. "»"
+            return "Отдел «" .. parentLabel .. "»  →  Подотдел «" .. subLabel .. "»"
         end
-        return facLabel .. "  →  Подотдел «" .. subLabel .. "»"
-    end
+        return "Подотдел «" .. subLabel .. "»"
+    end,
+}
+
+--- Человеческая «хлебная крошка» выбранного узла
+function SP.SelectionPath(data, sel)
+    if not istable(sel) then return "—" end
+    if sel.scope == "global" then return "Глобальные точки" end
+    local fac = istable(data) and istable(data.factions) and data.factions[sel.faction] or nil
+    local facLabel = istable(fac) and tostring(fac.displayName or sel.faction) or tostring(sel.faction or "—")
+    if sel.scope == "faction" then return facLabel .. "  →  Точки организации" end
+    local label = SCOPE_LABELS[sel.scope]
+    if label then return facLabel .. "  →  " .. label(fac, sel.key) end
     return facLabel
 end
 
@@ -1349,52 +1371,43 @@ if CLIENT then
     -- ----------------------------------------------------------------
     -- Отправка команд на сервер
     -- ----------------------------------------------------------------
+    --[[ Каналы админ-команд по осям. Раньше это были две лестницы по
+         пять веток (добавить/удалить), различавшиеся ТОЛЬКО именем
+         канала и тем, пишется ли ключ узла. Ось с ключом (роль, отдел,
+         подотдел) шлёт `faction + key`, ось без ключа (глобальные,
+         организация) — только «фракцию»; для глобальных это условное
+         имя `__global`, как ждёт сервер. ]]
+    local SCOPE_NET = {
+        global = { add = "SpawnAdmin_AddPoint", remove = "SpawnAdmin_RemovePoint",
+                   faction = "__global" },
+        faction = { add = "SpawnAdmin_AddPoint", remove = "SpawnAdmin_RemovePoint" },
+        role = { add = "SpawnAdmin_AddRolePoint", remove = "SpawnAdmin_RemoveRolePoint", keyed = true },
+        dept = { add = "SpawnAdmin_AddDeptPoint", remove = "SpawnAdmin_RemoveDeptPoint", keyed = true },
+        sub = { add = "SpawnAdmin_AddSubPoint", remove = "SpawnAdmin_RemoveSubPoint", keyed = true },
+    }
+
+    --- Записать «адрес» узла в пакет: фракция (или __global) и ключ узла.
+    local function writeScope(channel, sel)
+        net.WriteString(channel.faction or sel.faction)
+        if channel.keyed then net.WriteString(sel.key) end
+    end
+
     local function sendAdd(sel, pos, ang)
-        if sel.scope == "global" then
-            net.Start("SpawnAdmin_AddPoint")
-            net.WriteString("__global")
-            net.WriteVector(pos) net.WriteAngle(ang)
-        elseif sel.scope == "faction" then
-            net.Start("SpawnAdmin_AddPoint")
-            net.WriteString(sel.faction)
-            net.WriteVector(pos) net.WriteAngle(ang)
-        elseif sel.scope == "role" then
-            net.Start("SpawnAdmin_AddRolePoint")
-            net.WriteString(sel.faction) net.WriteString(sel.key)
-            net.WriteVector(pos) net.WriteAngle(ang)
-        elseif sel.scope == "dept" then
-            net.Start("SpawnAdmin_AddDeptPoint")
-            net.WriteString(sel.faction) net.WriteString(sel.key)
-            net.WriteVector(pos) net.WriteAngle(ang)
-        elseif sel.scope == "sub" then
-            net.Start("SpawnAdmin_AddSubPoint")
-            net.WriteString(sel.faction) net.WriteString(sel.key)
-            net.WriteVector(pos) net.WriteAngle(ang)
-        else
-            return
-        end
+        local channel = SCOPE_NET[sel.scope]
+        if not channel then return end
+        net.Start(channel.add)
+            writeScope(channel, sel)
+            net.WriteVector(pos)
+            net.WriteAngle(ang)
         net.SendToServer()
     end
 
     local function sendRemove(sel, index)
-        if sel.scope == "global" then
-            net.Start("SpawnAdmin_RemovePoint")
-            net.WriteString("__global") net.WriteInt(index, 32)
-        elseif sel.scope == "faction" then
-            net.Start("SpawnAdmin_RemovePoint")
-            net.WriteString(sel.faction) net.WriteInt(index, 32)
-        elseif sel.scope == "role" then
-            net.Start("SpawnAdmin_RemoveRolePoint")
-            net.WriteString(sel.faction) net.WriteString(sel.key) net.WriteInt(index, 32)
-        elseif sel.scope == "dept" then
-            net.Start("SpawnAdmin_RemoveDeptPoint")
-            net.WriteString(sel.faction) net.WriteString(sel.key) net.WriteInt(index, 32)
-        elseif sel.scope == "sub" then
-            net.Start("SpawnAdmin_RemoveSubPoint")
-            net.WriteString(sel.faction) net.WriteString(sel.key) net.WriteInt(index, 32)
-        else
-            return
-        end
+        local channel = SCOPE_NET[sel.scope]
+        if not channel then return end
+        net.Start(channel.remove)
+            writeScope(channel, sel)
+            net.WriteInt(index, 32)
         net.SendToServer()
     end
 

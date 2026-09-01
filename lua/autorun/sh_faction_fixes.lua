@@ -1028,6 +1028,83 @@ if SERVER then
         net.Send(ply)
     end)
 
+    --[[ ОСИ СНАРЯЖЕНИЯ (фракция / роль / отдел / подотдел / должность).
+
+         Одни и те же пять веток были написаны ДВАЖДЫ — отдельно для
+         моделей и отдельно для оружия. Это ровно тот случай, о котором
+         говорил владелец: условие про отдел и подотдел пишется по новой
+         вместо одной общей проверки. Цена уже проявилась: у подотдела
+         модели сохранялись на диск (FactionsAPI.Save), а оружие — нет,
+         хотя лежит там же, в factions.json; после рестарта оружие
+         подотдела пропадало.
+
+         Ось описывает: куда класть список (`field` по виду снаряжения),
+         как класть (`store`), нужно ли писать factions.json (`persist`)
+         и кому пере-выдать оружие (`targets`).
+    ]]
+    local LOADOUT_AXES = {
+        faction = {
+            field = { models = "Models", weapons = "Weapons" },
+            targets = function(factionName) return factionName, nil, nil, nil end,
+        },
+        role = {
+            field = { models = "RoleModels", weapons = "RoleWeapons" },
+            keyed = true,
+            targets = function(factionName, key) return factionName, key, nil, nil end,
+        },
+        department = {
+            field = { models = "DepartmentModels", weapons = "DepartmentWeapons" },
+            keyed = true,
+            targets = function(factionName, key) return factionName, nil, key, nil end,
+        },
+        subdepartment = {
+            -- Списки подотдела живут внутри самой записи подотдела
+            -- (f.Subdepartments[key].models/.weapons), как их читает
+            -- GetSubdepartments; это часть factions.json, поэтому persist.
+            persist = true,
+            targets = function(factionName, key) return factionName, nil, nil, key end,
+            store = function(f, kind, key, list)
+                f.Subdepartments = istable(f.Subdepartments) and f.Subdepartments or {}
+                if not istable(f.Subdepartments[key]) then return false end
+                f.Subdepartments[key][kind] = list
+                return true
+            end,
+        },
+        position = {
+            -- Форма должности: самая точная в порядке ResolveLoadout.
+            field = { models = "PositionModels", weapons = "PositionWeapons" },
+            keyed = true,
+            persist = true,
+            validate = function(f, key)
+                return GRM.Positions ~= nil and GRM.Positions.Get ~= nil
+                    and GRM.Positions.Get(f, key) ~= nil
+            end,
+        },
+    }
+
+    --[[ Записать список снаряжения по оси.
+         kind — "models" или "weapons". Возвращает ok, причину отказа. ]]
+    local function storeLoadout(kind, f, saveType, key, list)
+        local axis = LOADOUT_AXES[saveType]
+        if not axis then return false end
+        if axis.validate and not axis.validate(f, key) then return false, "not_found" end
+
+        if axis.store then
+            if not axis.store(f, kind, key, list) then return false end
+        else
+            local field = axis.field[kind]
+            if axis.keyed then
+                f[field] = istable(f[field]) and f[field] or {}
+                f[field][key] = list
+            else
+                f[field] = list
+            end
+        end
+
+        if axis.persist and FactionsAPI and FactionsAPI.Save then pcall(FactionsAPI.Save) end
+        return true
+    end
+
     net.Receive(NET_ADMIN_MODELS_SAVE, function(_, ply)
         if not IsValid(ply) or not ply:IsSuperAdmin() then return end
         local saveType = net.ReadString()
@@ -1051,31 +1128,12 @@ if SERVER then
 
         if not Factions or not Factions[factionName] then return end
         local f = Factions[factionName]
-        if saveType == "faction" then
-            f.Models = models
-        elseif saveType == "role" then
-            f.RoleModels = f.RoleModels or {}
-            f.RoleModels[key] = models
-        elseif saveType == "department" then
-            f.DepartmentModels = f.DepartmentModels or {}
-            f.DepartmentModels[key] = models
-        elseif saveType == "subdepartment" then
-            -- Списки подотдела живут внутри самой записи подотдела
-            -- (f.Subdepartments[key].models), как их читает GetSubdepartments.
-            f.Subdepartments = istable(f.Subdepartments) and f.Subdepartments or {}
-            if istable(f.Subdepartments[key]) then
-                f.Subdepartments[key].models = models
-            end
-            if FactionsAPI and FactionsAPI.Save then pcall(FactionsAPI.Save) end
-        elseif saveType == "position" then
-            -- Форма должности: самая точная в порядке ResolveLoadout.
-            if not (GRM.Positions and GRM.Positions.Get and GRM.Positions.Get(f, key)) then
+        local ok, why = storeLoadout("models", f, saveType, key, models)
+        if not ok then
+            if why == "not_found" then
                 ply:PrintMessage(HUD_PRINTTALK, "[Модели] Должность не найдена.")
-                return
             end
-            f.PositionModels = istable(f.PositionModels) and f.PositionModels or {}
-            f.PositionModels[key] = models
-            if FactionsAPI and FactionsAPI.Save then pcall(FactionsAPI.Save) end
+            return
         end
 
         saveFactionExtras()
@@ -1129,32 +1187,20 @@ if SERVER then
 
         if not Factions or not Factions[factionName] then return end
         local f = Factions[factionName]
-        if saveType == "faction" then
-            f.Weapons = weapons
-            applyWeaponsToTargetGroup(factionName, nil, nil)
-        elseif saveType == "role" then
-            f.RoleWeapons = f.RoleWeapons or {}
-            f.RoleWeapons[key] = weapons
-            applyWeaponsToTargetGroup(factionName, key, nil)
-        elseif saveType == "department" then
-            f.DepartmentWeapons = f.DepartmentWeapons or {}
-            f.DepartmentWeapons[key] = weapons
-            applyWeaponsToTargetGroup(factionName, nil, key)
-        elseif saveType == "subdepartment" then
-            f.Subdepartments = istable(f.Subdepartments) and f.Subdepartments or {}
-            if istable(f.Subdepartments[key]) then
-                f.Subdepartments[key].weapons = weapons
-                applyWeaponsToTargetGroup(factionName, nil, nil, key)
-            end
-        elseif saveType == "position" then
-            if not (GRM.Positions and GRM.Positions.Get and GRM.Positions.Get(f, key)) then
+        local ok, why = storeLoadout("weapons", f, saveType, key, weapons)
+        if not ok then
+            if why == "not_found" then
                 ply:PrintMessage(HUD_PRINTTALK, "[Оружие] Должность не найдена.")
-                return
             end
-            f.PositionWeapons = istable(f.PositionWeapons) and f.PositionWeapons or {}
-            f.PositionWeapons[key] = weapons
-            if FactionsAPI and FactionsAPI.Save then pcall(FactionsAPI.Save) end
+            return
         end
+
+        -- Оружие, в отличие от моделей, надо пере-выдать тем, кто уже в игре.
+        local axis = LOADOUT_AXES[saveType]
+        if axis.targets then
+            applyWeaponsToTargetGroup(axis.targets(factionName, key))
+        end
+
         -- фикс v3.1.1: оружейные списки раньше НЕ сохранялись на диск
         -- (только модели) — после рестарта слетали; пишем в fw_faction_extras.json
         saveFactionExtras()

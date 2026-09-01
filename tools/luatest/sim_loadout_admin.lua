@@ -72,9 +72,16 @@ ok(fixes:find("roleNames = st.roleNames", 1, true) and fixes:find("deptNames = s
     "публичные названия должностей и отделов уходят клиенту")
 ok(select(2, fixes:gsub('subdepartments = st%.subdepartments', "")) == 2,
     "и модели, и оружие подотделов передаются")
-ok(fixes:find('f.Subdepartments[key].models = models', 1, true) ~= nil, "сохранение моделей подотдела")
-ok(fixes:find('f.Subdepartments[key].weapons = weapons', 1, true) ~= nil, "сохранение оружия подотдела")
-ok(fixes:find("applyWeaponsToTargetGroup(factionName, nil, nil, key)", 1, true) ~= nil,
+--[[ Модели и оружие подотдела пишутся общей функцией storeLoadout:
+     раньше это были две копии одной ветки, из-за чего у оружия
+     подотдела забыли запись factions.json (после рестарта пропадало).
+     Проверяем контракт оси, а не текст копии (§10.1.4). ]]
+ok(fixes:find("f.Subdepartments[key][kind] = list", 1, true) ~= nil,
+    "списки подотдела пишутся общей функцией (и модели, и оружие)")
+ok(fixes:find("persist = true", 1, true) ~= nil,
+    "ось подотдела пишет factions.json — иначе оружие подотдела теряется при рестарте")
+ok(fixes:find("applyWeaponsToTargetGroup(axis.targets(factionName, key))", 1, true) ~= nil
+    and fixes:find("return factionName, nil, nil, key", 1, true) ~= nil,
     "оружие подотдела сразу выдаётся его сотрудникам")
 ok(fixes:find("local subMatch =", 1, true) ~= nil, "выдача фильтрует по подотделу")
 

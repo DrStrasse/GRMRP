@@ -116,6 +116,117 @@ ok(has(client, "Derma_Query"), "confirmation dialog exists")
 ok(has(client, "concommand.Add"), "console command registered")
 ok(has(client, "grm_chips"), "chips console command name exists")
 
+--[[ РЕЕСТР МОДИФИКАТОРОВ: apply/remove/fold — по одной строке на способность.
+
+     Раньше `speed/health/armor/carryWeight/stamina/vision` разбирались
+     тремя лестницами (применить / снять / пересчитать), то есть новая
+     способность требовала трёх правок в разных концах файла. Цена такой
+     схемы уже была видна: пересчёт эффектов лежал в файле ДВАЖДЫ, и Lua
+     молча использовал вторую копию.
+
+     Проверяем циклом по реестру: у каждой способности есть все три
+     половины, и «применить → снять» возвращает игрока к базовым
+     значениям (потерянная remove-половина = вечный бафф после снятия
+     чипа, который заметят только по жалобе). ]]
+SERVER, CLIENT = true, false
+function AddCSLuaFile() end
+function isstring(v) return type(v) == "string" end
+function istable(v) return type(v) == "table" end
+function isfunction(v) return type(v) == "function" end
+function isnumber(v) return type(v) == "number" end
+function IsValid(v) return type(v) == "table" and v.__valid ~= false end
+function CurTime() return 0 end
+function Color(r, g, b, a) return { r = r, g = g, b = b, a = a or 255 } end
+CHAN_AUTO = 0
+math.Clamp = function(v, a, b) return math.max(a, math.min(b, v)) end
+string.Trim = function(x) return (tostring(x):gsub("^%s+", ""):gsub("%s+$", "")) end
+hook = { Add = function() end, Run = function() end, Remove = function() end }
+timer = { Simple = function() end, Create = function() end, Remove = function() end }
+util = { AddNetworkString = function() end, TableToJSON = function() return "{}" end,
+    JSONToTable = function() return {} end }
+file = { Exists = function() return false end, Read = function() end, Write = function() end,
+    CreateDir = function() end, Find = function() return {}, {} end, IsDir = function() return true end }
+concommand = { Add = function() end }
+player = { GetAll = function() return {} end }
+ents = { FindByClass = function() return {} end }
+local NET_SENT = {}
+net = setmetatable({ Start = function(n) NET_SENT[#NET_SENT + 1] = n end,
+    Receive = function() end }, { __index = function() return function() end end })
+GRM = { Notify = function() end }
+dofile("tools/luatest/lib_grm_core.lua")()
+GRM.Movement = { Config = { WalkSpeed = 160, RunSpeed = 220 } }
+GRM.Augmentations = { Config = { DefaultHealth = 100, MaxHealth = 1000, DefaultArmor = 0 } }
+
+assert(loadfile("lua/autorun/sh_grm_augmentation_chips.lua"))()
+local CHIPS = GRM.AugChips or GRM.AugmentationChips or GRM.Chips
+ok(istable(CHIPS) and istable(CHIPS.Modifiers), "реестр модификаторов доступен как CHIPS.Modifiers")
+
+local MODS = (istable(CHIPS) and CHIPS.Modifiers) or {}
+ok(shared:find("elseif modKey ==", 1, true) == nil, "лестница `elseif modKey ==` не вернулась")
+ok(select(2, shared:gsub("function CHIPS%.RecomputeEffects", "")) == 1,
+    "пересчёт эффектов объявлен ровно один раз (была вторая копия, затиравшая первую)")
+
+-- Базовые значения игрока, к которым обязано вернуть снятие чипа.
+local BASE = { walk = 160, run = 220, maxHealth = 100, health = 100, armor = 0 }
+local function mkPly()
+    local p = { __valid = true, _nwi = {}, _nwf = {} }
+    p.walk, p.run, p.maxHealth, p.health, p.armor = BASE.walk, BASE.run, BASE.maxHealth, BASE.health, BASE.armor
+    function p:SetWalkSpeed(v) self.walk = v end
+    function p:SetRunSpeed(v) self.run = v end
+    function p:SetMaxHealth(v) self.maxHealth = v end
+    function p:GetMaxHealth() return self.maxHealth end
+    function p:SetHealth(v) self.health = v end
+    function p:Health() return self.health end
+    function p:SetArmor(v) self.armor = v end
+    function p:Armor() return self.armor end
+    function p:SetNWInt(k, v) self._nwi[k] = v end
+    function p:SetNWFloat(k, v) self._nwf[k] = v end
+    function p:GetNWInt(k) return self._nwi[k] or 0 end
+    function p:GetNWFloat(k) return self._nwf[k] or 0 end
+    function p:EmitSound() end
+    function p:ChatPrint() end
+    function p:IsPlayer() return true end
+    function p:SteamID64() return "1" end
+    return p
+end
+
+-- Значения-образцы для проверки пары apply/remove.
+local SAMPLE = { speed = 1.5, health = 50, armor = 40, carryWeight = 25,
+    stamina = 1.4, vision = "nightvision" }
+
+local expected = { "speed", "health", "armor", "carryWeight", "stamina", "vision" }
+for _, key in ipairs(expected) do
+    local mod = MODS[key]
+    ok(istable(mod) and isfunction(mod.apply) and isfunction(mod.remove) and isfunction(mod.fold),
+        ("модификатор %s: есть apply, remove и fold"):format(key))
+
+    if istable(mod) and isfunction(mod.apply) and isfunction(mod.remove) then
+        local ply = mkPly()
+        mod.apply(ply, SAMPLE[key])
+        mod.remove(ply, SAMPLE[key])
+        local restored = ply.walk == BASE.walk and ply.run == BASE.run
+            and ply.armor == BASE.armor
+            and (key ~= "health" or ply.maxHealth == BASE.maxHealth)
+            and ply:GetNWInt("GRM_ChipCarryWeight") == 0
+            and (key ~= "stamina" or ply:GetNWFloat("GRM_ChipStamina") == 1.0)
+        ok(restored, ("модификатор %s: снятие возвращает базовые значения"):format(key))
+    end
+end
+
+-- Пересчёт складывает эффекты нескольких чипов по правилам fold.
+CHIPS.GetPlayerChips = function()
+    return {
+        { implanted = true, modifiers = { armor = 30, speed = 1.2, carryWeight = 10 } },
+        { implanted = true, modifiers = { armor = 25, speed = 1.1, carryWeight = 40 } },
+        { implanted = true, active = false, modifiers = { armor = 100 } },
+    }
+end
+local ply = mkPly()
+CHIPS.RecomputeEffects(ply)
+ok(ply.armor == 55, "пересчёт: броня складывается (30+25), выключенный чип не считается")
+ok(math.abs(ply.walk - 160 * 1.2 * 1.1) < 0.01, "пересчёт: скорость перемножается")
+ok(ply:GetNWInt("GRM_ChipCarryWeight") == 40, "пересчёт: вес берётся лучший, а не сумма")
+
 print(("AUGCHIPS: %d/%d failures=%d"):format(pass, pass + fail, fail))
 
 if fail > 0 then
