@@ -452,10 +452,14 @@ ok(hud:find('open   = "common/wpn_hudon.wav"', 1, true) ~= nil
     and hud:find('pick   = "common/wpn_select.wav"', 1, true) ~= nil
     and hud:find('deny   = "common/wpn_denyselect.wav"', 1, true) ~= nil,
     "используются именно ванильные HL2-звуки, а не самодельные")
-ok(hud:find('if was ~= (selector.slot .. ":" .. selector.pos) then selectorSound("move") end', 1, true) ~= nil,
+ok(hud:find('if was ~= (selector.slot .. ":" .. selector.pos) then', 1, true) ~= nil
+    and hud:find('selectorSound("move")', 1, true) ~= nil,
     "щелчок звучит только когда выбор реально сдвинулся")
-ok(hud:find('selectorSound(picked and "pick" or "deny", 0.05)', 1, true) ~= nil,
-    "подтверждение и отказ звучат по-разному")
+ok(hud:find('selectorSound(has and "move" or "deny")', 1, true) ~= nil,
+    "слоты: различный звук выбора и отказа (пустой слот)")
+ok(hud:find("local function PickCurrent()", 1, true) ~= nil
+    and hud:find("input.SelectWeapon(wep)", 1, true) ~= nil,
+    "тик колеса выбирает оружие сразу (v10.5, заказ владельца)")
 ok(hud:find('selectorSound("open", 0.05)', 1, true) ~= nil, "открытие селектора озвучено")
 ok(hud:find('if selector.active and not silent then selectorSound("close") end', 1, true) ~= nil,
     "закрытие селектора озвучено")

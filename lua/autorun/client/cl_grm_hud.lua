@@ -6,7 +6,11 @@ local function grmBootStart(id, tier, fn)
 end
 
 --[[--------------------------------------------------------------------
-    GRM HUD v10.4 — Полноценный HUD для Sandbox
+    GRM HUD v10.5 — Полноценный HUD для Sandbox
+    v10.5: колесо ПЕРЕКЛЮЧАЕТ оружие сразу, как ванильный GMod (заказ
+           владельца 03.09 вечер-6: «селектор так и не починили» = тик
+           колеса не менял оружие; бар GRM — визуальный слой, ЛКМ только
+           закрывает его). Физган-занятость по-прежнему глотает колесо.
     v10.4: колесо и клавиши слотов только двигают подсветку; таймаут
            закрывает панель без смены оружия. Выбор выполняется лишь ЛКМ.
     v10.3: колесо/слоты/таймаут селектора НЕ сменяют оружие, пока
@@ -284,20 +288,16 @@ local function RefreshWeapons()
     for s, weps in pairs(selector.weapons) do table.sort(weps, function(a, b) return a.slotPos < b.slotPos end) end
 end
 
+-- Мгновенный выбор «по тику»: подсветка = и есть смена оружия (ваниль).
+local function PickCurrent()
+    local slotWeps = selector.weapons[selector.slot]
+    local wep = slotWeps and slotWeps[selector.pos] and slotWeps[selector.pos].weapon
+    if IsValid(wep) then input.SelectWeapon(wep) end
+end
+
 local function CloseSelector(silent)
     if selector.active and not silent then selectorSound("close") end
     selector.active = false
-end
-
-local function SelectWeapon()
-    local slotWeps = selector.weapons[selector.slot]
-    local picked = false
-    if slotWeps and slotWeps[selector.pos] then
-        local wep = slotWeps[selector.pos].weapon
-        if IsValid(wep) then input.SelectWeapon(wep) picked = true end
-    end
-    selectorSound(picked and "pick" or "deny", 0.05)
-    CloseSelector(true)
 end
 
 local function FindCurrentWeapon()
@@ -432,8 +432,11 @@ hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
         local was = selector.slot .. ":" .. selector.pos
         NextWeapon()
         -- Щелчок только когда выбор реально сдвинулся (одно оружие в руках —
-        -- звука нет, как в ванильном селекторе).
-        if was ~= (selector.slot .. ":" .. selector.pos) then selectorSound("move") end
+        -- звука нет, как в ванильном селекторе). Движение = и есть выбор.
+        if was ~= (selector.slot .. ":" .. selector.pos) then
+            selectorSound("move")
+            PickCurrent()
+        end
         selector.lastInput = CurTime()
         return true
     elseif bind == "invprev" then
@@ -441,7 +444,10 @@ hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
         if not selector.active then selector.active = true selectorSound("open", 0.05) FindCurrentWeapon() end
         local was = selector.slot .. ":" .. selector.pos
         PrevWeapon()
-        if was ~= (selector.slot .. ":" .. selector.pos) then selectorSound("move") end
+        if was ~= (selector.slot .. ":" .. selector.pos) then
+            selectorSound("move")
+            PickCurrent()
+        end
         selector.lastInput = CurTime()
         return true
     end
@@ -458,12 +464,15 @@ hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
                 selector.active = true selector.slot = i selector.pos = 1
                 selectorSound(has and "move" or "deny")
             end
+            if has then PickCurrent() end
             selector.lastInput = CurTime()
             return true
         end
     end
-    if bind == "+attack" and selector.active then SelectWeapon(); return true end
-    if bind == "+attack2" and selector.active then CloseSelector(); return true end
+    -- ЛКМ больше не «подтверждает» (выбор случился тиком): только закрывает
+    -- бар. Обе формы бинда — конфиги вида `bind mouse1 attack` реальны.
+    if (bind == "+attack" or bind == "attack") and selector.active then CloseSelector(); return true end
+    if (bind == "+attack2" or bind == "attack2") and selector.active then CloseSelector(); return true end
 end)
 
 local hideElements = {

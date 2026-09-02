@@ -19,9 +19,9 @@ local function has(src, n) return src:find(n, 1, true) ~= nil end
 local hud = read("lua/autorun/client/cl_grm_hud.lua")
 
 print("\n=== КОНТРАКТ ИСТОЧНИКА ===")
-check("версия 10.4 в шапке", has(hud, "GRM HUD v10.4"))
-check("приветствие v10.4", has(hud, "HUD v10.4 загружен"))
-check("принт v10.4", has(hud, '[GRM] HUD v10.4 загружен'))
+check("версия 10.5 в шапке", has(hud, "GRM HUD v10.5"))
+check("приветствие v10.5", has(hud, "HUD v10.5 загружен"))
+check("принт v10.5", has(hud, '[GRM] HUD v10.5 загружен'))
 check("хелпер IsPropToolBusy", has(hud, "function GRM.HUD.IsPropToolBusy"))
 check("хелпер IsBuildWeapon", has(hud, "function GRM.HUD.IsBuildWeapon"))
 check("физган в белом списке", has(hud, "weapon_physgun"))
@@ -49,6 +49,10 @@ TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER, TEXT_ALIGN_RIGHT = 0, 1, 2
 TEXT_ALIGN_TOP, TEXT_ALIGN_BOTTOM = 3, 4
 
 function Color(r, g, b, a) return { r = r or 0, g = g or 0, b = b or 0, a = a or 255 } end
+function ErrorNoHalt(...) end
+function ErrorNoHaltWithStack(...) end
+function MsgC(...) end
+function print_error(...) end
 function IsValid(x) return type(x) == "table" and x._valid ~= false end
 function istable(v) return type(v) == "table" end
 function isstring(v) return type(v) == "string" end
@@ -161,19 +165,27 @@ check("монтировка не build", GRM.HUD.IsBuildWeapon(ply) == false)
 check("монтировка+ЛКМ не busy", GRM.HUD.IsPropToolBusy(ply) == false)
 ply._active = physgun
 
--- Без захвата колесо только подсвечивает. Выбор — исключительно ЛКМ.
+-- v10.5: колесо переключает оружие МГНОВЕННО (как ваниль; заказ владельца
+-- 03.09 вечер-6 — «селектор так и не починили» = тик ничего не менял).
+-- Бар — визуальный слой; ЛКМ только закрывает его; слоты тоже выбирают.
+check("мгновенный выбор по тику в источнике", has(hud, "PickCurrent()"))
 ply._keys[IN_ATTACK] = false
 input.selected = nil
 NOW = 20
 local rFree = bind(ply, "invnext", true)
 check("без захвата invnext глотается", rFree == true)
+check("тиком колеса оружие переключилось сразу", input.selected == crowbar, tostring(input.selected))
 NOW = 24
 paint()
-check("таймаут НЕ выбирает подсвеченное", input.selected == nil)
+check("таймаут выбор не трогает", input.selected == crowbar)
 NOW = 25
-bind(ply,"invnext",true)
-local rConfirm=bind(ply,"+attack",true)
-check("ЛКМ подтверждает выбор",rConfirm==true and input.selected==crowbar)
+local rTick = bind(ply, "invnext", true)
+check("после закрытия отсчёт от живой руки (мок не двигает _active)",
+    rTick == true and input.selected == crowbar, tostring(input.selected))
+local rClose = bind(ply, "+attack", true)
+check("ЛКМ только закрывает бар (не откатывает)", rClose == true and input.selected == crowbar)
+local rSlot = bind(ply, "slot2", true)
+check("клавиша слота тоже выбирает сразу", rSlot == true and input.selected == pistol, tostring(input.selected))
 
 -- С захватом колесо НЕ должно выбрать другое оружие даже после таймаута
 ply._keys[IN_ATTACK] = true

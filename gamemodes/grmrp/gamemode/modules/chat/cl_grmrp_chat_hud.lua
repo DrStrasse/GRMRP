@@ -73,7 +73,7 @@ net.Receive(GRMRP.Net.MSG, function()
     local chanId = net.ReadString()
     local name = net.ReadString()
     local text = net.ReadString()
-    local t = net.ReadDouble()
+    net.ReadDouble() -- серверные часы: протокол читаем, возраст НЕ считаем
     if chanId == "system" then
         push({ title = "!", color = { r = 250, g = 185, b = 63 } }, "", name, CurTime(), false)
         return
@@ -83,7 +83,13 @@ net.Receive(GRMRP.Net.MSG, function()
         -- напечатан — молча гасим дубль (§5.2 «один владелец строки»)
         return
     end
-    GRMRPChat.AddLine(chanId, name, text, t)
+    -- ШТАМП — КЛИЕНТСКИЕ CurTime. Урок 03.09 (вечер-6, «отправка есть,
+    -- отрисовки нет ни в одном канале»): лена считала возраст строки как
+    -- RealTime() - t, где t — CurTime автора или, для чужих строк, CurTime
+    -- СЕРВЕРА из пакета. Разница RealTime/CurTime = часы аптайма машины,
+    -- «свежая» строка была уже «протухшей» — lifeLeft=0, лента молчала.
+    -- Возраст и жизнь строки живут на одних часах: CurTime().
+    GRMRPChat.AddLine(chanId, name, text, CurTime())
 end)
 
 hook.Add("HUDPaint", "GRMRPChat_HUD", function()
@@ -95,7 +101,7 @@ hook.Add("HUDPaint", "GRMRPChat_HUD", function()
     -- («чат подними по высоте», 03.09); нижняя строка — над верхом полосы
     -- ввода (ввод стоит на h-262).
     local x, yBase = 16, h - 268
-    local nowRT = RealTime()
+    local nowRT = CurTime() -- те же часы, что в штампах push/AddLine
     local hold = GRMRPChat.INPUT_OPEN or GRMRPChat.HIST_OPEN
 
     local shown = 0

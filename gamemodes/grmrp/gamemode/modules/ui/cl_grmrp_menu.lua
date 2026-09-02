@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-6 (03.09)'
+Menu.BuildStamp = 'вечер-7 (03.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -244,9 +244,11 @@ function Menu.Open()
     -- копируются с живого игрока: раньше DModelPanel рисовал «голую»
     -- дефолтную модель («почему не показываются текущие бодигруппы»).
     local ply = LocalPlayer()
-    local rightW = math.Clamp(scrW * 0.26, 300, 380)
-    local cardH = math.Clamp(scrH - 160, 400, 620)
-    local modelH = math.Clamp(cardH - 62 - 196, 120, 360)
+    -- «Персонаж мелкий» (владелец 03.09 вечер-6): карточка и окно модели
+    -- раздвинуты; раньше модель упиралась в потолок 120px на малых экранах.
+    local rightW = math.Clamp(scrW * 0.30, 320, 430)
+    local cardH = math.Clamp(scrH - 150, 420, 700)
+    local modelH = math.Clamp(cardH - 62 - 196, 240, 440)
     local statsBase = 62 + modelH + 12
     cardH = statsBase + 6 * 28 + 18
 
@@ -266,15 +268,10 @@ function Menu.Open()
     steamLbl:SetPos(14, 42)
     steamLbl:SetWide(rightW - 28)
 
-    local function camParams()
-        local mn, mx = ply:OBBMins(), ply:OBBMaxs()
-        local hh = (mx and mx.z or 64) - (mn and mn.z or 0)
-        local wide = math.max(math.abs(mx and mx.x or 16), math.abs(mn and mn.x or 16))
-        return hh, wide
-    end
-
-    local function applyLook(m)
-        m:SetModel(ply:GetModel() or "models/player.mdl")
+    -- Скин/бодигруппы — отдельным проходом, БЕЗ касания модели: их можно
+    -- (и нужно) применять повторно — SetAnimated пересоздаёт анимационный
+    -- контроллер и сбрасывал бодигруппы («так и не появились», вечер-6).
+    local function applySkinGroups(m)
         -- У Player нет метода Skin() — правильный обход Entity:GetSkin();
         -- прежний вызов и ронял всё меню (крах-лог 03.09). Всё копирование
         -- внешности — под pcall: ни один аддон-ресет не обязан существовать.
@@ -282,28 +279,42 @@ function Menu.Open()
             local okS, sk = pcall(function() return ply:GetSkin() end)
             if okS and isnumber(sk) then pcall(function() m:SetSkin(sk) end) end
         end
-        if ply.GetBodyGroups and m.SetBodygroup then
-            for _, bg in ipairs(ply:GetBodyGroups()) do
-                local ok, val = pcall(function() return ply:GetBodygroup(bg.id) end)
+        if not ply.GetBodyGroups then return end
+        for _, bg in ipairs(ply:GetBodyGroups()) do
+            local idx = tonumber(bg.id)
+            if idx then
+                local ok, val = pcall(function() return ply:GetBodygroup(idx) end)
                 if ok and isnumber(val) then
-                    pcall(function() m:SetBodygroup(bg.id, val) end)
+                    -- Двойной путь: панель (её таблица групп) и сам model
+                    -- entity — какой из них рисует, зависит от режима
+                    -- анимации; пишем обоим.
+                    if m.SetBodygroup then pcall(function() m:SetBodygroup(idx, val) end) end
+                    local me = m.GetModelEntity and m:GetModelEntity()
+                    if IsValid(me) and me.SetBodygroup then
+                        pcall(function() me:SetBodygroup(idx, val) end)
+                    end
                 end
             end
         end
     end
+    local function applyLook(m)
+        m:SetModel(ply:GetModel() or "models/player.mdl")
+        applySkinGroups(m)
+    end
 
     local function newModel(parent, px, py, pw, ph)
         local m = vgui.Create("DModelPanel", parent)
-        local hgt, wide = camParams()
         m:SetSize(pw, ph)
         m:SetPos(px, py)
-        applyLook(m)
+        -- Порядок важен: сначала анимационный режим, ПОСЛЕ него — внешность
+        -- (SetAnimated пересобирает контроллер и сбрасывал skin/bodygroups).
         m:SetAnimated(true)
-        -- Широкий кадр по полному росту: фигура целиком, голова в кадре;
-        -- мышь включена — модель можно вращать перетаскиванием.
-        local dist = hgt * 1.25 + wide * 1.2 + 20
-        m:SetCamPos(Vector(dist, dist * 0.22, hgt * 0.55))
-        m:SetLookAt(Vector(0, 0, hgt * 0.5))
+        applyLook(m)
+        -- Камеру НЕ трогаем: Layout() DModelPanel сам вписывает модель по
+        -- полному росту в панель. Прежний ручной CamPos (dist = hgt*1.25 +
+        -- wide*1.2 + 20 ≈ 120 юнитов от 64-юнитового человека) отодвигал
+        -- камеру так, что персонаж занимал ~четверть кадра — «мелкий»
+        -- (владелец 03.09). Мышью — вращение.
         if m.SetMouseInputEnabled then m:SetMouseInputEnabled(true) end
         return m
     end
@@ -345,6 +356,14 @@ function Menu.Open()
             and tostring(GRMRP.Jobs.GetJobName(pl)) or "—")
         vTime:SetText(fmtTime(CurTime() - (GRMRP.JoinTime or CurTime())))
         vMap:SetText(game.GetMap())
+        -- Витрина живая: сменил модель — пересняли; сменил только
+        -- бодигруппы/скин (экипировка) — применяем их, не дёргая SetModel.
+        local mm = Menu.model
+        if IsValid(mm) then
+            local want = pl:GetModel() or "models/player.mdl"
+            local cur = mm.GetModel and mm:GetModel()
+            if cur ~= want then applyLook(mm) else applySkinGroups(mm) end
+        end
     end
 
     ------------------------------------------------------------Think: только анимации
