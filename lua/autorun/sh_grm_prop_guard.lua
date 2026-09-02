@@ -574,6 +574,10 @@ if CLIENT then
         return (not IsValid(owner)) or owner == LocalPlayer()
     end
 
+    local PG_WARN = Color(255, 120, 110)
+    local PG_WAIT = Color(255, 205, 120)
+    local PG_BG = Color(12, 16, 24, 215)
+
     hook.Add("HUDPaint", "GRM_PropGuard_Hint", function()
         local lp = LocalPlayer()
         if not IsValid(lp) or not lp:Alive() then return end
@@ -593,12 +597,12 @@ if CLIENT then
         local waiting = ent:GetNWBool("GRM_PropGhostWait", false)
         local text = waiting and "ЗОНА ПРОПА ЗАНЯТА — ОН ЗАКРЕПИТСЯ, КОГДА ИГРОК ОТОЙДЁТ"
             or "ПРОП НЕ ЗАКРЕПЛЁН — ЗАМОРОЗЬТЕ ЕГО ФИЗГАНОМ (ПКМ)"
-        local col = waiting and Color(255, 120, 110) or Color(255, 205, 120)
+        local col = waiting and PG_WARN or PG_WAIT
 
         surface.SetFont("GRMPropGuard_Hint")
         local w, h = surface.GetTextSize(text)
         local x, y = ScrW() / 2, ScrH() - 150
-        draw.RoundedBox(6, x - w / 2 - 14, y - h / 2 - 6, w + 28, h + 12, Color(12, 16, 24, 215))
+        draw.RoundedBox(6, x - w / 2 - 14, y - h / 2 - 6, w + 28, h + 12, PG_BG)
         draw.SimpleText(text, "GRMPropGuard_Hint", x, y, col, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end)
 end

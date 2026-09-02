@@ -895,6 +895,14 @@ if CLIENT then
     hook.Add("EntityNetworkedVarChanged","GRM_FireTruck_RenderRegistry",function(ent,name,_,value)if name=="GRM_FireTruck"then if value==true then renderTrucks[ent]=true else renderTrucks[ent]=nil end end end)
     hook.Add("EntityRemoved","GRM_FireTruck_RenderRegistryRemove",function(ent)renderTrucks[ent]=nil end)
     timer.Simple(1,function()for _,ent in ipairs(ents.GetAll())do if IsValid(ent)and ent.GetNWBool and ent:GetNWBool("GRM_FireTruck",false)then renderTrucks[ent]=true end end end)
+    -- 3D-плашка на крыше: скретч-геометрия и константы красок (§6.1.8)
+    local FT_LOCAL = Vector(0, 0, 0)
+    local FT_ANG = Angle(0, 0, 90)
+    local FT_OBB0 = Vector(0, 0, 50)
+    local FT_PLATE_BG = Color(28, 18, 14, 230)
+    local FT_PLATE_TITLE = Color(255, 150, 70)
+    local FT_PLATE_SUB = Color(230, 230, 235)
+
     hook.Add("PostDrawTranslucentRenderables", "GRM_FireTruck_3D", function(_, sky)
         if sky then return end
         local lp = LocalPlayer()
@@ -903,9 +911,11 @@ if CLIENT then
             if IsValid(ent) and ent.GetNWBool and ent:GetNWBool("GRM_FireTruck", false) then
                 if lp:GetPos():DistToSqr(ent:GetPos()) > 520 * 520 then
                 else
-                    local obb = isfunction(ent.OBBMaxs) and ent:OBBMaxs() or Vector(0, 0, 50)
-                    local pos = ent:LocalToWorld(Vector(0, 0, (obb.z or 50) + 18))
-                    local ang = Angle(0, EyeAngles().y - 90, 90)
+                    local obb = isfunction(ent.OBBMaxs) and ent:OBBMaxs() or FT_OBB0
+                    FT_LOCAL.z = (obb.z or 50) + 18
+                    local pos = ent:LocalToWorld(FT_LOCAL)
+                    FT_ANG.y = EyeAngles().y - 90
+                    local ang = FT_ANG
                     local fac = ent:GetNWString("GRM_FireFaction", "")
                     local tank = ent:GetNWInt("GRM_FireTank", 0)
                     local foam = ent:GetNWInt("GRM_FireFoam", 0)
@@ -913,9 +923,9 @@ if CLIENT then
                     local out = ent:GetNWInt("GRM_FireHosesOut", 0)
                     local maxh = ent:GetNWInt("GRM_FireHoses", 4)
                     cam.Start3D2D(pos, ang, 0.08)
-                        draw.RoundedBox(6, -180, -28, 360, 56, Color(28, 18, 14, 230))
-                        draw.SimpleText("ПОЖАРНАЯ" .. (fac ~= "" and (" · " .. fac) or ""), "GRMFireTrk_3D", 0, -10, Color(255, 150, 70), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-                        draw.SimpleText("вода " .. tank .. "  пена " .. foam .. "  порошок " .. powder .. "  рукава " .. out .. "/" .. maxh, "GRMFireTrk_N", 0, 14, Color(230, 230, 235), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                        draw.RoundedBox(6, -180, -28, 360, 56, FT_PLATE_BG)
+                        draw.SimpleText("ПОЖАРНАЯ" .. (fac ~= "" and (" · " .. fac) or ""), "GRMFireTrk_3D", 0, -10, FT_PLATE_TITLE, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                        draw.SimpleText("вода " .. tank .. "  пена " .. foam .. "  порошок " .. powder .. "  рукава " .. out .. "/" .. maxh, "GRMFireTrk_N", 0, 14, FT_PLATE_SUB, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
                     cam.End3D2D()
                 end
             end
@@ -969,6 +979,9 @@ if CLIENT then
         return nil
     end
 
+    -- строка статуса пожарки: константа (§6.1.8)
+    local FT_LINE = Color(255, 170, 90, 230)
+
     hook.Add("HUDPaint", "GRM_FireTruck_HUD", function()
         local ply = LocalPlayer()
         if not IsValid(ply) then return end
@@ -990,7 +1003,7 @@ if CLIENT then
         local out = veh:GetNWInt("GRM_FireHosesOut", 0)
         local maxh = veh:GetNWInt("GRM_FireHoses", 4)
         draw.SimpleText("ПОЖАРКА  вода " .. tank .. "  пена " .. foam .. "  порошок " .. powder .. "  рукава " .. out .. "/" .. maxh .. "  G — насос",
-            "GRMFireTrk_N", ScrW() / 2, ScrH() - 118, Color(255, 170, 90, 230), TEXT_ALIGN_CENTER)
+            "GRMFireTrk_N", ScrW() / 2, ScrH() - 118, FT_LINE, TEXT_ALIGN_CENTER)
     end)
 
     print("[GRM Fire] Truck client loaded")

@@ -696,6 +696,9 @@ if CLIENT then
         end
     end
 
+-- позиция якоря плашки: скретч (GetPos уже копирует, а + Vector()
+-- был бы вторым объектом на каждого игрока в кадре; §6.1.8)
+local NP_POS = Vector(0, 0, 0)
     hook.Add("HUDPaint", "GRM_Nameplate", function()
         if not cvEnable:GetBool() then return end
         local lp = LocalPlayer()
@@ -716,7 +719,11 @@ if CLIENT then
                             anchor = veh
                             height = math.max(60, (veh:OBBMaxs().z - veh:OBBMins().z) + 20)
                         end
-                        local screen = (anchor:GetPos() + Vector(0, 0, height)):ToScreen()
+                        local ap = anchor:GetPos()
+                        NP_POS.x = ap.x
+                        NP_POS.y = ap.y
+                        NP_POS.z = ap.z + height
+                        local screen = NP_POS:ToScreen()
                         if screen.visible then
                             drawPlate(info, screen.x, screen.y, math.Clamp(255 * (1.15 - dist / maxDist), 60, 255))
                         end

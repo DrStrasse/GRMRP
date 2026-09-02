@@ -342,11 +342,14 @@ if CLIENT then
         notification.AddLegacy(msg, NOTIFY_GENERIC, 8)
         -- Текстовый маркер в мире на месте смерти (на 8 сек)
         local untilT = CurTime() + 8
+        -- краски мира-маркера: по одной аллокации на сообщение вместо двух
+        -- на кадр восьмисекундной метки (§6.1.8)
+        local tagCol, tagOut = Color(255, 170, 150), Color(8, 14, 23, 235)
         hook.Add("HUDPaint", "GRM_ChipControl_WorldTag", function()
             if CurTime() > untilT then hook.Remove("HUDPaint", "GRM_ChipControl_WorldTag") return end
             local screen = pos:ToScreen()
             if screen.visible then
-                draw.SimpleTextOutlined("⚠ " .. msg, "GRMMM_Body", screen.x, screen.y - 40, Color(255, 170, 150), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 2, Color(8, 14, 23, 235))
+                draw.SimpleTextOutlined("⚠ " .. msg, "GRMMM_Body", screen.x, screen.y - 40, tagCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 2, tagOut)
             end
         end)
     end)

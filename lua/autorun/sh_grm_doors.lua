@@ -2595,6 +2595,19 @@ if CLIENT then
     hook.Remove("ShowSpare2", "GRM_Doors_OverrideF4")
     hook.Remove("ShowHelp", "GRM_Doors_OverrideF1")
 
+    -- Цвета дверной плашки зависят от дышащей прозрачности, поэтому не
+    -- константы, а один скретч-Color на все семь мест: поле .a пишается
+    -- строго перед употреблением (Color в GMod — таблица, draw/surface
+    -- читают поля, а не метатип; §6.1.8)
+    local DOOR_C = Color(0, 0, 0, 255)
+    local function doorCol(r, g, b, a)
+        DOOR_C.r = r
+        DOOR_C.g = g
+        DOOR_C.b = b
+        DOOR_C.a = a
+        return DOOR_C
+    end
+
     hook.Add("HUDPaint", "GRM_Doors_HUD3D2D", function()
         local cv = GetConVar("grm_cl_doorhud")
         if cv and cv:GetInt() == 0 then return end
@@ -2621,13 +2634,13 @@ if CLIENT then
         local sw, sh = ScrW(), ScrH()
         local cx, cy = sw / 2, sh / 2 + 90
         local bw, bh = 300, 76
-        draw.RoundedBox(8, cx - bw / 2, cy, bw, bh, Color(16, 20, 28, alpha * 0.92))
-        surface.SetDrawColor(locked and Color(220, 70, 70, alpha) or Color(60, 190, 110, alpha))
+        draw.RoundedBox(8, cx - bw / 2, cy, bw, bh, doorCol(16, 20, 28, alpha * 0.92))
+        surface.SetDrawColor(locked and doorCol(220, 70, 70, alpha) or doorCol(60, 190, 110, alpha))
         surface.DrawOutlinedRect(cx - bw / 2, cy, bw, bh, 2)
-        draw.SimpleText(title ~= "" and title or "Дверь", "GRMDoor_HUD", cx, cy + 18, Color(240, 245, 250, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText(ownerStr ~= "" and ownerStr or "Продаётся / Ничья", "GRMDoor_HUDSm", cx, cy + 38, Color(200, 210, 225, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(title ~= "" and title or "Дверь", "GRMDoor_HUD", cx, cy + 18, doorCol(240, 245, 250, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(ownerStr ~= "" and ownerStr or "Продаётся / Ничья", "GRMDoor_HUDSm", cx, cy + 38, doorCol(200, 210, 225, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         draw.SimpleText(locked and "[ЗАКРЫТО]" or "[ОТКРЫТО]", "GRMDoor_HUDSm", cx, cy + 58,
-            locked and Color(255, 90, 90, alpha) or Color(90, 230, 130, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            locked and doorCol(255, 90, 90, alpha) or doorCol(90, 230, 130, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end)
 
     --[[ Окно «Управление дверью» переехало в отдельный клиентский модуль

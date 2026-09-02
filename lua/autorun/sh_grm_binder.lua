@@ -702,6 +702,11 @@ end)
 hook.Add("OnPlayerChat", "GRM_Binder_RadialChat", function() if BD.RadialOpen then BD.CloseRadial(false) end end)
 hook.Add("PlayerDeath", "GRM_Binder_RadialDeath", function() if BD.RadialOpen then BD.CloseRadial(false) end end)
 
+-- Краски радиального меню (перерисовка каждый кадр; §6.1.8)
+local BIND_OUTLINE = Color(8, 12, 18, 235)
+local BIND_SEL = Color(235, 245, 255)
+local BIND_TEXT_C = Color(0, 0, 0, 255)
+
 hook.Add("HUDPaint", "GRM_Binder_RadialDraw", function()
     if not BD.RadialOpen then return end
     local entries = radialEntries()
@@ -793,13 +798,18 @@ hook.Add("HUDPaint", "GRM_Binder_RadialDraw", function()
         for _, st in ipairs(slot.steps or {}) do
             if st.enabled ~= false and string.Trim(tostring(st.text or "")) ~= "" then steps = steps + 1 end
         end
-        local textCol = Color(
-            Lerp(anim, C.text.r, 255), Lerp(anim, C.text.g, 255), Lerp(anim, C.text.b, 255))
+        -- textCol «разгорается» вместе с анимацией появления сектора — это
+        -- скретч с записью полей перед немедленной отрисовкой; обводка и
+        -- выбранный слот — константы (§6.1.8)
+        local textCol = BIND_TEXT_C
+        textCol.r = math.floor(Lerp(anim, C.text.r, 255))
+        textCol.g = math.floor(Lerp(anim, C.text.g, 255))
+        textCol.b = math.floor(Lerp(anim, C.text.b, 255))
         draw.SimpleTextOutlined(tostring(slot.name or ("Слот " .. entry.id)),
             anim > 0.5 and "GRMBind_Head" or "GRMBind_Body", tx, ty - 9,
-            textCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 2, Color(8, 12, 18, 235))
+            textCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 2, BIND_OUTLINE)
         draw.SimpleTextOutlined(steps .. " шаг(ов)", "GRMBind_Small", tx, ty + 11,
-            selected and Color(235, 245, 255) or C.dim, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 2, Color(8, 12, 18, 235))
+            selected and BIND_SEL or C.dim, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 2, BIND_OUTLINE)
     end
 
     -- Центр: подсказка и текущий выбор

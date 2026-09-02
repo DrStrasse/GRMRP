@@ -1507,6 +1507,14 @@ if CLIENT then
 
     -- Камеры больше не рисуют огромные сферы/лучи для всех игроков.
     -- Только суперадмин видит компактную полупрозрачную метку вблизи.
+    -- Плашка камеры: позиция и цвет с дышащей от дистанции альфой —
+    -- скретч-объекты на загрузке файла, поля пишутся перед немедленной
+    -- отрисовкой (камер много, а объект один; §6.1.8)
+    local AZ_POS = Vector(0, 0, 34)
+    local AZ_ANG = Angle(0, 0, 90)
+    local AZ_C = Color(0, 0, 0, 255)
+    local ARREST_LAB_UP = Vector(0, 0, 82)
+    local ARREST_LAB_BG = Color(13, 18, 27, 220)
     local arrestZoneDrawFrame = -1
     hook.Add("PostDrawTranslucentRenderables", "GRM_Arrest_Zones", function()
         local frame = FrameNumber()
@@ -1520,12 +1528,19 @@ if CLIENT then
                 local distSqr = lp:GetPos():DistToSqr(camEnt:GetPos())
                 if distSqr <= 500 * 500 then
                     local alpha = math.Clamp(170 - math.sqrt(distSqr) * 0.22, 45, 150)
-                    local pos = camEnt:GetPos() + Vector(0, 0, 34)
-                    local ang = Angle(0, EyeAngles().y - 90, 90)
+                    local cp = camEnt:GetPos()
+                    AZ_POS.x = cp.x
+                    AZ_POS.y = cp.y
+                    AZ_POS.z = cp.z + 34
+                    local pos = AZ_POS
+                    AZ_ANG.y = EyeAngles().y - 90
+                    local ang = AZ_ANG
                     cam.Start3D2D(pos, ang, 0.055)
-                        draw.RoundedBox(4, -90, -14, 180, 28, Color(12, 17, 25, alpha))
+                        AZ_C.r, AZ_C.g, AZ_C.b, AZ_C.a = 12, 17, 25, alpha
+                        draw.RoundedBox(4, -90, -14, 180, 28, AZ_C)
+                        AZ_C.r, AZ_C.g, AZ_C.b, AZ_C.a = 235, 170, 95, alpha + 60
                         draw.SimpleText("КАМЕРА • " .. tostring(camEnt:GetCameraName() or camEnt:GetCameraID() or "без имени"),
-                            "GRMArrestSmall", 0, 0, Color(235, 170, 95, alpha + 60), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                            "GRMArrestSmall", 0, 0, AZ_C, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
                     cam.End3D2D()
                 end
             end
@@ -1537,9 +1552,9 @@ if CLIENT then
         if not IsValid(lp) then return end
         for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
             if IsValid(p) and p:GetNWBool("GRM_Arrested", false) and (p == lp or lp:GetPos():DistToSqr(p:GetPos()) < 600 * 600) then
-                local sp = (p:GetPos() + Vector(0, 0, 82)):ToScreen()
+                local sp = (p:GetPos() + ARREST_LAB_UP):ToScreen()
                 if sp.visible then
-                    draw.RoundedBox(5, sp.x - 120, sp.y - 26, 240, 30, Color(13, 18, 27, 220))
+                    draw.RoundedBox(5, sp.x - 120, sp.y - 26, 240, 30, ARREST_LAB_BG)
                     draw.SimpleText("АРЕСТОВАННЫЙ  •  " .. p:GetNWString("GRM_ArrestGroupName", ""), "GRMArrestSmall", sp.x, sp.y - 11, UI.orange, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
                 end
             end

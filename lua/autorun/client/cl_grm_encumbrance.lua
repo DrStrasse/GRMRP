@@ -62,6 +62,9 @@ if GRM.HUD and GRM.HUD.RegisterBar then
     })
 end
 
+local ENC_RED = Color(255, 110, 100)
+local ENC_GOLD = Color(255, 200, 90)
+
 hook.Add("HUDPaint", "GRM_Weight_Warning", function()
     local ply = LocalPlayer()
     if not IsValid(ply) or not ply:Alive() then return end
@@ -70,7 +73,7 @@ hook.Add("HUDPaint", "GRM_Weight_Warning", function()
     local sw, sh = ScrW(), ScrH()
     draw.SimpleText(state.blocked and "ПРЕДЕЛ ПЕРЕНОСА — НЕЛЬЗЯ ПОДНИМАТЬ НОВОЕ" or "ПЕРЕГРУЗ: БЕГ ОТКЛЮЧЁН",
         "GRMWeight_Label", sw / 2, sh - 150,
-        state.blocked and Color(255, 110, 100) or Color(255, 200, 90), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        state.blocked and ENC_RED or ENC_GOLD, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
 end)
 
 concommand.Add("grm_weight", function()

@@ -1852,6 +1852,20 @@ local runVehicles=setmetatable({},{__mode="k"})
 hook.Add("EntityNetworkedVarChanged","GRM_Incass_RunRegistry",function(ent,name,_,value)if name=="GRM_IncassRun"then if(tonumber(value)or 0)>0 then runVehicles[ent]=true else runVehicles[ent]=nil end end end)
 hook.Add("EntityRemoved","GRM_Incass_RunRegistryRemove",function(ent)runVehicles[ent]=nil end)
 timer.Simple(1,function()for _,ent in ipairs(ents.GetAll())do if IsValid(ent)and ent:GetNWInt("GRM_IncassRun",0)>0 then runVehicles[ent]=true end end end)
+-- Маркеры инкассации: позиция и угол — скретч-объекты (в цикле по машинам
+-- и по банкоматам потребление строго немедленное), краски — константы
+-- загрузки (§6.1.8). eye-угол считается один раз на кадр.
+local INC_LOCAL = Vector(0, 0, 0)
+local INC_POS = Vector(0, 0, 0)
+local INC_ANG = Angle(0, 0, 90)
+local INC_BG1 = Color(20, 24, 32, 230)
+local INC_BAR1 = Color(35, 42, 56, 245)
+local INC_TITLE = Color(245, 185, 65)
+local INC_SUB = Color(230, 235, 245)
+local INC_BG2 = Color(25, 20, 20, 235)
+local INC_BAR2 = Color(65, 32, 32, 245)
+local INC_WARN_TITLE = Color(255, 195, 60)
+local INC_WARN_SUB = Color(255, 130, 130)
 hook.Add("PostDrawTranslucentRenderables", "GRM_Incass_3D2D", function(depth, skybox)
     if skybox then return end
     local ply = LocalPlayer()
@@ -1865,22 +1879,24 @@ hook.Add("PostDrawTranslucentRenderables", "GRM_Incass_3D2D", function(depth, sk
             local d2 = myPos:DistToSqr(epos)
             if d2 <= (500 * 500) then
                 local obbMax = isfunction(ent.OBBMaxs) and ent:OBBMaxs() or nil
-                local pos = ent:LocalToWorld(Vector(0, 0, (obbMax and obbMax.z or 50) + 20))
+                INC_LOCAL.z = (obbMax and obbMax.z or 50) + 20
+                local pos = ent:LocalToWorld(INC_LOCAL)
                 local ang = EyeAngles()
                 ang:RotateAroundAxis(ang:Forward(), 90)
                 ang:RotateAroundAxis(ang:Right(), 90)
+                INC_ANG.y = ang.y
 
                 local carCash = ent:GetNWInt("GRM_IncassCarCash", 0)
                 local faction = ent:GetNWString("GRM_IncassFaction", "")
                 local cap = I.Config and I.Config.MaxCarryPerCar or 250000
 
-                cam.Start3D2D(pos, Angle(0, ang.y, 90), 0.08)
-                    draw.RoundedBox(6, -170, -32, 340, 64, Color(20, 24, 32, 230))
-                    draw.RoundedBox(4, -168, -30, 336, 26, Color(35, 42, 56, 245))
+                cam.Start3D2D(pos, INC_ANG, 0.08)
+                    draw.RoundedBox(6, -170, -32, 340, 64, INC_BG1)
+                    draw.RoundedBox(4, -168, -30, 336, 26, INC_BAR1)
                     local title = "ИНКАССАЦИЯ" .. (faction ~= "" and (" • " .. faction) or "")
-                    draw.SimpleText(title, "GRMInc_3DHead", 0, -17, Color(245, 185, 65), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                    draw.SimpleText(title, "GRMInc_3DHead", 0, -17, INC_TITLE, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
                     local sub = "В багажнике: " .. fmtClient(carCash) .. " / " .. fmtClient(cap)
-                    draw.SimpleText(sub, "GRMInc_3DSub", 0, 16, Color(230, 235, 245), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                    draw.SimpleText(sub, "GRMInc_3DSub", 0, 16, INC_SUB, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
                 cam.End3D2D()
             end
         end
@@ -1893,16 +1909,20 @@ hook.Add("PostDrawTranslucentRenderables", "GRM_Incass_3D2D", function(depth, sk
             local epos = ent:GetPos()
             local d2 = myPos:DistToSqr(epos)
             if d2 <= (450 * 450) then
-                local pos = epos + Vector(0, 0, 75)
+                INC_POS.x = epos.x
+                INC_POS.y = epos.y
+                INC_POS.z = epos.z + 75
+                local pos = INC_POS
                 local ang = EyeAngles()
                 ang:RotateAroundAxis(ang:Forward(), 90)
                 ang:RotateAroundAxis(ang:Right(), 90)
+                INC_ANG.y = ang.y
 
-                cam.Start3D2D(pos, Angle(0, ang.y, 90), 0.08)
-                    draw.RoundedBox(6, -150, -28, 300, 56, Color(25, 20, 20, 235))
-                    draw.RoundedBox(4, -148, -26, 296, 24, Color(65, 32, 32, 245))
-                    draw.SimpleText("⚠ РЕЖИМ ИНКАССАЦИИ", "GRMInc_3DHead", 0, -14, Color(255, 195, 60), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-                    draw.SimpleText("Идёт загрузка / изъятие средств", "GRMInc_3DSub", 0, 14, Color(255, 130, 130), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                cam.Start3D2D(pos, INC_ANG, 0.08)
+                    draw.RoundedBox(6, -150, -28, 300, 56, INC_BG2)
+                    draw.RoundedBox(4, -148, -26, 296, 24, INC_BAR2)
+                    draw.SimpleText("⚠ РЕЖИМ ИНКАССАЦИИ", "GRMInc_3DHead", 0, -14, INC_WARN_TITLE, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                    draw.SimpleText("Идёт загрузка / изъятие средств", "GRMInc_3DSub", 0, 14, INC_WARN_SUB, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
                 cam.End3D2D()
             end
         end
@@ -2032,6 +2052,12 @@ hook.Add("PlayerButtonDown", "GRM_Incass_GKey", function(ply, button)
 end)
 
 -- ── HUD инкассации ───────────────────────────────────────────────
+-- Краски HUD инкассации: статичные, создаются раз при загрузке (§6.1.8)
+local INCASS_CYAN = Color(120, 200, 255, 230)
+local INCASS_CYAN_HINT = Color(180, 210, 255, 210)
+local INCASS_GOLD = Color(255, 220, 120, 230)
+local INCASS_GREEN = Color(120, 255, 160, 230)
+
 hook.Add("HUDPaint", "GRM_Incass_HUD", function()
     local ply = LocalPlayer()
     if not IsValid(ply) then return end
@@ -2042,9 +2068,9 @@ hook.Add("HUDPaint", "GRM_Incass_HUD", function()
 
     if carrying and bagAmt > 0 then
         draw.SimpleText("ИНКАСС: в руке чемодан " .. fmtClient(bagAmt),
-            "GRMInc_Normal", ScrW() / 2, ScrH() - 120, Color(120, 200, 255, 230), TEXT_ALIGN_CENTER)
+            "GRMInc_Normal", ScrW() / 2, ScrH() - 120, INCASS_CYAN, TEXT_ALIGN_CENTER)
         draw.SimpleText("[G на машину = загрузить / G на банкомат или хранилище = сдать]",
-            "GRMInc_Small", ScrW() / 2, ScrH() - 98, Color(180, 210, 255, 210), TEXT_ALIGN_CENTER)
+            "GRMInc_Small", ScrW() / 2, ScrH() - 98, INCASS_CYAN_HINT, TEXT_ALIGN_CENTER)
     elseif IsValid(car) then
         local rid = car:GetNWInt("GRM_IncassRun", 0)
         local cash = car:GetNWInt("GRM_IncassCarCash", 0)
@@ -2054,7 +2080,7 @@ hook.Add("HUDPaint", "GRM_Incass_HUD", function()
         else
             txt = txt .. "  [G = меню]"
         end
-        draw.SimpleText(txt, "GRMInc_Normal", ScrW() / 2, ScrH() - 120, Color(255, 220, 120, 230), TEXT_ALIGN_CENTER)
+        draw.SimpleText(txt, "GRMInc_Normal", ScrW() / 2, ScrH() - 120, INCASS_GOLD, TEXT_ALIGN_CENTER)
     end
 
     local tr = (GRM.Perf and GRM.Perf.EyeTrace) and GRM.Perf.EyeTrace(ply, 0.05) or ply:GetEyeTrace()
@@ -2081,11 +2107,11 @@ hook.Add("HUDPaint", "GRM_Incass_HUD", function()
         local d = pPos:DistToSqr(pos)
         if targetEnt:GetClass() == "grm_bank_terminal" and d <= (250 * 250) and IsValid(car) then
             draw.SimpleText("[G] — открыть меню банкомата (изъять / загрузить)", "GRMInc_Normal",
-                ScrW() / 2, ScrH() / 2 + 40, Color(255, 220, 120, 230), TEXT_ALIGN_CENTER)
+                ScrW() / 2, ScrH() / 2 + 40, INCASS_GOLD, TEXT_ALIGN_CENTER)
         elseif targetEnt:GetClass() == "grm_bank_vault"
             and d <= (((I.Config and I.Config.VaultRadius) or 140) ^ 2) then
             draw.SimpleText("[G] — сдать инкассацию в хранилище банка", "GRMInc_Normal",
-                ScrW() / 2, ScrH() / 2 + 40, Color(120, 255, 160, 230), TEXT_ALIGN_CENTER)
+                ScrW() / 2, ScrH() / 2 + 40, INCASS_GREEN, TEXT_ALIGN_CENTER)
         end
     end
 end)

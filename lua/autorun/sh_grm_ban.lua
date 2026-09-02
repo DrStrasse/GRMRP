@@ -855,6 +855,17 @@ if CLIENT then
     surface.CreateFont("GRM_Ban_Head", { font = "Roboto", size = 22, weight = 800, extended = true })
     surface.CreateFont("GRM_Ban_Sub", { font = "Roboto", size = 15, weight = 600, extended = true })
 
+    -- Кадровые краски бан-оверлеев: один раз при загрузке, не на кадр
+    -- (оба слоя перерисовываются каждый кадр; §6.1.8). Красный «ЗАБАНЕН»
+    -- здесь один на все места — и в общий слой, и в резервную плашку.
+    local COL_BAN_RED = Color(235, 70, 70)
+    local COL_BAN_PLATE_BG = Color(28, 10, 12, 235)
+    local COL_BAN_REASON = Color(230, 210, 210)
+    local COL_BAN_URGE = Color(250, 200, 90)
+    local COL_BAN_LEFT = Color(235, 235, 235)
+    local COL_BAN_HINT = Color(170, 160, 160)
+    local BAN_HEAD_UP = Vector(0, 0, 84)
+
     --- Плашку рисует общий слой шапки (GRM.Nameplate), если он включён —
     --- две отрисовки над головой мы уже один раз чинили.
     hook.Add("GRM_NameplateOverride", "GRM_ServerBan_Plate", function(ply, info)
@@ -863,7 +874,7 @@ if CLIENT then
         info.name = "ЗАБАНЕН"
         info.nameKnown = false
         info.tag = ply:GetNWString("GRM_ServerBanReason", "")
-        info.tagColor = Color(235, 70, 70)
+        info.tagColor = COL_BAN_RED
         info.desc = nil
         info.cid = nil
         info.banned = true
@@ -877,10 +888,10 @@ if CLIENT then
         if not IsValid(lp) then return end
         for _, ply in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
             if IsValid(ply) and ply ~= lp and ply:GetNWBool("GRM_ServerBanned", false) then
-                local screen = (ply:GetPos() + Vector(0, 0, 84)):ToScreen()
+                local screen = (ply:GetPos() + BAN_HEAD_UP):ToScreen()
                 if screen.visible and lp:GetPos():DistToSqr(ply:GetPos()) < 1200 * 1200 then
                     draw.SimpleText("ЗАБАНЕН", "GRM_Ban_Head", screen.x, screen.y,
-                        Color(235, 70, 70), TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM)
+                        COL_BAN_RED, TEXT_ALIGN_CENTER, TEXT_ALIGN_BOTTOM)
                 end
             end
         end
@@ -918,16 +929,16 @@ if CLIENT then
         local text, left = banLeftText(lp)
         local w, h = 560, 112
         local x, y = ScrW() * 0.5 - w * 0.5, ScrH() - h - 40
-        draw.RoundedBox(8, x, y, w, h, Color(28, 10, 12, 235))
+        draw.RoundedBox(8, x, y, w, h, COL_BAN_PLATE_BG)
         draw.SimpleText("ВЫ ЗАБАНЕНЫ НА СЕРВЕРЕ", "GRM_Ban_Head", x + w * 0.5, y + 22,
-            Color(235, 70, 70), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            COL_BAN_RED, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         draw.SimpleText(lp:GetNWString("GRM_ServerBanReason", "нарушение правил"),
-            "GRM_Ban_Sub", x + w * 0.5, y + 48, Color(230, 210, 210), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            "GRM_Ban_Sub", x + w * 0.5, y + 48, COL_BAN_REASON, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         draw.SimpleText("Осталось: " .. text,
-            "GRM_Ban_Head", x + w * 0.5, y + 68, left >= 0 and left < 60 and Color(250, 200, 90)
-                or Color(235, 235, 235), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            "GRM_Ban_Head", x + w * 0.5, y + 68, left >= 0 and left < 60 and COL_BAN_URGE
+                or COL_BAN_LEFT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         draw.SimpleText("Меню, инвентарь, оружие и волны недоступны. Ждите решения администрации.",
-            "GRM_Ban_Sub", x + w * 0.5, y + 92, Color(170, 160, 160), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            "GRM_Ban_Sub", x + w * 0.5, y + 92, COL_BAN_HINT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end)
 
     --[[ «Ничего не открывать»: контекстное меню и спавн-меню закрыты хуками,

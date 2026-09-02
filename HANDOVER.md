@@ -73,11 +73,15 @@
   4. ~~224 аллокации~~ **волна 7 (02.09): 182.** Вычищено 34 в пяти HUD
      (vehicle_hud, customization, quests, factions, faction_fixes) + GPS
      миникарты; все они в CLEANED `sim_render_allocs.lua` (13/13).
-     Из остатка 20 — в мёртвом `GRM_Minimap_HUD` (`if false then` внутри,
-     хук снимается сразу: файл в CLEANED не добавлен до решения
-     владельца); остальное — `sh_grm_ban`(8), `sh_grm_estate`(7),
-     `sh_grm_doors`(7), `addons/grm_fire*`, вендор. Детектор `audit_slop`
-     исправлен: `obj:Angle()` — метод, не конструктор.
+     Волна 7 добита полностью: hot-alloc **224 → 20** и это ONLY мёртвый
+     `GRM_Minimap_HUD` (файл в CLEANED не добавлен до решения владельца).
+     Живой код: ноль. Сторож `sim_render_allocs.lua` вырос до 45 файлов
+     (45/45). Детектор `audit_slop` исправлен трижды: метод `obj:Angle()`
+     не конструктор; `string.format` в кадре не slop (строка нужна всё
+     равно); номера строк больше не съезжают (`strip_comments` сохраняет
+     переводы); в `HOT_HOOKS` добавлен PostDrawTranslucent. Кандаты
+     волны 8: слить 3 копии `label3D` стулов; `sim_slop_budget` при
+     желании расширяется новыми CLEANED-подписями.
   6. `sh_grm_minimap.lua`: внутри `GRM_Minimap_HUD` лежит выключенный
      блок `if false then` (~40 строк рендера карты). Это не мусор
      генерации, а отключённая функция — удалять или чинить только по

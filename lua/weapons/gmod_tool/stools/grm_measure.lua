@@ -236,6 +236,11 @@ if CLIENT then
     end)
 
     --- Панель с замером: висит, пока инструмент в руках.
+    local MS_BG = Color(12, 17, 25, 232)
+    local MS_ACCENT = Color(90, 175, 255)
+    local MS_HEAD = Color(120, 205, 255)
+    local MS_BODY = Color(232, 238, 246)
+
     hook.Add("HUDPaint", "GRM_Measure_HUD", function()
         local lp = LocalPlayer()
         if not IsValid(lp) then return end
@@ -260,17 +265,25 @@ if CLIENT then
         local tall = 44 + #lines * 18
         local x, y = 24, ScrH() * 0.22
 
-        draw.RoundedBox(8, x, y, wide, tall, Color(12, 17, 25, 232))
-        draw.RoundedBox(8, x, y, wide, 6, Color(90, 175, 255))
-        draw.SimpleText("GRM · КООРДИНАТЫ", "GRMMeasure_Head", x + 14, y + 14, Color(120, 205, 255),
+        draw.RoundedBox(8, x, y, wide, tall, MS_BG)
+        draw.RoundedBox(8, x, y, wide, 6, MS_ACCENT)
+        draw.SimpleText("GRM · КООРДИНАТЫ", "GRMMeasure_Head", x + 14, y + 14, MS_HEAD,
             TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
         for i, l in ipairs(lines) do
-            draw.SimpleText(l, "GRMMeasure_Body", x + 14, y + 38 + (i - 1) * 18, Color(232, 238, 246),
+            draw.SimpleText(l, "GRMMeasure_Body", x + 14, y + 38 + (i - 1) * 18, MS_BODY,
                 TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
         end
     end)
 
     --- Метки в мире.
+    -- точки/линейка разметки: позиции в скретче, цвета константами (§6.1.8)
+    local MS_DOT = Vector(0, 0, 0)
+    local MS_DOT_A = Vector(0, 0, 0)
+    local MS_DOT_B = Vector(0, 0, 0)
+    local MS_DOT_COL = Color(90, 220, 140, 220)
+    local MS_LINE_COL = Color(255, 170, 90, 220)
+    local MS_LINK_COL = Color(120, 205, 255)
+
     hook.Add("PostDrawTranslucentRenderables", "GRM_Measure_Marks", function(depth, sky, sky3d)
         if depth or sky or sky3d then return end
         local lp = LocalPlayer()
@@ -280,15 +293,20 @@ if CLIENT then
         if lp:GetInfo("gmod_toolmode") ~= "grm_measure" then return end
 
         local a, b = M.Marks[1], M.Marks[2]
-        local function dot(p, col)
+        local function dot(p, dst, col)
             render.SetColorMaterial()
-            render.DrawSphere(Vector(p.x, p.y, p.z), 4, 12, 12, col)
+            dst.x = p.x
+            dst.y = p.y
+            dst.z = p.z
+            render.DrawSphere(dst, 4, 12, 12, col)
         end
-        if a then dot(a, Color(90, 220, 140, 220)) end
-        if b then dot(b, Color(255, 170, 90, 220)) end
+        if a then dot(a, MS_DOT, MS_DOT_COL) end
+        if b then dot(b, MS_DOT, MS_LINE_COL) end
         if a and b then
             render.SetColorMaterial()
-            render.DrawLine(Vector(a.x, a.y, a.z), Vector(b.x, b.y, b.z), Color(120, 205, 255), true)
+            MS_DOT_A.x = a.x; MS_DOT_A.y = a.y; MS_DOT_A.z = a.z
+            MS_DOT_B.x = b.x; MS_DOT_B.y = b.y; MS_DOT_B.z = b.z
+            render.DrawLine(MS_DOT_A, MS_DOT_B, MS_LINK_COL, true)
         end
     end)
 end

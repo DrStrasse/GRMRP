@@ -146,6 +146,9 @@ end
 
 if CLIENT then
     -- Напоминание в углу: посылка в руках — не абстракция, её видно.
+    local PARCEL_BG = Color(14, 20, 28, 230)
+    local PARCEL_TEXT = Color(235, 220, 130)
+
     hook.Add("HUDPaint", "GRM_Courier_ParcelHUD", function()
         local ply = LocalPlayer()
         if not IsValid(ply) then return end
@@ -153,8 +156,8 @@ if CLIENT then
         if not IsValid(parcel) then return end
         local label = parcel.GetLabel and parcel:GetLabel() or ""
         if label == "" then label = "адрес в задании" end
-        draw.RoundedBox(7, ScrW() / 2 - 230, ScrH() - 145, 460, 42, Color(14, 20, 28, 230))
+        draw.RoundedBox(7, ScrW() / 2 - 230, ScrH() - 145, 460, 42, PARCEL_BG)
         draw.SimpleText("ПОСЫЛКА В РУКАХ  •  " .. string.upper(label), "DermaDefaultBold",
-            ScrW() / 2, ScrH() - 124, Color(235, 220, 130), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            ScrW() / 2, ScrH() - 124, PARCEL_TEXT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end)
 end

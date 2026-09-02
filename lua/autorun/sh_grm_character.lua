@@ -2722,14 +2722,17 @@ if CLIENT then
         return IsValid(lp) and lp:GetNWBool("GRM_CharacterPending", false)
     end
 
+    local LOCK_TITLE = Color(235, 235, 245)
+    local LOCK_SUB = Color(145, 155, 175)
+
     hook.Add("HUDPaintBackground", "GRM_Char_LockScreen", function()
         if not clientCharacterPending() then return end
         surface.SetDrawColor(0, 0, 0, 255)
         surface.DrawRect(0, 0, ScrW(), ScrH())
         draw.SimpleText("Выберите персонажа", "GRMChar_Title", ScrW() / 2, ScrH() - 84,
-            Color(235, 235, 245), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            LOCK_TITLE, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         draw.SimpleText("Игровой мир заблокирован до подтверждения персонажа", "GRMChar_Normal",
-            ScrW() / 2, ScrH() - 58, Color(145, 155, 175), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            ScrW() / 2, ScrH() - 58, LOCK_SUB, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end)
 
     hook.Add("HUDShouldDraw", "GRM_Char_HideHUD", function()

@@ -103,6 +103,13 @@ hook.Add("Think", "GRM_Augmentations_Regeneration", function()
 end)
 
 -- HUD Overlay (терминал перед лицом)
+-- Кадровые краски HUD: константы загрузки файла (§6.1.8), «GRMAugHUD v2»
+-- раньше собирал по семь Color() на каждый кадр.
+local AUG_CYAN = Color(0, 255, 200, 200)
+local AUG_WARN = Color(255, 100, 100, 255)
+local AUG_IR = Color(255, 100, 100, 200)
+local AUG_NIGHT = Color(100, 255, 100, 200)
+
 hook.Add("HUDPaint", "GRM_Augmentations_HUD", function()
     if not hudEnabled then return end
 
@@ -142,32 +149,32 @@ hook.Add("HUDPaint", "GRM_Augmentations_HUD", function()
     end
 
     -- Статус система
-    draw.SimpleText("GRM AUGMENTATION SYSTEM v2.0", "GRMAugHUD_Status", 30, 30, Color(0, 255, 200, 200))
-    draw.SimpleText("STATUS: ACTIVE", "GRMAugHUD_Status", 30, 50, Color(0, 255, 200, 200))
+    draw.SimpleText("GRM AUGMENTATION SYSTEM v2.0", "GRMAugHUD_Status", 30, 30, AUG_CYAN)
+    draw.SimpleText("STATUS: ACTIVE", "GRMAugHUD_Status", 30, 50, AUG_CYAN)
 
     -- Системная информация
     local ply = LocalPlayer()
     if IsValid(ply) then
-        draw.SimpleText("HP: " .. ply:Health() .. "/" .. ply:GetMaxHealth(), "GRMAugHUD_Info", 30, 80, Color(0, 255, 200, 200))
-        draw.SimpleText("ARMOR: " .. ply:Armor(), "GRMAugHUD_Info", 30, 100, Color(0, 255, 200, 200))
+        draw.SimpleText("HP: " .. ply:Health() .. "/" .. ply:GetMaxHealth(), "GRMAugHUD_Info", 30, 80, AUG_CYAN)
+        draw.SimpleText("ARMOR: " .. ply:Armor(), "GRMAugHUD_Info", 30, 100, AUG_CYAN)
     end
 
     -- Время
-    draw.SimpleText(os.date("%H:%M:%S"), "GRMAugHUD_Info", scrW - 100, 30, Color(0, 255, 200, 200))
+    draw.SimpleText(os.date("%H:%M:%S"), "GRMAugHUD_Info", scrW - 100, 30, AUG_CYAN)
 
     -- Предупреждения
     if ply:Health() < 30 then
-        draw.SimpleText("WARNING: LOW HEALTH", "GRMAugHUD_Warning", scrW / 2, scrH - 100, Color(255, 100, 100, 255), TEXT_ALIGN_CENTER)
+        draw.SimpleText("WARNING: LOW HEALTH", "GRMAugHUD_Warning", scrW / 2, scrH - 100, AUG_WARN, TEXT_ALIGN_CENTER)
     end
 
     -- Индикатор инфракрасного режима
     if infraredEnabled then
-        draw.SimpleText("INFRARED: ACTIVE", "GRMAugHUD_Small", scrW - 150, 50, Color(255, 100, 100, 200))
+        draw.SimpleText("INFRARED: ACTIVE", "GRMAugHUD_Small", scrW - 150, 50, AUG_IR)
     end
 
     -- Индикатор ночного зрения
     if nightVisionEnabled then
-        draw.SimpleText("NIGHT VISION: ACTIVE", "GRMAugHUD_Small", scrW - 180, 70, Color(100, 255, 100, 200))
+        draw.SimpleText("NIGHT VISION: ACTIVE", "GRMAugHUD_Small", scrW - 180, 70, AUG_NIGHT)
     end
 end)
 

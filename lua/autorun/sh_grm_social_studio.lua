@@ -411,12 +411,21 @@ hook.Add("HUDPaint", "GRM_SocStudio_GizmoLabel", function()
     GRM.Gizmo.DrawLabel(ST.mode, axis, mx, my)
 end)
 
+-- Орбита редактора: константы hull/up и переиспользуемый Angle — хук
+-- работает каждый кадр редактора (§6.1.8; тот же приём, что CAM_ANG
+-- в cl_grm_customization)
+local SS_TARGET_UP = Vector(0, 0, 40)
+local SS_HULL_MIN, SS_HULL_MAX = Vector(-4, -4, -4), Vector(4, 4, 4)
+local SS_ANG = Angle(0, 0, 0)
 hook.Add("CalcView", "GRM_SocStudio_Cam", function(ply)
     if not ST.on or ply ~= LocalPlayer() then return end
-    local tgt = ply:GetPos() + Vector(0, 0, 40)
-    local ang = Angle(ST.pitch, ST.yaw, 0)
+    local tgt = ply:GetPos() + SS_TARGET_UP
+    SS_ANG.p = ST.pitch
+    SS_ANG.y = ST.yaw
+    SS_ANG.r = 0
+    local ang = SS_ANG
     local want = tgt - ang:Forward() * ST.dist
-    local tr = util.TraceHull({ start = tgt, endpos = want, filter = ply, mins = Vector(-4, -4, -4), maxs = Vector(4, 4, 4) })
+    local tr = util.TraceHull({ start = tgt, endpos = want, filter = ply, mins = SS_HULL_MIN, maxs = SS_HULL_MAX })
     return { origin = tr.HitPos, angles = (tgt - tr.HitPos):Angle(), fov = 50, drawviewer = true }
 end)
 hook.Add("ShouldDrawLocalPlayer", "GRM_SocStudio_DrawMe", function()

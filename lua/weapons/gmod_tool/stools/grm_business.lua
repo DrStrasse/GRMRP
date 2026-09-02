@@ -65,14 +65,22 @@ if CLIENT then
     GRM = GRM or {}
     GRM.BusinessToolCorner = function(v) corner = v end
 
+    -- плашка подписи: угол — скретч, краски — константы (§6.1.8). Слить три
+    -- копии label3D в общий хелпер — кандидат следующей волны (шрифты и
+    -- минимальные ширины различаются).
+    local LBL_ANG = Angle(0, 0, 90)
+    local LBL_BG = Color(10, 15, 22, 232)
+    local LBL_SUB = Color(195, 210, 230)
+
     local function label3D(pos, text, sub, col, scale)
-        cam.Start3D2D(pos, Angle(0, EyeAngles().y - 90, 90), scale or 0.1)
+        LBL_ANG.y = EyeAngles().y - 90
+        cam.Start3D2D(pos, LBL_ANG, scale or 0.1)
             local w = math.max(300, string.len(text) * 11)
-            draw.RoundedBox(6, -w / 2, -26, w, sub and 52 or 34, Color(10, 15, 22, 232))
+            draw.RoundedBox(6, -w / 2, -26, w, sub and 52 or 34, LBL_BG)
             draw.SimpleText(text, "GRMBizTool_Head", 0, sub and -12 or -8, col,
                 TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             if sub then
-                draw.SimpleText(sub, "GRMBizTool_Small", 0, 12, Color(195, 210, 230),
+                draw.SimpleText(sub, "GRMBizTool_Small", 0, 12, LBL_SUB,
                     TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             end
         cam.End3D2D()
@@ -91,6 +99,16 @@ if CLIENT then
         return n
     end
 
+    -- Скретч-геометрия зон (см. §6.1.8): обводка и подписи идут подряд,
+    -- каждый вектор потребляется до следующей записи
+    local BZ_MIN = Vector(0, 0, 0)
+    local BZ_MAX = Vector(0, 0, 0)
+    local BZ_CENTER = Vector(0, 0, 0)
+    local BZ_EXT_MIN = Vector(0, 0, 0)
+    local BZ_EXT_MAX = Vector(0, 0, 0)
+    local BZ_LOOSE_POS = Vector(0, 0, 0)
+    local BZ_CORNER_COL = Color(255, 230, 120, 250)
+
     hook.Add("PostDrawTranslucentRenderables", "GRM_BizZone_Draw", function(depth, sky, sky3d)
         if depth or sky or sky3d then return end
         local active, ply = toolActive()
@@ -99,11 +117,17 @@ if CLIENT then
         -- Существующие зоны: цвет по виду объекта.
         for _, zone in ipairs(zones or {}) do
             local mn, mx = zone.mins or {}, zone.maxs or {}
-            local mins = Vector(mn.x or 0, mn.y or 0, mn.z or 0)
-            local maxs = Vector(mx.x or 0, mx.y or 0, mx.z or 0)
-            local center = (mins + maxs) * 0.5
+            local mins, maxs = BZ_MIN, BZ_MAX
+            mins.x = mn.x or 0; mins.y = mn.y or 0; mins.z = mn.z or 0
+            maxs.x = mx.x or 0; maxs.y = mx.y or 0; maxs.z = mx.z or 0
+            local center = BZ_CENTER
+            center.x = (mins.x + maxs.x) * 0.5
+            center.y = (mins.y + maxs.y) * 0.5
+            center.z = (mins.z + maxs.z) * 0.5
+            BZ_EXT_MIN.x = mins.x - center.x; BZ_EXT_MIN.y = mins.y - center.y; BZ_EXT_MIN.z = mins.z - center.z
+            BZ_EXT_MAX.x = maxs.x - center.x; BZ_EXT_MAX.y = maxs.y - center.y; BZ_EXT_MAX.z = maxs.z - center.z
             local col = zone.kind == "estate" and COL_ESTATE or COL_BIZ
-            render.DrawWireframeBox(center, angle_zero, mins - center, maxs - center, col, true)
+            render.DrawWireframeBox(center, angle_zero, BZ_EXT_MIN, BZ_EXT_MAX, col, true)
 
             local title = (zone.kind == "estate" and "ЖИЛЬЁ: " or "БИЗНЕС: ")
                 .. tostring(zone.name or "")
@@ -114,13 +138,17 @@ if CLIENT then
             if zone.kind == "business" then
                 sub = sub .. "  •  " .. tostring(zone.summary ~= "" and zone.summary or "пусто")
             end
-            label3D(center + Vector(0, 0, (maxs.z - mins.z) * 0.5 + 14), title, sub, col, 0.1)
+            center.z = center.z + (maxs.z - mins.z) * 0.5 + 14
+            label3D(center, title, sub, col, 0.1)
         end
 
         --[[ Оборудование вне зон: админ сразу видит, что осталось
              неоформленным, и не ищет автоматы по карте вручную. ]]
         for _, row in ipairs(loose or {}) do
-            local pos = Vector(row.x, row.y, row.z + 46)
+            local pos = BZ_LOOSE_POS
+            pos.x = row.x
+            pos.y = row.y
+            pos.z = row.z + 46
             render.DrawWireframeSphere(pos, 14, 7, 7, COL_LOOSE, true)
         end
 
@@ -128,21 +156,34 @@ if CLIENT then
         if corner and IsValid(ply) then
             local tr = ply:GetEyeTrace()
             local a, b = corner, tr.HitPos
-            local mn = Vector(math.min(a.x, b.x), math.min(a.y, b.y), math.min(a.z, b.z))
-            local mx = Vector(math.max(a.x, b.x), math.max(a.y, b.y), math.max(a.z, b.z) + 190)
-            local center = (mn + mx) * 0.5
-            render.DrawWireframeBox(center, angle_zero, mn - center, mx - center, COL_NEW, true)
-            render.DrawWireframeSphere(a, 12, 8, 8, Color(255, 230, 120, 250), true)
+            local mn, mx = BZ_MIN, BZ_MAX
+            mn.x = math.min(a.x, b.x); mn.y = math.min(a.y, b.y); mn.z = math.min(a.z, b.z)
+            mx.x = math.max(a.x, b.x); mx.y = math.max(a.y, b.y); mx.z = math.max(a.z, b.z) + 190
+            local center = BZ_CENTER
+            center.x = (mn.x + mx.x) * 0.5
+            center.y = (mn.y + mx.y) * 0.5
+            center.z = (mn.z + mx.z) * 0.5
+            BZ_EXT_MIN.x = mn.x - center.x; BZ_EXT_MIN.y = mn.y - center.y; BZ_EXT_MIN.z = mn.z - center.z
+            BZ_EXT_MAX.x = mx.x - center.x; BZ_EXT_MAX.y = mx.y - center.y; BZ_EXT_MAX.z = mx.z - center.z
+            render.DrawWireframeBox(center, angle_zero, BZ_EXT_MIN, BZ_EXT_MAX, COL_NEW, true)
+            render.DrawWireframeSphere(a, 12, 8, 8, BZ_CORNER_COL, true)
 
             local area = math.floor(((mx.x - mn.x) / 39.37) * ((mx.y - mn.y) / 39.37))
             local inside = countInside(mn, mx)
             local kind = GetConVar("grm_business_kind"):GetString()
-            label3D(center + Vector(0, 0, (mx.z - mn.z) * 0.5 + 12),
+            center.z = center.z + (mx.z - mn.z) * 0.5 + 12
+            label3D(center,
                 kind == "estate" and "НОВАЯ ЗОНА ЖИЛЬЯ" or "НОВАЯ БИЗНЕС-ЗОНА",
                 ("%d м²  •  попадёт точек: %d  •  ПКМ — создать"):format(area, inside),
                 COL_NEW, 0.09)
         end
     end)
+
+    local BIZ_BG = Color(12, 16, 24, 226)
+    local BIZ_LABEL = Color(150, 200, 255)
+    local BIZ_VALUE = Color(225, 233, 245)
+    local BIZ_FOOT = Color(160, 200, 170)
+    local BIZ_DIM = Color(150, 165, 185)
 
     hook.Add("HUDPaint", "GRM_BizZone_HUD", function()
         if not toolActive() then return end
@@ -165,23 +206,23 @@ if CLIENT then
         end
         -- Совсем к потолку прижимать тоже нельзя: там висит имя тула.
         y = math.max(y, 110)
-        draw.RoundedBox(8, x, y, w, h, Color(12, 16, 24, 226))
+        draw.RoundedBox(8, x, y, w, h, BIZ_BG)
         draw.RoundedBox(0, x, y, 4, h, kind == "estate" and COL_ESTATE or COL_BIZ)
         draw.SimpleText(kind == "estate" and "GRM: ЗОНА ЖИЛЬЯ" or "GRM: БИЗНЕС-ЗОНА",
             "GRMBizTool_Body", x + 14, y + 8, kind == "estate" and COL_ESTATE or COL_BIZ,
             TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
         for i, l in ipairs(lines) do
             draw.SimpleText(l[1], "GRMBizTool_Small", x + 14, y + 28 + (i - 1) * 22,
-                Color(150, 200, 255), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+                BIZ_LABEL, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
             draw.SimpleText(l[2], "GRMBizTool_Small", x + 60, y + 28 + (i - 1) * 22,
-                Color(225, 233, 245), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+                BIZ_VALUE, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
         end
         draw.SimpleText(("зон: %d  •  оборудование вне зон: %d"):format(#(zones or {}), #(loose or {})),
             "GRMBizTool_Small", x + w - 14, y + 8,
-            #(loose or {}) > 0 and COL_LOOSE or Color(160, 200, 170),
+            #(loose or {}) > 0 and COL_LOOSE or BIZ_FOOT,
             TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
         draw.SimpleText("Оборудование внутри зоны учитывается само — привязывать не нужно",
-            "GRMBizTool_Small", x + 14, y + h - 20, Color(150, 165, 185),
+            "GRMBizTool_Small", x + 14, y + h - 20, BIZ_DIM,
             TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
     end)
 

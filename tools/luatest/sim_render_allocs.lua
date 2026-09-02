@@ -33,6 +33,45 @@ local CLEANED = {
     "lua/autorun/client/cl_grm_quests.lua",
     "lua/autorun/sh_factions.lua",
     "lua/autorun/sh_faction_fixes.lua",
+    -- волна 7, продолжение: плашки бана/недвижимости/дверей
+    "lua/autorun/sh_grm_ban.lua",
+    "lua/autorun/sh_grm_estate.lua",
+    "lua/autorun/sh_grm_doors.lua",
+    -- волна 7, хвост: GPS-метки, радиальный биндер, 911, хало, плашки,
+    -- баннер, вес, камера от 3-го лица, капсула, круиз, курьер, выносливость
+    "lua/autorun/sh_grm_jobs.lua",
+    "lua/autorun/sh_grm_binder.lua",
+    "lua/autorun/sh_grm_911.lua",
+    "lua/autorun/sh_grm_property.lua",
+    "lua/autorun/sh_grm_nameplate.lua",
+    "lua/autorun/sh_grm_broadcast.lua",
+    "lua/autorun/client/cl_grm_encumbrance.lua",
+    "lua/autorun/client/cl_grm_thirdperson.lua",
+    "lua/entities/grm_augmentation_pod/init.lua",
+    "lua/autorun/sh_grm_cruise.lua",
+    "lua/autorun/sh_grm_jobs_courier.lua",
+    "lua/autorun/sh_grm_movement.lua",
+    "lua/autorun/sh_grm_fire_dispatch.lua",
+    "lua/autorun/zz_grm_doors_plus.lua",
+    "lua/entities/grm_home_bed/cl_init.lua",
+    "lua/autorun/client/cl_grm_cctv.lua",
+    "lua/autorun/sh_grm_chip_control.lua",
+    -- волна 7, PostDraw-хвост (аудит с исправленным списком хуков):
+    -- 3D2D-маркеры знаков, инкассации, сетей, пожарок, камер багажников,
+    -- плит, превью квест-тула и индустрии
+    "lua/autorun/sh_grm_plates.lua",
+    "lua/autorun/sh_grm_radionet.lua",
+    "lua/autorun/sh_grm_fire_truck.lua",
+    "lua/weapons/gmod_tool/stools/grm_quest_tool.lua",
+    "lua/autorun/client/cl_grm_industry_ui.lua",
+    "lua/autorun/sh_grm_trunk.lua",
+    "lua/autorun/sh_grm_stove_slots.lua",
+    -- инструменты-стулы: собственные HUDPaint-оверлеи
+    "lua/weapons/gmod_tool/stools/grm_arrest_zone.lua",
+    "lua/weapons/gmod_tool/stools/grm_business.lua",
+    "lua/weapons/gmod_tool/stools/grm_measure.lua",
+    "lua/weapons/gmod_tool/stools/grm_perm_tool.lua",
+    "lua/weapons/gmod_tool/stools/grm_transport.lua",
 }
 
 -- Хуки, которые вызываются каждый кадр.

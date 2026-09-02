@@ -141,6 +141,8 @@ end
 
 local smoothPos
 
+-- холл трассировки камеры: константы загрузки (§6.1.8)
+local TP_HULL_MIN, TP_HULL_MAX = Vector(-6, -6, -6), Vector(6, 6, 6)
 hook.Add("CalcView", "GRM_ThirdPerson", function(ply, origin, ang, fov)
     if not TP.IsOn() then
         smoothPos = nil
@@ -160,8 +162,8 @@ hook.Add("CalcView", "GRM_ThirdPerson", function(ply, origin, ang, fov)
         start = origin,
         endpos = want,
         filter = ply,
-        mins = Vector(-6, -6, -6),
-        maxs = Vector(6, 6, 6),
+        mins = TP_HULL_MIN,
+        maxs = TP_HULL_MAX,
         mask = MASK_SOLID_BRUSHONLY,
     })
     local pos = tr.HitPos

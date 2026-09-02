@@ -187,7 +187,17 @@ if CLIENT then
     local NET_VACCESS_OPEN = "GRM_VAccess_Open"
 
     -- Патчим OpenLeaderMenu для добавления вкладки транспорта
-    hook.Add("Think", "GRM_PatchLeaderMenu", function()
+    -- Краски вкладки «Транспорт» в менеджере магазинов: Think крутит их только
+-- при пересборке, но Paint кнопки — каждый кадр открытого окна; держим
+-- константами загрузки (§6.1.8).
+local SHOP_TAB_TEXT = Color(200, 200, 210)
+local SHOP_BTN_TEXT = Color(255, 255, 255)
+local SHOP_BLUE_HOVER = Color(50, 120, 200)
+local SHOP_BLUE = Color(80, 160, 255)
+local SHOP_GREEN_HOVER = Color(40, 160, 80)
+local SHOP_GREEN = Color(60, 200, 100)
+
+hook.Add("Think", "GRM_PatchLeaderMenu", function()
         -- Этот хук срабатывает один раз для патча
         if GRM.Perf and not GRM.Perf.Throttle("shop.leader.patch",.5)then return end
         if not OpenLeaderMenu then return end
@@ -229,7 +239,7 @@ if CLIENT then
                 infoLbl:SetWrap(true)
                 infoLbl:SetText("Управление доступом к транспорту для вашей фракции.\nНастройте, какой транспорт доступен участникам по рангам и отделам.")
                 infoLbl:SetFont("Factions_Normal")
-                infoLbl:SetTextColor(Color(200, 200, 210))
+                infoLbl:SetTextColor(SHOP_TAB_TEXT)
 
                 local btnOpenAccess = vgui.Create("DButton", transportPanel)
                 btnOpenAccess:Dock(TOP)
@@ -237,9 +247,9 @@ if CLIENT then
                 btnOpenAccess:DockMargin(0, 10, 0, 0)
                 btnOpenAccess:SetText("Открыть панель управления транспортом")
                 btnOpenAccess:SetFont("Factions_Normal")
-                btnOpenAccess:SetTextColor(Color(255, 255, 255))
+                btnOpenAccess:SetTextColor(SHOP_BTN_TEXT)
                 function btnOpenAccess:Paint(w, h)
-                    draw.RoundedBox(6, 0, 0, w, h, self:IsHovered() and Color(50, 120, 200) or Color(80, 160, 255))
+                    draw.RoundedBox(6, 0, 0, w, h, self:IsHovered() and SHOP_BLUE_HOVER or SHOP_BLUE)
                 end
                 btnOpenAccess.DoClick = function()
                     net.Start(NET_VACCESS_OPEN)
@@ -252,9 +262,9 @@ if CLIENT then
                 btnShop:DockMargin(0, 8, 0, 0)
                 btnShop:SetText("Открыть магазин транспорта")
                 btnShop:SetFont("Factions_Normal")
-                btnShop:SetTextColor(Color(255, 255, 255))
+                btnShop:SetTextColor(SHOP_BTN_TEXT)
                 function btnShop:Paint(w, h)
-                    draw.RoundedBox(6, 0, 0, w, h, self:IsHovered() and Color(40, 160, 80) or Color(60, 200, 100))
+                    draw.RoundedBox(6, 0, 0, w, h, self:IsHovered() and SHOP_GREEN_HOVER or SHOP_GREEN)
                 end
                 btnShop.DoClick = function()
                     net.Start("GRM_VShop_Open")

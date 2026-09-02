@@ -540,29 +540,40 @@ else
     net.Receive(NET_CASES,function() local rows=net.ReadTable() or {}; local f=frame("911 • ЖУРНАЛ РАССЛЕДОВАНИЙ",900,620); local sc=vgui.Create("DScrollPanel",f) sc:SetPos(12,62) sc:SetSize(876,546); for _,c in ipairs(rows) do local p=vgui.Create("DPanel",sc) p:Dock(TOP) p:DockMargin(0,0,0,7) p:SetTall(86) p.Paint=function(_,w,h) draw.RoundedBox(6,0,0,w,h,C.panel); draw.SimpleText(tostring(c.id).." • "..tostring(c.status),"GRM911_Text",12,12,C.red); draw.SimpleText(tostring(c.body and c.body.name or "неизвестно").." • "..os.date("%d.%m.%Y %H:%M",tonumber(c.created) or 0),"GRM911_Text",12,36,C.text); draw.SimpleText("Орудие: "..tostring(c.body and c.body.weapon or "—").." • действий: "..tostring(#(c.actions or {})),"GRM911_Text",12,60,C.muted) end sc:AddItem(p) end end)
     net.Receive(NET_ADMIN,function() local cfg=net.ReadTable() or {}; local f=frame("911 • НАСТРОЙКА",620,520); local vals={}; local fields={{"bleedoutSec","До смерти, сек"},{"stabilizedSec","После стабилизации, сек"},{"bodyTTL","Время тела, сек"},{"maxBodies","Максимум тел"},{"reviveHealth","HP после реанимации"},{"reviveSubsidy","Субсидия медслужбе"}}; for i,v in ipairs(fields) do local l=vgui.Create("DLabel",f) l:SetPos(16,66+(i-1)*48) l:SetSize(260,22) l:SetText(v[2]) l:SetTextColor(C.muted); local e=vgui.Create("DTextEntry",f) e:SetPos(290,64+(i-1)*48) e:SetSize(300,26) e:SetValue(tostring(cfg[v[1]] or 0)); vals[v[1]]=e end local enabled=vgui.Create("DCheckBoxLabel",f) enabled:SetPos(16,360) enabled:SetSize(260,24) enabled:SetText("Система включена") enabled:SetTextColor(C.text) enabled:SetValue(cfg.enabled and 1 or 0); local auto=vgui.Create("DCheckBoxLabel",f) auto:SetPos(290,360) auto:SetSize(300,24) auto:SetText("Автовызов при ранении") auto:SetTextColor(C.text) auto:SetValue(cfg.autoCall and 1 or 0); local loot=vgui.Create("DCheckBoxLabel",f) loot:SetPos(16,390) loot:SetSize(400,24) loot:SetText("Переносить инвентарь в тело") loot:SetTextColor(C.text) loot:SetValue(cfg.lootInventory and 1 or 0); button(f,"СОХРАНИТЬ",438,C.green,function() local t={enabled=enabled:GetChecked(),autoCall=auto:GetChecked(),lootInventory=loot:GetChecked()}; for k,e in pairs(vals) do t[k]=tonumber(e:GetValue()) end net.Start(NET_ADMIN_SAVE) net.WriteTable(t) net.SendToServer(); f:Close() end) end)
     net.Receive(NET_MARKER,function() if net.ReadBool() then marker={pos=net.ReadVector(),id=net.ReadUInt(32),at=CurTime()} else marker=nil end end)
+    local WOUND_POS = Vector(0, 0, 34)
+    local WOUND_ANG = Angle(0, 0, 90)
+    local WOUND_BG = Color(18, 5, 8, 225)
+    local WOUND_HEAD = Color(255, 70, 85)
     hook.Add("PostDrawTranslucentRenderables","GRM_911_WoundedLabels",function()
         local ragdolls=GRM.Perf and GRM.Perf.Entities and GRM.Perf.Entities("prop_ragdoll")or ents.FindByClass("prop_ragdoll")
         for _,rag in ipairs(ragdolls) do
             if IsValid(rag) and rag:GetNWBool("GRM_911_WoundedRagdoll") then
-                local pos=rag:GetPos()+Vector(0,0,34); local ang=Angle(0,EyeAngles().y-90,90)
+                local rp=rag:GetPos()
+                WOUND_POS.x = rp.x; WOUND_POS.y = rp.y; WOUND_POS.z = rp.z + 34
+                local pos=WOUND_POS
+                WOUND_ANG.y = EyeAngles().y - 90
+                local ang=WOUND_ANG
                 cam.Start3D2D(pos,ang,0.09)
-                    draw.RoundedBox(7,-105,-28,210,56,Color(18,5,8,225))
+                    draw.RoundedBox(7,-105,-28,210,56,WOUND_BG)
                     surface.SetDrawColor(244,78,96,220); surface.DrawOutlinedRect(-105,-28,210,56,2)
-                    draw.SimpleText("РАНЕН","GRM911_HUD",0,-20,Color(255,70,85),TEXT_ALIGN_CENTER,TEXT_ALIGN_TOP)
+                    draw.SimpleText("РАНЕН","GRM911_HUD",0,-20,WOUND_HEAD,TEXT_ALIGN_CENTER,TEXT_ALIGN_TOP)
                     draw.SimpleText(rag:GetNWBool("GRM_911_Stable") and "СТАБИЛИЗИРОВАН" or "НУЖНА ПОМОЩЬ","GRM911_Text",0,5,rag:GetNWBool("GRM_911_Stable") and C.green or C.text,TEXT_ALIGN_CENTER,TEXT_ALIGN_TOP)
                 cam.End3D2D()
             end
         end
     end)
+    local RAG_UP = Vector(0, 0, 48)
+    local MARKER_RED = Color(244, 78, 96, 180)
     hook.Add("CalcView","GRM_911_RagdollView",function(ply,pos,ang,fov)
         if not IsValid(ply) or not ply:GetNWBool("GRM_911_Downed") then return end
         local rag=ply:GetNWEntity("GRM_911_Ragdoll")
         if not IsValid(rag) then return end
-        return {origin=rag:GetPos()+Vector(0,0,48)-ang:Forward()*90,angles=ang,fov=fov,drawviewer=false}
+        return {origin=rag:GetPos()+RAG_UP-ang:Forward()*90,angles=ang,fov=fov,drawviewer=false}
     end)
 
-    hook.Add("HUDPaint","GRM_911_HUD",function() local lp=LocalPlayer(); if IsValid(lp) and lp:GetNWBool("GRM_911_Downed") then local nowEpoch=(GRM.Time and GRM.Time.Epoch) and math.floor(GRM.Time.Epoch()) or os.time(); local left=math.max(0,lp:GetNWInt("GRM_911_DeathAt",nowEpoch)-nowEpoch); draw.RoundedBox(8,ScrW()/2-240,ScrH()-155,480,90,Color(20,8,12,230)); draw.SimpleText("ТЯЖЁЛОЕ РАНЕНИЕ","GRM911_HUD",ScrW()/2,ScrH()-137,C.red,TEXT_ALIGN_CENTER); draw.SimpleText((lp:GetNWBool("GRM_911_Stable") and "Стабилизирован • " or "Кровопотеря • ").."до смерти "..left.." с","GRM911_Text",ScrW()/2,ScrH()-105,C.text,TEXT_ALIGN_CENTER); draw.SimpleText("Ожидайте помощь. Вызов: /911","GRM911_Text",ScrW()/2,ScrH()-82,C.muted,TEXT_ALIGN_CENTER) end; if marker then local d=math.floor(LocalPlayer():GetPos():Distance(marker.pos)); draw.SimpleText("911 #"..marker.id.." • "..d.." юн","GRM911_HUD",ScrW()/2,90,C.red,TEXT_ALIGN_CENTER) end end)
-    hook.Add("PostDrawTranslucentRenderables","GRM_911_Marker",function() if marker then render.SetColorMaterial(); render.DrawWireframeSphere(marker.pos,80,20,10,Color(244,78,96,180),true) end end)
+    local DWN_BG = Color(20, 8, 12, 230)
+    hook.Add("HUDPaint","GRM_911_HUD",function() local lp=LocalPlayer(); if IsValid(lp) and lp:GetNWBool("GRM_911_Downed") then local nowEpoch=(GRM.Time and GRM.Time.Epoch) and math.floor(GRM.Time.Epoch()) or os.time(); local left=math.max(0,lp:GetNWInt("GRM_911_DeathAt",nowEpoch)-nowEpoch); draw.RoundedBox(8,ScrW()/2-240,ScrH()-155,480,90,DWN_BG); draw.SimpleText("ТЯЖЁЛОЕ РАНЕНИЕ","GRM911_HUD",ScrW()/2,ScrH()-137,C.red,TEXT_ALIGN_CENTER); draw.SimpleText((lp:GetNWBool("GRM_911_Stable") and "Стабилизирован • " or "Кровопотеря • ").."до смерти "..left.." с","GRM911_Text",ScrW()/2,ScrH()-105,C.text,TEXT_ALIGN_CENTER); draw.SimpleText("Ожидайте помощь. Вызов: /911","GRM911_Text",ScrW()/2,ScrH()-82,C.muted,TEXT_ALIGN_CENTER) end; if marker then local d=math.floor(LocalPlayer():GetPos():Distance(marker.pos)); draw.SimpleText("911 #"..marker.id.." • "..d.." юн","GRM911_HUD",ScrW()/2,90,C.red,TEXT_ALIGN_CENTER) end end)
+    hook.Add("PostDrawTranslucentRenderables","GRM_911_Marker",function() if marker then render.SetColorMaterial(); render.DrawWireframeSphere(marker.pos,80,20,10,MARKER_RED,true) end end)
     hook.Add("CalcMainActivity","GRM_911_Lie",function(ply) if ply:GetNWBool("GRM_911_Downed") then return ACT_DIESIMPLE,-1 end end)
 end
 

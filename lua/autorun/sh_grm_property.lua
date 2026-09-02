@@ -358,6 +358,9 @@ if CLIENT then
   local n=net.ReadUInt(8);P._sel={}
   for i=1,n do P._sel[net.ReadString()]=true end
  end)
+-- контуры выделения (общие, создаются раз при загрузке; §6.1.8)
+local HALO_HOVER = Color(80, 200, 255)
+local HALO_SEL = Color(70, 220, 120)
  hook.Add("PreDrawHalos","GRM_Property_Halos",function()
   local lp=LocalPlayer();if not IsValid(lp)then return end
   local wep=lp:GetActiveWeapon()
@@ -374,7 +377,7 @@ if CLIENT then
     if id and P._sel[id]then sel[#sel+1]=e end
    end
   end
-  if #hover>0 then halo.Add(hover,Color(80,200,255),2,2,1,true,true) end
-  if #sel>0 then halo.Add(sel,Color(70,220,120),3,3,2,true,true) end
+  if #hover>0 then halo.Add(hover,HALO_HOVER,2,2,1,true,true) end
+  if #sel>0 then halo.Add(sel,HALO_SEL,3,3,2,true,true) end
  end)
 end

@@ -469,6 +469,17 @@ if CLIENT then
         timer.Simple(0.35, function() surface.PlaySound("garrysmod/save_load" .. tostring(math.random(1, 4)) .. ".wav") end)
     end)
 
+    -- Тост гаснет по альфе — цвет не константа, а скретч с записью полей
+    -- перед каждой отрисовкой (все потребление немедленное; §6.1.8)
+    local ACH_C = Color(0, 0, 0, 255)
+    local function achCol(r, g, b, a)
+        ACH_C.r = r
+        ACH_C.g = g
+        ACH_C.b = b
+        ACH_C.a = a
+        return ACH_C
+    end
+
     hook.Add("HUDPaint", "GRM_Ach_Toast", function()
         if not istable(toast) then return end
         local now = CurTime()
@@ -480,12 +491,12 @@ if CLIENT then
         local w, h = 460, 74
         local x = ScrW() / 2 - w / 2
         local y = 70 - slide * 60
-        draw.RoundedBox(8, x, y, w, h, Color(20, 24, 32, math.min(235, a)))
+        draw.RoundedBox(8, x, y, w, h, achCol(20, 24, 32, math.min(235, a)))
         surface.SetDrawColor(C.gold.r, C.gold.g, C.gold.b, a)
         surface.DrawOutlinedRect(x, y, w, h, 2)
-        draw.SimpleText("★ ДОСТИЖЕНИЕ РАЗБЛОКИРОВАНО", "GRMAch_Small", ScrW() / 2, y + 12, Color(C.gold.r, C.gold.g, C.gold.b, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-        draw.SimpleText(tostring(toast.name) .. "  (+" .. fmtMoney(toast.reward) .. ")", "GRMAch_Big", ScrW() / 2, y + 30, Color(255, 255, 255, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-        draw.SimpleText(tostring(toast.desc), "GRMAch_Small", ScrW() / 2, y + 56, Color(C.dim.r, C.dim.g, C.dim.b, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        draw.SimpleText("★ ДОСТИЖЕНИЕ РАЗБЛОКИРОВАНО", "GRMAch_Small", ScrW() / 2, y + 12, achCol(C.gold.r, C.gold.g, C.gold.b, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        draw.SimpleText(tostring(toast.name) .. "  (+" .. fmtMoney(toast.reward) .. ")", "GRMAch_Big", ScrW() / 2, y + 30, achCol(255, 255, 255, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        draw.SimpleText(tostring(toast.desc), "GRMAch_Small", ScrW() / 2, y + 56, achCol(C.dim.r, C.dim.g, C.dim.b, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
     end)
 
     -- вкладка «Ачивки» в F4 -----------------------------------------------------

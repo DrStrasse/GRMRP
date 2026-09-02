@@ -153,13 +153,15 @@ if CLIENT then
         kickNeed = net.ReadFloat()
         kickUntil = on and (CurTime() + kickNeed) or 0
     end)
+    local DP_TEXT = Color(255, 160, 80)
+
     hook.Add("HUDPaint", "GRM_DoorsPlus_KickHUD", function()
         if kickUntil <= CurTime() then return end
         local left = kickUntil - CurTime()
         local pct = 1 - left / math.max(0.1, kickNeed)
         local w, h = 220, 12
         local x, y = ScrW() / 2 - w / 2, ScrH() / 2 + 70
-        draw.SimpleText("Выбиваем дверь… держите R", "DermaDefaultBold", x + w / 2, y - 16, Color(255, 160, 80), TEXT_ALIGN_CENTER)
+        draw.SimpleText("Выбиваем дверь… держите R", "DermaDefaultBold", x + w / 2, y - 16, DP_TEXT, TEXT_ALIGN_CENTER)
         surface.SetDrawColor(30, 30, 30, 200) surface.DrawRect(x, y, w, h)
         surface.SetDrawColor(230, 90, 60) surface.DrawRect(x, y, w * pct, h)
     end)

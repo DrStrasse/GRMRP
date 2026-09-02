@@ -330,6 +330,8 @@ local function collectLabels(eye)
     return out
 end
 
+local IND_ANG = Angle(0, 0, 90)
+local IND_POS = Vector(0, 0, 0)
 hook.Add("PostDrawTranslucentRenderables", "GRM_IndustryNodeLabels", function()
     local ply = LocalPlayer()
     if not IsValid(ply) then return end
@@ -350,10 +352,17 @@ hook.Add("PostDrawTranslucentRenderables", "GRM_IndustryNodeLabels", function()
     end
 
     -- Отрисовка — КАЖДЫЙ кадр, иначе подписи моргают.
-    local ang = Angle(0, ply:EyeAngles().y - 90, 90)
+    -- Угол и точка якоря — скретч (каждая запись тут же потребляется
+    -- cam.Start3D2D; §6.1.8)
+    IND_ANG.y = ply:EyeAngles().y - 90
+    local ang = IND_ANG
     for _, item in ipairs(labelCache or {}) do
         if IsValid(item.ent) then
-            cam.Start3D2D(item.ent:GetPos() + Vector(0, 0, item.height), ang, 0.11)
+            local ip = item.ent:GetPos()
+            IND_POS.x = ip.x
+            IND_POS.y = ip.y
+            IND_POS.z = ip.z + item.height
+            cam.Start3D2D(IND_POS, ang, 0.11)
                 surface.SetFont("GRMInd_Head")
                 local w = surface.GetTextSize(item.title)
                 draw.SimpleText(item.title, "GRMInd_Head", 0, 0, UI.C.text, TEXT_ALIGN_CENTER)

@@ -174,6 +174,11 @@ else
     end
 
     -- HUD при наведении
+    -- Краски подписи капсулы (перерисовка каждый кадр; §6.1.8)
+    local POD_HEAD = Color(0, 255, 200)
+    local POD_BUSY = Color(255, 100, 100)
+    local POD_FREE = Color(100, 255, 100)
+
     hook.Add("HUDPaint", "GRM_AugmentationPod_HUD", function()
         local ply = LocalPlayer()
         local tr = (GRM and GRM.Perf and GRM.Perf.EyeTrace) and GRM.Perf.EyeTrace(ply, 0.05) or (IsValid(ply) and ply:GetEyeTrace())
@@ -187,12 +192,12 @@ else
 
         local screenPos = ent:GetPos():ToScreen()
 
-        draw.SimpleText("КАПСУЛА АУГМЕНТАЦИИ", "DermaDefaultBold", screenPos.x, screenPos.y - 40, Color(0, 255, 200), TEXT_ALIGN_CENTER)
+        draw.SimpleText("КАПСУЛА АУГМЕНТАЦИИ", "DermaDefaultBold", screenPos.x, screenPos.y - 40, POD_HEAD, TEXT_ALIGN_CENTER)
 
         if ent:GetOccupied() then
-            draw.SimpleText("ЗАНЯТО", "DermaDefault", screenPos.x, screenPos.y - 20, Color(255, 100, 100), TEXT_ALIGN_CENTER)
+            draw.SimpleText("ЗАНЯТО", "DermaDefault", screenPos.x, screenPos.y - 20, POD_BUSY, TEXT_ALIGN_CENTER)
         else
-            draw.SimpleText("Нажмите E для использования", "DermaDefault", screenPos.x, screenPos.y - 20, Color(100, 255, 100), TEXT_ALIGN_CENTER)
+            draw.SimpleText("Нажмите E для использования", "DermaDefault", screenPos.x, screenPos.y - 20, POD_FREE, TEXT_ALIGN_CENTER)
         end
     end)
 

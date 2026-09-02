@@ -292,7 +292,9 @@ if SERVER then
 end
 if CLIENT then
  hook.Add("PlayerButtonDown","GRM_Garbage_GKey",function(p,keyCode)if p~=LocalPlayer()or keyCode~=KEY_G then return end;if not(IsValid(p:GetNWEntity("GRM_GarbageBox"))or p:GetNWBool("GRM_GarbageJob",false))then return end;if(p._grmGarbageKeyNext or 0)>CurTime()then return end;p._grmGarbageKeyNext=CurTime()+.6;net.Start(NGARBAGE);net.SendToServer()end)
- hook.Add("HUDPaint","GRM_Garbage_CarryHUD",function()local p=LocalPlayer();local box=IsValid(p)and p:GetNWEntity("GRM_GarbageBox")or nil;if not IsValid(box)then return end;draw.RoundedBox(7,ScrW()/2-220,ScrH()-145,440,42,Color(14,20,28,230));draw.SimpleText("КОРОБКА С МУСОРОМ • сзади мусоровоза нажмите G","DermaDefaultBold",ScrW()/2,ScrH()-124,Color(235,220,130),TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)end)
+ local CARRY_BG = Color(14, 20, 28, 230)
+ local CARRY_TEXT = Color(235, 220, 130)
+ hook.Add("HUDPaint","GRM_Garbage_CarryHUD",function()local p=LocalPlayer();local box=IsValid(p)and p:GetNWEntity("GRM_GarbageBox")or nil;if not IsValid(box)then return end;draw.RoundedBox(7,ScrW()/2-220,ScrH()-145,440,42,CARRY_BG);draw.SimpleText("КОРОБКА С МУСОРОМ • сзади мусоровоза нажмите G","DermaDefaultBold",ScrW()/2,ScrH()-124,CARRY_TEXT,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)end)
  net.Receive(NTAXI,function()
   local fare,minFare,maxFare=net.ReadUInt(20),net.ReadUInt(20),net.ReadUInt(20);local rows,current=net.ReadTable()or{},net.ReadUInt(24)
   if IsValid(JB._taxiFrame)then JB._taxiFrame:Remove()end

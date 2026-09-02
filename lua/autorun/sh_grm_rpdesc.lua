@@ -354,6 +354,19 @@ if CLIENT then
         return lines
     end
 
+    -- Плашки каждого игрока пересобираются каждый кадр, а альфа у них
+    -- дистанционная: позиция и цвета — скретч-объекты с записью полей
+    -- строго перед немедленным потреблением (§6.1.8)
+    local RD_POS = Vector(0, 0, 0)
+    local RD_C = Color(0, 0, 0, 255)
+    local function rdCol(r, g, b, a)
+        RD_C.r = r
+        RD_C.g = g
+        RD_C.b = b
+        RD_C.a = a
+        return RD_C
+    end
+
     hook.Add("HUDPaint", TAG, function()
         --[[ 21.08. Единая шапка (GRM.Nameplate) рисует имя, тег и описание
              одной плашкой. Снятия хука по имени оказалось мало: файл
@@ -387,8 +400,12 @@ if CLIENT then
                         else
                             alpha = math.Clamp(255 * (1.15 - d / maxDist), 60, 255)
                         end
-                        local pos = ply:GetPos() + Vector(0, 0, 80)
-                            local sp = pos:ToScreen()
+                        local gp = ply:GetPos()
+                        local pos = RD_POS
+                        pos.x = gp.x
+                        pos.y = gp.y
+                        pos.z = gp.z + 80
+                        local sp = pos:ToScreen()
                             if sp.visible then
                                 local topY = sp.y -- верх всего блока; имя уедет ещё выше
 
@@ -406,12 +423,12 @@ if CLIENT then
                                         local boxH = #lines * (lineH + 2) + pad * 2
 
                                         local bx, by = sp.x - boxW / 2, sp.y - boxH
-                                        draw.RoundedBox(6, bx, by, boxW, boxH, Color(10, 14, 20, alpha * 0.78))
+                                        draw.RoundedBox(6, bx, by, boxW, boxH, rdCol(10, 14, 20, alpha * 0.78))
                                         surface.SetDrawColor(70, 150, 240, alpha * 0.7)
                                         surface.DrawOutlinedRect(bx, by, boxW, boxH, 1)
 
                                         for i, ln in ipairs(lines) do
-                                            draw.SimpleText(ln, "GRM_RPDesc_Font", sp.x, by + pad + (i - 1) * (lineH + 2), Color(235, 240, 248, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+                                            draw.SimpleText(ln, "GRM_RPDesc_Font", sp.x, by + pad + (i - 1) * (lineH + 2), rdCol(235, 240, 248, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
                                         end
                                         topY = by
                                     end
@@ -423,10 +440,10 @@ if CLIENT then
                                     local nw = surface.GetTextSize(rname) or 0
                                     local nbW, nbH = nw + 22, nameH + 8
                                     local nx, ny = sp.x - nbW / 2, topY - nbH - 4
-                                    draw.RoundedBox(6, nx, ny, nbW, nbH, Color(12, 16, 24, alpha * 0.85))
+                                    draw.RoundedBox(6, nx, ny, nbW, nbH, rdCol(12, 16, 24, alpha * 0.85))
                                     surface.SetDrawColor(230, 190, 80, alpha * 0.85)
                                     surface.DrawOutlinedRect(nx, ny, nbW, nbH, 1)
-                                    draw.SimpleText(rname, "GRM_RPName_Font", sp.x, ny + 4, Color(255, 226, 140, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+                                    draw.SimpleText(rname, "GRM_RPName_Font", sp.x, ny + 4, rdCol(255, 226, 140, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
                                 end
                             end
                         end

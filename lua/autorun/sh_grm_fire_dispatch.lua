@@ -565,6 +565,9 @@ if CLIENT then
     end)
 
     -- HUD-подсказка принявшему: куда ехать и сколько осталось.
+-- плашка вызова у прицела (§6.1.8)
+local DISP_TAG_BG = Color(24, 14, 12, 225)
+
     hook.Add("HUDPaint", "GRM_FireDispatch_HUD", function()
         local call = D.MyCall
         if not call or not isvector(call.origin) then return end
@@ -576,7 +579,7 @@ if CLIENT then
         local x = math.Clamp(screen.x, 90, ScrW() - 90)
         local y = math.Clamp(screen.y, 80, ScrH() - 140)
 
-        draw.RoundedBox(8, x - 88, y - 26, 176, 52, Color(24, 14, 12, 225))
+        draw.RoundedBox(8, x - 88, y - 26, 176, 52, DISP_TAG_BG)
         draw.SimpleText("ВЫЗОВ #" .. call.id, "GRMFireCall_Body", x, y - 12, C.gold, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         draw.SimpleText(dist .. " м · " .. tostring(call.text or ""), "GRMFireCall_Small", x, y + 10, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end)

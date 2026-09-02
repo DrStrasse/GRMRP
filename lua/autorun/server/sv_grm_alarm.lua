@@ -329,6 +329,9 @@ A._speakerSyncAll = syncAllSpeakers
 
 -- ── sensor scan ────────────────────────────────────────────
 local lastScan, lastSpeakerWatch = 0, 0
+-- подъём начала трассировки — константа загрузки, не аллокация
+-- на каждый датчик×игрок в кадре Think (§6.1.8)
+local ALARM_PROBE_UP = Vector(0, 0, 8)
 hook.Add("Think", "GRM_Alarm_Scan", function()
     local now = CurTime()
     local interval = tonumber(CFG().ScanInterval) or 0.35
@@ -385,7 +388,7 @@ hook.Add("Think", "GRM_Alarm_Scan", function()
                                 local last = tonumber(sensor:GetLastTrigger()) or 0
                                 if now - last >= cd then
                                     local tr = util.TraceLine({
-                                        start = origin + Vector(0, 0, 8),
+                                        start = origin + ALARM_PROBE_UP,
                                         endpos = ply:EyePos(),
                                         filter = { sensor, ply },
                                         mask = MASK_SOLID_BRUSHONLY,

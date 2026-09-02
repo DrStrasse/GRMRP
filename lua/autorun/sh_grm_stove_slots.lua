@@ -447,6 +447,8 @@ if CLIENT then
         return out
     end
 
+    -- ориентация конфорки: угол-скретч (SetAngles копирует; §6.1.8)
+    local SS_ANG = Angle(0, 0, 0)
     hook.Add("PostDrawTranslucentRenderables", "GRM_StoveSlots_Draw", function(depth, sky)
         if depth or sky then return end
         local lp = LocalPlayer()
@@ -471,7 +473,8 @@ if CLIENT then
                              «горячим» цветом: сразу видно, что работает. ]]
                         local col = taken and (cooking and COL_COOK or COL_TAKEN) or COL_FREE
                         cube:SetPos(pos)
-                        cube:SetAngles(Angle(0, stove:GetAngles().y, 0))
+                        SS_ANG.y = stove:GetAngles().y
+                        cube:SetAngles(SS_ANG)
                         render.SetColorModulation(col.r / 255, col.g / 255, col.b / 255)
                         render.SetBlend(taken and 0.85 or 0.45)
                         cube:DrawModel()

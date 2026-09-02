@@ -131,16 +131,48 @@ if CLIENT then
     local COL_TERM   = Color(255, 215, 120, 235)
     local COL_DEALER = Color(140, 220, 255, 235)
 
+    -- плашка подписи: угол — скретч, краски — константы (§6.1.8). Слить три
+    -- копии label3D в общий хелпер — кандидат следующей волны (шрифты и
+    -- минимальные ширины различаются).
+    local LBL_ANG = Angle(0, 0, 90)
+    local LBL_BG = Color(10, 15, 22, 232)
+    local LBL_SUB = Color(195, 210, 230)
+
     local function label3D(pos, text, sub, col, scale)
-        cam.Start3D2D(pos, Angle(0, EyeAngles().y - 90, 90), scale or 0.1)
+        LBL_ANG.y = EyeAngles().y - 90
+        cam.Start3D2D(pos, LBL_ANG, scale or 0.1)
             local w = math.max(260, string.len(text) * 11)
-            draw.RoundedBox(6, -w / 2, -26, w, sub and 52 or 34, Color(10, 15, 22, 232))
+            draw.RoundedBox(6, -w / 2, -26, w, sub and 52 or 34, LBL_BG)
             draw.SimpleText(text, "GRMTool_Head", 0, sub and -12 or -8, col, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             if sub then
-                draw.SimpleText(sub, "GRMTool_Small", 0, 12, Color(195, 210, 230), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                draw.SimpleText(sub, "GRMTool_Small", 0, 12, LBL_SUB, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             end
         cam.End3D2D()
     end
+
+    -- Геометрия зон/мест/стоек рисуется каждый кадр — скретч-векторы с
+    -- немедленным потреблением и константы hull'ов (§6.1.8)
+    local TT_MIN = Vector(0, 0, 0)
+    local TT_MAX = Vector(0, 0, 0)
+    local TT_CENTER = Vector(0, 0, 0)
+    local TT_EXT_MIN = Vector(0, 0, 0)
+    local TT_EXT_MAX = Vector(0, 0, 0)
+    local TT_POS = Vector(0, 0, 0)
+    local TT_LINE_END = Vector(0, 0, 0)
+    local TT_ANG = Angle(0, 0, 0)
+    local TT_SLOT_MIN, TT_SLOT_MAX = Vector(-52, -100, -18), Vector(52, 100, 22)
+    local TT_TERM_MIN, TT_TERM_MAX = Vector(-20, -20, -30), Vector(20, 20, 40)
+    local TT_ARROW_COL = Color(255, 190, 80, 240)
+    local TT_POS2 = Vector(0, 0, 0)
+    local TT_DEALER_MIN, TT_DEALER_MAX = Vector(-22, -22, -36), Vector(22, 22, 40)
+    local TT_SPAWN_MIN, TT_SPAWN_MAX = Vector(-52, -100, -8), Vector(52, 100, 20)
+    local TT_SPAWN_COL = Color(255, 185, 70, 235)
+    local TT_SPAWN_ARROW = Color(255, 160, 50, 245)
+    local TT_SPAWN_LABEL = Color(255, 200, 110)
+    local TT_PREVIEW = Color(120, 255, 160, 245)
+    local TT_CORNER = Color(255, 230, 120, 250)
+    local TT_WARN = Color(255, 140, 120)
+    local TT_OK_COL = Color(120, 255, 160)
 
     hook.Add("PostDrawTranslucentRenderables", "GRM_TransportTool_Draw", function(depth, sky, sky3d)
         if depth or sky or sky3d then return end
@@ -149,52 +181,82 @@ if CLIENT then
         local mode = curMode()
 
         for _, z in ipairs(data.zones or {}) do
-            local mn, mx = Vector(z.min.x, z.min.y, z.min.z), Vector(z.max.x, z.max.y, z.max.z)
-            local center = (mn + mx) * 0.5
+            local mn, mx = TT_MIN, TT_MAX
+            mn.x = z.min.x; mn.y = z.min.y; mn.z = z.min.z
+            mx.x = z.max.x; mx.y = z.max.y; mx.z = z.max.z
+            local center = TT_CENTER
+            center.x = (mn.x + mx.x) * 0.5
+            center.y = (mn.y + mx.y) * 0.5
+            center.z = (mn.z + mx.z) * 0.5
+            TT_EXT_MIN.x = mn.x - center.x; TT_EXT_MIN.y = mn.y - center.y; TT_EXT_MIN.z = mn.z - center.z
+            TT_EXT_MAX.x = mx.x - center.x; TT_EXT_MAX.y = mx.y - center.y; TT_EXT_MAX.z = mx.z - center.z
             local col = z.selected and COL_SEL or COL_ZONE
-            render.DrawWireframeBox(center, angle_zero, mn - center, mx - center, col, true)
-            label3D(center + Vector(0, 0, (mx.z - mn.z) * 0.5 + 14),
+            render.DrawWireframeBox(center, angle_zero, TT_EXT_MIN, TT_EXT_MAX, col, true)
+            center.z = center.z + (mx.z - mn.z) * 0.5 + 14
+            label3D(center,
                 (z.selected and "ВЫБРАН ГАРАЖ: " or "ГАРАЖ: ") .. tostring(z.name),
                 ("%s • мест выдачи %d • стоек %d • ворот %d"):format(tostring(z.kindName or ""),
                     z.slots or 0, z.terminals or 0, z.doors or 0), col, 0.1)
 
             for _, s in ipairs(z.slotList or {}) do
-                local p = Vector(s.pos.x, s.pos.y, s.pos.z)
-                local a = Angle(0, s.ang and s.ang.y or 0, 0)
+                local p = TT_POS
+                p.x = s.pos.x; p.y = s.pos.y; p.z = s.pos.z
+                TT_ANG.y = s.ang and s.ang.y or 0
+                local a = TT_ANG
                 local scol = (s.free == false) and COL_BUSY or COL_FREE
-                render.DrawWireframeBox(p + Vector(0, 0, 20), a, Vector(-52, -100, -18), Vector(52, 100, 22), scol, true)
-                render.DrawLine(p + Vector(0, 0, 24), p + a:Forward() * 130 + Vector(0, 0, 24), Color(255, 190, 80, 240), true)
-                label3D(p + Vector(0, 0, 66), tostring(s.name or "Место"),
+                p.z = p.z + 20
+                render.DrawWireframeBox(p, a, TT_SLOT_MIN, TT_SLOT_MAX, scol, true)
+                p.z = p.z + 4
+                local fwd = a:Forward()
+                TT_LINE_END.x = p.x + fwd.x * 130
+                TT_LINE_END.y = p.y + fwd.y * 130
+                TT_LINE_END.z = p.z
+                render.DrawLine(p, TT_LINE_END, TT_ARROW_COL, true)
+                p.z = p.z + 42
+                label3D(p, tostring(s.name or "Место"),
                     (s.free == false) and "занято" or "свободно, машина встанет по стрелке", scol, 0.07)
             end
 
             for _, t in ipairs(z.terminalList or {}) do
-                local p = Vector(t.pos.x, t.pos.y, t.pos.z)
-                render.DrawWireframeBox(p + Vector(0, 0, 30), angle_zero, Vector(-20, -20, -30), Vector(20, 20, 40), COL_TERM, true)
-                label3D(p + Vector(0, 0, 84), "СТОЙКА ВЫЗОВА", "меню гаража по [E]", COL_TERM, 0.06)
+                local p = TT_POS
+                p.x = t.pos.x; p.y = t.pos.y; p.z = t.pos.z + 30
+                render.DrawWireframeBox(p, angle_zero, TT_TERM_MIN, TT_TERM_MAX, COL_TERM, true)
+                p.z = p.z + 54
+                label3D(p, "СТОЙКА ВЫЗОВА", "меню гаража по [E]", COL_TERM, 0.06)
             end
         end
 
         for _, d in ipairs(data.dealers or {}) do
-            local p = Vector(d.pos.x, d.pos.y, d.pos.z)
-            render.DrawWireframeBox(p + Vector(0, 0, 36), angle_zero, Vector(-22, -22, -36), Vector(22, 22, 40), COL_DEALER, true)
-            label3D(p + Vector(0, 0, 96), "ДИЛЕР: " .. tostring(d.name),
+            local p = TT_POS
+            p.x = d.pos.x; p.y = d.pos.y; p.z = d.pos.z + 36
+            render.DrawWireframeBox(p, angle_zero, TT_DEALER_MIN, TT_DEALER_MAX, COL_DEALER, true)
+            p.z = p.z + 60
+            label3D(p, "ДИЛЕР: " .. tostring(d.name),
                 d.garageName ~= "" and ("покупки → гараж «" .. d.garageName .. "»") or "гараж не привязан",
                 COL_DEALER, 0.07)
             if d.spawnPos then
-                local sp = Vector(d.spawnPos.x, d.spawnPos.y, d.spawnPos.z)
-                local sa = Angle(0, d.spawnAng and d.spawnAng.y or 0, 0)
-                render.DrawWireframeBox(sp + Vector(0, 0, 10), sa, Vector(-52, -100, -8), Vector(52, 100, 20),
-                    Color(255, 185, 70, 235), true)
-                render.DrawLine(sp + Vector(0, 0, 14), sp + sa:Forward() * 120 + Vector(0, 0, 14),
-                    Color(255, 160, 50, 245), true)
-                label3D(sp + Vector(0, 0, 56), "ТОЧКА ВЫДАЧИ ДИЛЕРА",
+                local sp = TT_POS2
+                sp.x = d.spawnPos.x; sp.y = d.spawnPos.y; sp.z = d.spawnPos.z + 10
+                TT_ANG.y = d.spawnAng and d.spawnAng.y or 0
+                local sa = TT_ANG
+                render.DrawWireframeBox(sp, sa, TT_SPAWN_MIN, TT_SPAWN_MAX, TT_SPAWN_COL, true)
+                sp.z = sp.z + 4
+                local fwd = sa:Forward()
+                TT_LINE_END.x = sp.x + fwd.x * 120
+                TT_LINE_END.y = sp.y + fwd.y * 120
+                TT_LINE_END.z = sp.z
+                render.DrawLine(sp, TT_LINE_END, TT_SPAWN_ARROW, true)
+                sp.z = sp.z + 42
+                label3D(sp, "ТОЧКА ВЫДАЧИ ДИЛЕРА",
                     ("высота %d  •  машина встанет по стрелке"):format(math.floor(tonumber(d.lift) or 0)),
-                    Color(255, 200, 110), 0.07)
+                    TT_SPAWN_LABEL, 0.07)
             end
             if d.garageCenter then
-                render.DrawLine(p + Vector(0, 0, 40),
-                    Vector(d.garageCenter.x, d.garageCenter.y, d.garageCenter.z), COL_DEALER, true)
+                p.z = p.z - 56 + 40
+                TT_LINE_END.x = d.garageCenter.x
+                TT_LINE_END.y = d.garageCenter.y
+                TT_LINE_END.z = d.garageCenter.z
+                render.DrawLine(p, TT_LINE_END, COL_DEALER, true)
             end
         end
 
@@ -202,21 +264,35 @@ if CLIENT then
         if mode == "zone" and corner and IsValid(ply) then
             local tr = ply:GetEyeTrace()
             local a, b = corner, tr.HitPos
-            local mn = Vector(math.min(a.x, b.x), math.min(a.y, b.y), math.min(a.z, b.z))
-            local mx = Vector(math.max(a.x, b.x), math.max(a.y, b.y), math.max(a.z, b.z) + 180)
-            local center = (mn + mx) * 0.5
-            render.DrawWireframeBox(center, angle_zero, mn - center, mx - center, Color(120, 255, 160, 245), true)
-            render.DrawWireframeSphere(a, 12, 8, 8, Color(255, 230, 120, 250), true)
+            local mn, mx = TT_MIN, TT_MAX
+            mn.x = math.min(a.x, b.x); mn.y = math.min(a.y, b.y); mn.z = math.min(a.z, b.z)
+            mx.x = math.max(a.x, b.x); mx.y = math.max(a.y, b.y); mx.z = math.max(a.z, b.z) + 180
+            local center = TT_CENTER
+            center.x = (mn.x + mx.x) * 0.5
+            center.y = (mn.y + mx.y) * 0.5
+            center.z = (mn.z + mx.z) * 0.5
+            TT_EXT_MIN.x = mn.x - center.x; TT_EXT_MIN.y = mn.y - center.y; TT_EXT_MIN.z = mn.z - center.z
+            TT_EXT_MAX.x = mx.x - center.x; TT_EXT_MAX.y = mx.y - center.y; TT_EXT_MAX.z = mx.z - center.z
+            render.DrawWireframeBox(center, angle_zero, TT_EXT_MIN, TT_EXT_MAX, TT_PREVIEW, true)
+            render.DrawWireframeSphere(a, 12, 8, 8, TT_CORNER, true)
             local side = math.min(mx.x - mn.x, mx.y - mn.y)
-            label3D(center + Vector(0, 0, (mx.z - mn.z) * 0.5 + 10), "НОВАЯ ЗОНА ГАРАЖА",
+            center.z = center.z + (mx.z - mn.z) * 0.5 + 10
+            label3D(center, "НОВАЯ ЗОНА ГАРАЖА",
                 ("%d x %d юнитов%s"):format(mx.x - mn.x, mx.y - mn.y,
                     side < 200 and "  •  МАЛО: нужна сторона от 200" or "  •  ЛКМ — подтвердить"),
-                side < 200 and Color(255, 140, 120) or Color(120, 255, 160), 0.09)
+                side < 200 and TT_WARN or TT_OK_COL, 0.09)
         end
     end)
 
     --[[ Подсказка на экране: что делает каждая кнопка ИМЕННО СЕЙЧАС.
          Без неё порядок работы приходилось помнить наизусть. ]]
+    local TT_BG = Color(12, 16, 24, 226)
+    local TT_BAR = Color(245, 195, 65)
+    local TT_HEAD = Color(245, 205, 90)
+    local TT_LABEL = Color(150, 200, 255)
+    local TT_VALUE = Color(225, 233, 245)
+    local TT_OK = Color(120, 255, 160)
+
     hook.Add("HUDPaint", "GRM_TransportTool_HUD", function()
         local active = toolActive()
         if not active then return end
@@ -228,17 +304,17 @@ if CLIENT then
         }
         local w, h = 520, 34 + #lines * 22
         local x, y = 24, ScrH() - h - 120
-        draw.RoundedBox(8, x, y, w, h, Color(12, 16, 24, 226))
-        draw.RoundedBox(0, x, y, 4, h, Color(245, 195, 65))
+        draw.RoundedBox(8, x, y, w, h, TT_BG)
+        draw.RoundedBox(0, x, y, 4, h, TT_BAR)
         draw.SimpleText("GRM: ТРАНСПОРТ — " .. string.upper(m.label), "GRMTool_Body", x + 14, y + 8,
-            Color(245, 205, 90), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+            TT_HEAD, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
         for i, l in ipairs(lines) do
-            draw.SimpleText(l[1], "GRMTool_Small", x + 14, y + 28 + (i - 1) * 22, Color(150, 200, 255), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-            draw.SimpleText(l[2], "GRMTool_Small", x + 60, y + 28 + (i - 1) * 22, Color(225, 233, 245), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+            draw.SimpleText(l[1], "GRMTool_Small", x + 14, y + 28 + (i - 1) * 22, TT_LABEL, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+            draw.SimpleText(l[2], "GRMTool_Small", x + 60, y + 28 + (i - 1) * 22, TT_VALUE, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
         end
         if curMode() == "zone" and corner then
             draw.SimpleText("Первый угол поставлен — кликните второй", "GRMTool_Small", x + w - 14, y + 8,
-                Color(120, 255, 160), TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
+                TT_OK, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
         end
     end)
 

@@ -612,15 +612,9 @@ if SERVER then
         end)
     end
 
-    hook.Add("CalcMainActivity", "GRM_Soc_Act", function(ply, vel)
-        if not IsValid(ply) then return end
-        if ply:GetNWString("GRM_SocAnim", "") == "" then return end
-        local def = S.ByID(ply:GetNWString("GRM_SocAnim", ""))
-        if not def or not def.crouch then return end
-        local moving = vel and vel:Length2D() > 8
-        return moving and ACT_HL2MP_WALK_CROUCH or ACT_HL2MP_IDLE_CROUCH, -1
-    end)
-
+    -- Копия CalcMainActivity-хука отсюда убрана: это КЛИЕНТСКИЙ хук, на
+    -- сервере он не вызывается никогда, а с тем же id ещё и затирался бы
+    -- последней регистрацией. Живой обработчик — в клиентской части файла.
     hook.Add("PlayerSay", "GRM_Soc_Chat", function(ply, text)
         local t = string.lower(string.Trim(tostring(text or "")))
         if t == "/anim" or t == "/аним" or t == "/анимации" or t == "/social" then

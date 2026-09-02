@@ -59,7 +59,8 @@ M.Config = {
 }
 
 function M.OreName(ore) local o = M.Ores[tostring(ore or "")] return o and o.name or tostring(ore or "") end
-function M.OreColor(ore) local o = M.Ores[tostring(ore or "")] return o and o.color or Color(220, 220, 220) end
+local ORE_FALLBACK = Color(220, 220, 220)
+function M.OreColor(ore) local o = M.Ores[tostring(ore or "")] return o and o.color or ORE_FALLBACK end
 function M.IsOre(ore) return M.Ores[tostring(ore or "")] ~= nil end
 function M.ItemID(ore) return "ore_" .. tostring(ore or "") end
 
@@ -478,6 +479,12 @@ if CLIENT then
         until_ = CurTime() + 1.2
     end)
 
+    -- Статичные краски полосы добычи (создаются раз при загрузке; §6.1.8)
+    local BAR_BG = Color(12, 17, 25, 240)
+    local BAR_TITLE = Color(240, 244, 250)
+    local BAR_PCT = Color(245, 195, 65)
+    local BAR_TRACK = Color(30, 38, 52)
+
     hook.Add("HUDPaint", "GRM_Mining_ProgressBar", function()
         if CurTime() > until_ or not IsValid(node) then return end
         local ply = LocalPlayer()
@@ -490,14 +497,14 @@ if CLIENT then
         local ore = node.GetNWString and node:GetNWString("GRM_OreType", "") or ""
         local col = GRM.Mining.OreColor(ore)
 
-        draw.RoundedBox(8, x, y, w, h, Color(12, 17, 25, 240))
+        draw.RoundedBox(8, x, y, w, h, BAR_BG)
         surface.SetDrawColor(38, 48, 66, 220)
         surface.DrawOutlinedRect(x, y, w, h)
         draw.SimpleText(ore ~= "" and GRM.Mining.OreName(ore) or "Добыча руды", "GRMMine_Bar", x + 12, y + 11,
-            Color(240, 244, 250), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+            BAR_TITLE, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
         draw.SimpleText(math.floor(progress * 100) .. "%", "GRMMine_Bar", x + w - 12, y + 11,
-            Color(245, 195, 65), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-        draw.RoundedBox(4, x + 12, y + 26, w - 24, 8, Color(30, 38, 52))
+            BAR_PCT, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+        draw.RoundedBox(4, x + 12, y + 26, w - 24, 8, BAR_TRACK)
         draw.RoundedBox(4, x + 12, y + 26, (w - 24) * math.Clamp(progress, 0, 1), 8, col)
     end)
 

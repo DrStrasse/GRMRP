@@ -515,7 +515,17 @@ if CLIENT then
     -- Между тиками перерисовываем кэшированный результат (метка обновляется
     -- с лёгкой задержкой, что незаметно для владельца).
     local ppHUDTrace = { at = 0, ent = nil }
-    hook.Add("HUDPaint", "GRM_PropProtect_OwnerHUD", function()
+        -- Палитра метки владельца: константы загрузки, не покадровые аллокации
+    -- (§6.1.8). Жёлтый «сервер» и «закреплён» — один цвет на двоих.
+    local COL_DEFAULT = Color(180, 190, 205)
+    local COL_MAP = Color(140, 175, 220)
+    local COL_GOLD = Color(245, 205, 80)
+    local COL_MINE = Color(100, 230, 130)
+    local COL_ONLINE = Color(150, 220, 255)
+    local COL_OFFLINE = Color(220, 160, 100)
+    local COL_HUD_BG = Color(12, 17, 25, 225)
+
+hook.Add("HUDPaint", "GRM_PropProtect_OwnerHUD", function()
         local lp = LocalPlayer()
         if not IsValid(lp) then return end
         local now = CurTime()
@@ -528,17 +538,17 @@ if CLIENT then
         if not IsValid(ent) then return end
 
         local text = ""
-        local col = Color(180, 190, 205)
+        local col = COL_DEFAULT
 
         if PP.IsMapEntity(ent) then
             text = "Владелец: Карта (Мир)"
-            col = Color(140, 175, 220)
+            col = COL_MAP
         elseif PP.IsServerEntity(ent) then
             text = "Владелец: Сервер (Оборудование)"
-            col = Color(245, 205, 80)
+            col = COL_GOLD
         elseif PP.IsOwner(lp, ent) then
             text = "Владелец: Вы (Ваш проп)"
-            col = Color(100, 230, 130)
+            col = COL_MINE
         elseif ownerOf(ent) ~= "" then
             local ownerKey = ownerOf(ent)
             local ownerName = ent:GetNWString("GRM_PropOwnerName", "")
@@ -551,7 +561,7 @@ if CLIENT then
                 end
             end
             text = "Владелец: " .. (ownerName ~= "" and ownerName or "Игрок") .. (online and "" or " (Офлайн)")
-            col = online and Color(150, 220, 255) or Color(220, 160, 100)
+            col = online and COL_ONLINE or COL_OFFLINE
         else
             return
         end
@@ -567,10 +577,10 @@ if CLIENT then
 
         local w, h = 310, permLine and 50 or 30
         local x, y = ScrW() - w - 18, math.floor(ScrH() * 0.32)
-        draw.RoundedBox(6, x, y, w, h, Color(12, 17, 25, 225))
+        draw.RoundedBox(6, x, y, w, h, COL_HUD_BG)
         if permLine then
             draw.SimpleText(text, "GRMPP_Owner", x + 12, y + 15, col, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-            draw.SimpleText(permLine, "GRMPP_Owner", x + 12, y + 35, Color(245, 205, 80), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+            draw.SimpleText(permLine, "GRMPP_Owner", x + 12, y + 35, COL_GOLD, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
         else
             draw.SimpleText(text, "GRMPP_Owner", x + 12, y + h / 2, col, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
         end

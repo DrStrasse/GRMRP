@@ -710,11 +710,16 @@ if CLIENT then
     hook.Add("EntityNetworkedVarChanged","GRM_Trunk_LidRegistry",function(ent,name,_,value)if name=="VK_TrunkOpen"then if value==true then openTrunks[ent]=true else openTrunks[ent]=nil end end end)
     hook.Add("EntityRemoved","GRM_Trunk_LidRegistryRemove",function(ent)openTrunks[ent]=nil end)
     timer.Simple(1,function()for _,veh in ipairs(ents.GetAll())do if IsValid(veh)and veh.GetNW2Bool and veh:GetNW2Bool("VK_TrunkOpen",false)then openTrunks[veh]=true end end end)
+    local TK_LOCAL = Vector(0, 0, 0)
+    local TK_ANG = Angle(0, 0, 90)
+    local TK_BG = Color(14, 18, 26, 215)
     hook.Add("PostDrawTranslucentRenderables", "GRM_Trunk_Lid", function()
         local lp=LocalPlayer();if not IsValid(lp)then return end
         for veh in pairs(openTrunks)do if not IsValid(veh)or not veh:GetNW2Bool("VK_TrunkOpen",false)then openTrunks[veh]=nil elseif lp:GetPos():DistToSqr(veh:GetPos())<=300*300 then
-            local mins,maxs=veh:OBBMins(),veh:OBBMaxs();local back=(mins and mins.y)and mins.y or-60;local pos=veh:LocalToWorld(Vector(0,back-8,(maxs and maxs.z or 60)*.5+30+math.sin(CurTime()*3)*3));local ang=Angle(0,EyeAngles().y-90,90)
-            cam.Start3D2D(pos,ang,.1);draw.RoundedBox(6,-110,-20,220,40,Color(14,18,26,215));surface.SetDrawColor(C.yellow.r,C.yellow.g,C.yellow.b,220);surface.DrawOutlinedRect(-110,-20,220,40,2);draw.SimpleText("БАГАЖНИК ОТКРЫТ","GRMTrunk_3D",0,0,C.yellow,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER);cam.End3D2D();return
+            local mins,maxs=veh:OBBMins(),veh:OBBMaxs();local back=(mins and mins.y)and mins.y or-60
+            TK_LOCAL.y=back-8;TK_LOCAL.z=(maxs and maxs.z or 60)*.5+30+math.sin(CurTime()*3)*3;local pos=veh:LocalToWorld(TK_LOCAL)
+            TK_ANG.y=EyeAngles().y-90;local ang=TK_ANG
+            cam.Start3D2D(pos,ang,.1);draw.RoundedBox(6,-110,-20,220,40,TK_BG);surface.SetDrawColor(C.yellow.r,C.yellow.g,C.yellow.b,220);surface.DrawOutlinedRect(-110,-20,220,40,2);draw.SimpleText("БАГАЖНИК ОТКРЫТ","GRMTrunk_3D",0,0,C.yellow,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER);cam.End3D2D();return
         end end
     end)
 

@@ -61,19 +61,28 @@ CMP_RE = re.compile(r"^\s*([\w\.\:\[\]\"']+)\s*==\s*(\"[^\"]*\"|'[^']*'|[\w\.]+)
 FUNC_RE = re.compile(r"^(\s*)(?:local\s+)?function\s+([\w\.\:]*)\s*\(|^(\s*)(?:local\s+)?([\w\.]+)\s*=\s*function\s*\(")
 HOOK_RE = re.compile(r"""hook\.Add\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']""")
 HOT_HOOKS = ("HUDPaint", "Think", "Tick", "PostDrawOpaqueRenderables", "PreDrawHalos",
-             "HUDPaintBackground", "RenderScreenspaceEffects", "CalcView", "PostDrawHUD")
+             "HUDPaintBackground", "RenderScreenspaceEffects", "CalcView", "PostDrawHUD",
+             "PostDrawTranslucentRenderables", "PreDrawTranslucentRenderables")
 # Конструкторы — только самостоятельные вызовы: obj:Angle( и a.b.Vector( это
 # методы, их аллокации лежат вне контроля модуля (движок сам решает, что
 # вернуть). Квалифицированные помощники (table.Copy и т.п.) — наоборот, их
 # пишет автор, и они всегда аллоцируют.
 HOT_CALL_RE = re.compile(
+    # string.format НЕ считаем слопом в кадре: строка подписи нужна каждое
+    # кадр в любом случае (draw-текст меняется), а формат vs конкатенация —
+    # микрооптимизация, не аллокационный паттерн. table.Copy/TableToJSON — да.
     r"(?<![:.\w])(Color|Vector|Angle|Material)\s*\("
-    r"|\b(table\.Copy|util\.TableToJSON|string\.format)\s*\(")
+    r"|\b(table\.Copy|util\.TableToJSON)\s*\(")
 BLOCK_OPEN_RE = re.compile(r"^\s*(if\b|for\b|while\b|repeat\b|function\b|local function\b)")
 
 
 def strip_comments(text: str) -> str:
-    text = COMMENT_RE.sub("", text)
+    # ВАЖНО: содержимое блочных комментариев вырезается, но ПЕРЕНОСЫ СТРОК
+    # сохраняются — иначе нумерация находок съезжает относительно файла и
+    # каждую приходится искать глазами (классический самоподстрел).
+    def blank_out(match):
+        return "\n" * match.group(0).count("\n")
+    text = COMMENT_RE.sub(blank_out, text)
     return LINE_COMMENT_RE.sub("", text)
 
 
@@ -232,38 +241,62 @@ def find_repeated_literals(text: str, threshold: int) -> list[dict]:
 
 
 def find_hot_allocs(lines: list[str]) -> list[dict]:
+    """Конструкторы таблиц внутри render-хуков.
+
+    Границы «горячей зоны»:
+    - открывается ТОЛЬКО на hook.Add с литералом function( в той же строке:
+      хук, зарегистрированный переменной (hook.Add("HUDPaint", id, fn)),
+      тело здесь не видит — иначе зона проглатывала бы весь файл дальше
+      (так ложно красили cl_grm_cctv и однострочники jobs_v4);
+    - однострочный хук (end) в той же строке) не открывается вовсе;
+    - закрывается на первой строке 'end)' — conservative undercount,
+      детектор-ориентир, строже него только sim_render_allocs.
+    Объявления-константы (local X = Color(0, 0, 0)) не считаем аллокациями
+    в кадре даже внутри зоны: они выполняются при загрузке.
+    """
     out = []
     current = None
-    depth = 0
+    decl_re = re.compile(
+        r"^\s*local\s+[\w,\s]+=\s*(?:Color|Vector|Angle|Material)\s*\([-\d.,\s]*\)\s*$")
     for idx, line in enumerate(lines):
-        hook_match = re.search(r'hook\.Add\s*\(\s*["'"'"'](\w+)["'"'"']', line)
+        hook_match = re.search(r'hook\.Add\s*\(\s*["\'](\w+)["\']', line)
         if hook_match and hook_match.group(1) in HOT_HOOKS:
-            current, depth = (hook_match.group(1), idx), 0
+            if "function" in line and not re.search(r"end\s*\)\s*(--.*)?$", line):
+                current = hook_match.group(1)
             continue
         if current is None:
             continue
         if re.match(r"^\s*end\s*\)", line):
             current = None
             continue
+        if decl_re.match(line):
+            continue
         for call in HOT_CALL_RE.finditer(line):
-            name = call.group(1)
-            # Color/Material с константными аргументами в рендере — самый
-            # частый и самый дешёвый в исправлении случай.
-            if name in ("Material", "Color", "Vector", "Angle"):
-                out.append({"kind": "hot-alloc", "line": idx + 1,
-                            "note": f"{name}( в {current[0]} — вынести в верхний уровень"})
+            name = call.group(1) or call.group(2)
+            out.append({"kind": "hot-alloc", "line": idx + 1,
+                        "note": f"{name}( в {current} — вынести в верхний уровень"})
     return out
+
+
+HOOK_REMOVE_RE = re.compile(
+    r"""hook\.Remove\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']""")
 
 
 def find_hook_dups(text: str) -> list[dict]:
     seen = defaultdict(list)
+    removed = set()
     for line_no, line in enumerate(text.splitlines(), 1):
         m = HOOK_RE.search(line)
         if m:
             seen[(m.group(1), m.group(2))].append(line_no)
+        r = HOOK_REMOVE_RE.search(line)
+        if r:
+            # явный hook.Remove того же id — это осознанная перерегистрация
+            # (спящий планировщик, wake-on-demand), а не случайный перезапуск
+            removed.add((r.group(1), r.group(2)))
     out = []
     for (hook_name, ident), lines_at in seen.items():
-        if len(lines_at) > 1:
+        if len(lines_at) > 1 and (hook_name, ident) not in removed:
             out.append({"kind": "hook-dup", "line": lines_at[0],
                         "note": f"hook.Add(\"{hook_name}\", \"{ident}\") повторён на строках "
                                 f"{', '.join(map(str, lines_at))} — последний затирает предыдущие"})

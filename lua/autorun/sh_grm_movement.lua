@@ -360,10 +360,16 @@ if CLIENT then
          центру экрана больше нет: раньше она висела отдельно от здоровья и
          брони и налезала на вес с сытостью. Если общего HUD почему-то нет
          (старая сборка), рисуем по-старому. ]]
+    local STAMINA_TRACK = Color(30, 32, 40, 200)
+    local STAMINA_PCT = Color(255, 255, 255, 240)
+    local STAMINA_LABEL = Color(160, 165, 175, 255)
+    local STAM_LOW = Color(130, 45, 200)
+    local STAM_MID = Color(155, 70, 230)
+    local STAM_HIGH = Color(175, 90, 255)
     local function staminaColor(frac)
-        if frac < 0.3 then return Color(130, 45, 200) end
-        if frac < 0.6 then return Color(155, 70, 230) end
-        return Color(175, 90, 255)
+        if frac < 0.3 then return STAM_LOW end
+        if frac < 0.6 then return STAM_MID end
+        return STAM_HIGH
     end
 
     -- Дыхание: под водой считаем запас воздуха. Движок его не отдаёт,
@@ -418,12 +424,12 @@ if CLIENT then
             local sw, sh = ScrW(), ScrH()
             local barW, barH = 250, 14
             local x, y = (sw - barW) / 2, sh - 66
-            draw.RoundedBox(4, x, y, barW, barH, Color(30, 32, 40, 200))
+            draw.RoundedBox(4, x, y, barW, barH, STAMINA_TRACK)
             local frac = math.Clamp(stamina / maxStamina, 0, 1)
             draw.RoundedBox(4, x, y, barW * frac, barH, staminaColor(frac))
-            draw.SimpleText("Выносливость", "GRM_HUD_Label", x + 10, y - 16, Color(160, 165, 175, 255), TEXT_ALIGN_LEFT)
+            draw.SimpleText("Выносливость", "GRM_HUD_Label", x + 10, y - 16, STAMINA_LABEL, TEXT_ALIGN_LEFT)
             draw.SimpleText(math.floor(stamina) .. "%", "GRM_HUD_Value", x + barW - 10, y + barH / 2,
-                Color(255, 255, 255, 240), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+                STAMINA_PCT, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
         end)
     end
 

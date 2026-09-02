@@ -434,12 +434,18 @@ end
 
 -- Снимок через RenderView в RT: обычный render.Capture экрана при SetViewEntity
 -- часто даёт ЧЁРНЫЙ кадр (буфер viewentity не тот). Рендерим вид камеры сами.
+-- getShotView зовётся и из CalcView каждый кадр: угол переиспользуется
+-- (CamStart3D/cam.SetViewParameters читают поля немедленно; §6.1.8)
+local CCTV_VIEW_ANG = Angle(0, 0, 0)
 local function getShotView()
     local cam = ViewState.cam
     local base = ViewState.baseAng or (IsValid(cam) and cam:GetAngles())
     local cameraPos = IsValid(cam) and cam:GetPos() or ViewState.basePos
     if not base or not cameraPos then return nil end
-    local viewAng = Angle(base.p, base.y, base.r)
+    CCTV_VIEW_ANG.p = base.p
+    CCTV_VIEW_ANG.y = base.y
+    CCTV_VIEW_ANG.r = base.r
+    local viewAng = CCTV_VIEW_ANG
     viewAng:RotateAroundAxis(viewAng:Up(), ViewState.yawOff or 0)
     viewAng:RotateAroundAxis(viewAng:Right(), ViewState.pitchOff or 0)
     local origin = cameraPos + viewAng:Forward() * 6 + viewAng:Up() * 2

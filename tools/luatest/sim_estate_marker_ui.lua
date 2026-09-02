@@ -249,9 +249,16 @@ ok(src:find("dir:Angle().y", 1, true) == nil,
 
      Подробности таблички — в sim_estate_door_marker.lua. Здесь
      проверяем только уцелевшую ветку «зона без дверей». ]]
-ok(src:find("(pos + Vector(0, 0, 18)):ToScreen()", 1, true) ~= nil,
+--[[ Подпись должна быть ПОДНЯТА над значком. Форма записи менялась при
+     чистке аллокаций (Vector-конструктор → скретч с записью поля),
+     поэтому проверяем любую из двух канонических форм, а не посимвольный
+     текст — иначе сторож краснеет на невинный рефакторинг (урок §10.1.4). ]]
+ok(src:find("(pos + Vector(0, 0, 18)):ToScreen()", 1, true) ~= nil
+    or (src:find("pos.z = pos.z + 18", 1, true) ~= nil
+        and src:find("pos:ToScreen()", 1, true) ~= nil),
    "ИСПРАВЛЕНО: подпись поднята над значком, а не спрятана под пол")
-ok(src:find("(pos - Vector(0, 0, 16)):ToScreen()", 1, true) == nil,
+ok(src:find("(pos - Vector(0, 0, 16)):ToScreen()", 1, true) == nil
+    and src:find("pos.z = pos.z - 16", 1, true) == nil,
    "прежний сдвиг вниз убран")
 
 local hudBlock = src:match('hook%.Add%("HUDPaint", "GRM_Estate_Labels".-\n    end%)') or ""

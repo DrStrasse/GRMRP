@@ -210,6 +210,9 @@ if CLIENT then
         end
     end)
 
+    local CRUISE_TEXT = Color(250, 185, 63)
+    local CRUISE_OUTLINE = Color(0, 0, 0, 220)
+
     hook.Add("HUDPaint", "GRM_Cruise_HUD", function()
         local lp = LocalPlayer()
         if not IsValid(lp) or not lp.InVehicle or not lp:InVehicle() then return end
@@ -217,6 +220,6 @@ if CLIENT then
         local cap = lp:GetNWInt("GRM_CruiseKmh", 0)
         local mode = lp:GetNWBool("GRM_AutoPilot") and "АВТОПИЛОТ" or "КРУИЗ"
         draw.SimpleTextOutlined(mode .. "  " .. cap .. " км/ч", "DermaDefault", ScrW() / 2, ScrH() - 132,
-            Color(250, 185, 63), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1, Color(0, 0, 0, 220))
+            CRUISE_TEXT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1, CRUISE_OUTLINE)
     end)
 end

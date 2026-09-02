@@ -66,12 +66,14 @@ hook.Add("ShouldDrawLocalPlayer", "GRM_HomeBed_ThirdPerson", function(ply)
     if IsValid(bed) and bed:GetSleeper() == ply then return true end
 end)
 
+local BED_CAM_UP = Vector(0, 0, 70)
+
 hook.Add("CalcView", "GRM_HomeBed_View", function(ply, pos, ang, fov)
     local bed = ply and ply.GRMBedEnt
     if not (IsValid(bed) and bed:GetSleeper() == ply) then return end
     --[[ Камера чуть выше и позади кровати: игрок видит себя лежащим и
          понимает, что происходит. Угол оставляем игроку — крутить
          головой лёжа не запрещено. ]]
-    local eye = bed:GetPos() + Vector(0, 0, 70) - ang:Forward() * 60
+    local eye = bed:GetPos() + BED_CAM_UP - ang:Forward() * 60
     return { origin = eye, angles = ang, fov = fov, drawviewer = true }
 end)

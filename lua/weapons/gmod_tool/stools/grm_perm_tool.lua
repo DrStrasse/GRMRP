@@ -204,6 +204,11 @@ if CLIENT then
 
     -- Оверлей живёт 8 секунд после действия: постоянная панель на экране
     -- мешала бы строить, а «мигнувшее» уведомление в чате теряется.
+    local PT_GOLD = Color(245, 205, 80)
+    local PT_KIND = Color(180, 205, 230)
+    local PT_DIM = Color(160, 175, 195)
+    local PT_BG = Color(10, 15, 22, 230)
+
     hook.Add("HUDPaint", "GRM_PermTool_Overlay", function()
         if not snap.has or not IsValid(snap.ent) then return end
         if CurTime() - (snap.at or 0) > 8 then return end
@@ -219,21 +224,23 @@ if CLIENT then
             or (kind == "character" and "ЛИЧНЫЙ: " .. (snap.ownerName or "?"))
             or "СЕРВЕРНОЕ ОБОРУДОВАНИЕ"
 
+        -- Строки пересобираются каждый кадр (меняется содержимое) — а вот
+        -- краски теперь константы загрузки (§6.1.8)
         local lines = {
-            { "★ ЗАКРЕПЛЁН НА КАРТЕ", Color(245, 205, 80) },
-            { kindText, Color(180, 205, 230) },
-            { "Класс: " .. tostring(snap.class or "?"), Color(160, 175, 195) },
-            { "Заморозка: " .. (snap.freeze and "да" or "нет"), Color(160, 175, 195) },
+            { "★ ЗАКРЕПЛЁН НА КАРТЕ", PT_GOLD },
+            { kindText, PT_KIND },
+            { "Класс: " .. tostring(snap.class or "?"), PT_DIM },
+            { "Заморозка: " .. (snap.freeze and "да" or "нет"), PT_DIM },
         }
         if snap.label and snap.label ~= "" then
-            lines[#lines + 1] = { "Метка: " .. snap.label, Color(160, 175, 195) }
+            lines[#lines + 1] = { "Метка: " .. snap.label, PT_DIM }
         end
 
         local w, lh = 250, 18
         local h = 12 + #lines * lh
         local x, y = pos.x - w / 2, pos.y - h - 20
-        draw.RoundedBox(6, x, y, w, h, Color(10, 15, 22, 230))
-        draw.RoundedBox(6, x, y, 3, h, Color(245, 205, 80))
+        draw.RoundedBox(6, x, y, w, h, PT_BG)
+        draw.RoundedBox(6, x, y, 3, h, PT_GOLD)
         for i, ln in ipairs(lines) do
             draw.SimpleText(ln[1], "DermaDefault", x + 12, y + 6 + (i - 1) * lh, ln[2],
                 TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)

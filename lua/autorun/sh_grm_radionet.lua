@@ -1701,10 +1701,15 @@ if CLIENT then
         end
         _idCache = t
     end)
+local NET_ANG = Angle(0, 0, 90)
+local NET_BG = Color(12, 16, 22, 210)
+local NET_ID = Color(150, 210, 255)
+
     hook.Add("PostDrawTranslucentRenderables", "GRM_RN_NetIds", function()
         local lp = LocalPlayer()
         if not IsValid(lp) then return end
         local lpos = lp:GetPos()
+        -- плашка id: угол скретчем, краски константами (§6.1.8)
         for _, e in ipairs(_idCache) do
             if IsValid(e) and e:GetPos():DistToSqr(lpos) <= 350 * 350 then
                 local id = e:GetNWString("GRM_NetID", "")
@@ -1712,12 +1717,13 @@ if CLIENT then
                     local ang = e:GetAngles()
                     local maxs = e:OBBMaxs()
                     local pos = e:GetPos() + ang:Up() * ((maxs and maxs.z or 40) + 26)
-                    cam.Start3D2D(pos, Angle(0, EyeAngles().y - 90, 90), 0.055)
+                    NET_ANG.y = EyeAngles().y - 90
+                    cam.Start3D2D(pos, NET_ANG, 0.055)
                         local tw = 40 + #id * 9
-                        draw.RoundedBox(6, -tw, -12, tw * 2, 24, Color(12, 16, 22, 210))
+                        draw.RoundedBox(6, -tw, -12, tw * 2, 24, NET_BG)
                         surface.SetDrawColor(90, 170, 250, 160)
                         surface.DrawOutlinedRect(-tw, -12, tw * 2, 24, 1)
-                        draw.SimpleText(id, "GRMNetId_S", 0, 0, Color(150, 210, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                        draw.SimpleText(id, "GRMNetId_S", 0, 0, NET_ID, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
                     cam.End3D2D()
                 end
             end

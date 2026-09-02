@@ -862,6 +862,17 @@ if CLIENT then
         surface.PlaySound("npc/overwatch/radiovoice/on3.wav")
     end)
 
+    -- Альфа баннера гаснет к концу оповещения — один скретч-Color на три
+    -- места (все потребляются немедленно; §6.1.8)
+    local BC_C = Color(0, 0, 0, 255)
+    local function bcCol(r, g, b, al)
+        BC_C.r = r
+        BC_C.g = g
+        BC_C.b = b
+        BC_C.a = al
+        return BC_C
+    end
+
     hook.Add("HUDPaint", "GRM_BC_AlertBanner", function()
         if not alertData then return end
         local left = alertData.untilT - CurTime()
@@ -870,12 +881,12 @@ if CLIENT then
         local blink = (math.sin(CurTime() * 8) + 1) * 0.5
         local w = math.min(900, ScrW() - 120)
         local x, y = (ScrW() - w) / 2, 60
-        draw.RoundedBox(8, x, y, w, 92, Color(140, 20, 20, a * 0.92))
+        draw.RoundedBox(8, x, y, w, 92, bcCol(140, 20, 20, a * 0.92))
         surface.SetDrawColor(255, 80 + blink * 120, 60, a)
         surface.DrawOutlinedRect(x, y, w, 92, 3)
-        draw.SimpleText("ВНИМАНИЕ! ОПОВЕЩЕНИЕ ГОРОДА", "GRMBC_Alert", ScrW() / 2, y + 18, Color(255, 235, 230, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText("ВНИМАНИЕ! ОПОВЕЩЕНИЕ ГОРОДА", "GRMBC_Alert", ScrW() / 2, y + 18, bcCol(255, 235, 230, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         draw.SimpleText(alertData.text, "GRMBC_AlertS", ScrW() / 2, y + 52, color_white, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Источник: " .. alertData.from, "GRMBC_Normal", ScrW() / 2, y + 76, Color(255, 200, 190, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText("Источник: " .. alertData.from, "GRMBC_Normal", ScrW() / 2, y + 76, bcCol(255, 200, 190, a), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end)
 
     print("[GRM Broadcast] Клиент v" .. BC.Version .. " загружен")

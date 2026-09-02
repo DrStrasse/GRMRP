@@ -1597,6 +1597,24 @@ if CLIENT then
 
          Рисуем в PostDrawTranslucentRenderables: там есть тест глубины
          по миру, поэтому перекрытие стенами достаётся даром. ]]
+    -- Кадровые краски и скретч-объекты плашек/подписей: создаются один раз
+    -- при загрузке, поля скретча пишутся строго перед употреблением
+    -- (GMod-Color это таблица, Vector/Angle — мутируемые struct'ы; §6.1.8)
+    local COL_PLAQUE_BG = Color(16, 20, 28, 235)
+    local COL_PLAQUE_STATUS = Color(214, 224, 236)
+    local COL_GOLD_HINT = Color(255, 226, 130)
+    local COL_LABEL_STATUS = Color(210, 220, 232)
+    local COL_LABEL_OUT_TITLE = Color(0, 0, 0, 220)
+    local COL_LABEL_OUT_STATUS = Color(0, 0, 0, 200)
+    local COL_LABEL_OUT_HINT = Color(0, 0, 0, 210)
+    local PLAQUE_TINT = Color(255, 255, 255)
+    local PLAQUE_POS = Vector(0, 0, 0)
+    local PLAQUE_ANG = Angle(0, 0, 90)
+    local LABEL_POS = Vector(0, 0, 0)
+    local MARKER_ANG = Angle(0, 0, 0)
+    local BTN_DISABLED = Color(70, 78, 92)
+    local BTN_HOVER = Color(0, 0, 0)
+
     local function drawPlaque(zone, eyePos)
         local door = zone.door and zone.door > 0 and Entity(zone.door) or nil
         local pos, ang
@@ -1616,8 +1634,11 @@ if CLIENT then
         --[[ Двери нет (не доехала до клиента или её снесли) — не бросаем
              объект без подписи: рисуем по присланной точке. ]]
         if not pos then
-            pos = Vector(zone.pos.x, zone.pos.y, zone.pos.z)
-            ang = Angle(0, 0, 90)
+            PLAQUE_POS.x = zone.pos.x
+            PLAQUE_POS.y = zone.pos.y
+            PLAQUE_POS.z = zone.pos.z
+            pos = PLAQUE_POS
+            ang = PLAQUE_ANG
         end
 
         local dist = eyePos:DistToSqr(pos)
@@ -1629,8 +1650,12 @@ if CLIENT then
              не читаются, а 3D2D дорогой. Вместо этого — цветной огонёк,
              чтобы объект было видно издалека. ]]
         if dist > ES.PlaqueDistance ^ 2 then
+            PLAQUE_TINT.r = col.r
+            PLAQUE_TINT.g = col.g
+            PLAQUE_TINT.b = col.b
+            PLAQUE_TINT.a = 190
             cam.Start3D2D(pos, ang, 0.25)
-                draw.RoundedBox(16, -60, -30, 120, 60, Color(col.r, col.g, col.b, 190))
+                draw.RoundedBox(16, -60, -30, 120, 60, PLAQUE_TINT)
             cam.End3D2D()
             return
         end
@@ -1648,20 +1673,24 @@ if CLIENT then
 
         cam.Start3D2D(pos, ang, scale)
             -- Подложка: тёмная, чтобы текст читался на любой двери.
-            draw.RoundedBox(10, -W / 2, -H / 2, W, H, Color(16, 20, 28, 235))
+            draw.RoundedBox(10, -W / 2, -H / 2, W, H, COL_PLAQUE_BG)
             -- Цветная полоса сверху — вид объекта видно мгновенно.
-            draw.RoundedBox(10, -W / 2, -H / 2, W, 8, Color(col.r, col.g, col.b, 255))
+            PLAQUE_TINT.r = col.r
+            PLAQUE_TINT.g = col.g
+            PLAQUE_TINT.b = col.b
+            PLAQUE_TINT.a = 255
+            draw.RoundedBox(10, -W / 2, -H / 2, W, 8, PLAQUE_TINT)
             surface.SetDrawColor(col.r, col.g, col.b, 90)
             surface.DrawOutlinedRect(-W / 2, -H / 2, W, H, 3)
 
             draw.SimpleText(title, "GRMEstate_Plaque", 0, -H / 2 + 42,
                 col, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             draw.SimpleText(status, "GRMEstate_PlaqueSub", 0, -H / 2 + 88,
-                Color(214, 224, 236), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                COL_PLAQUE_STATUS, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             if hint then
                 draw.SimpleText("Чтобы купить — напишите " .. hint,
                     "GRMEstate_PlaqueHint", 0, -H / 2 + 130,
-                    Color(255, 226, 130), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                    COL_GOLD_HINT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             end
         cam.End3D2D()
     end
@@ -1694,7 +1723,9 @@ if CLIENT then
                     --[[ Ровное вращение вокруг своей оси, одинаковое для
                          всех и независимое от камеры. Roll держит логотип
                          вертикально, чтобы он не лежал «крышей». ]]
-                    ent:SetAngles(Angle(0, (CurTime() * ES.MarkerSpin) % 360, ES.MarkerRoll))
+                    MARKER_ANG.y = (CurTime() * ES.MarkerSpin) % 360
+                    MARKER_ANG.r = ES.MarkerRoll
+                    ent:SetAngles(MARKER_ANG)
                     render.SetColorModulation(col.r / 255, col.g / 255, col.b / 255)
                     ent:DrawModel()
                     render.SetColorModulation(1, 1, 1)
@@ -1717,25 +1748,29 @@ if CLIENT then
 
         for _, zone in ipairs(ES.Zones or {}) do
             if not zone.onDoor then
-                local pos = Vector(zone.pos.x, zone.pos.y, zone.pos.z)
+                local pos = LABEL_POS
+                pos.x = zone.pos.x
+                pos.y = zone.pos.y
+                pos.z = zone.pos.z
                 local dist = eyePos:DistToSqr(pos)
                 if dist <= (ES.DrawDistance * 0.55) ^ 2 then
                     --[[ Подпись ставим НАД значком, а не под ним: после
                          опускания эмблемы почти к центру зоны сдвиг вниз
                          увёл бы текст под пол. ]]
-                    local screen = (pos + Vector(0, 0, 18)):ToScreen()
+                    pos.z = pos.z + 18
+                    local screen = pos:ToScreen()
                     if screen.visible then
                         local col = ES.ZoneColor(zone)
                         local title, status, hint = ES.PlaqueLines(zone)
                         draw.SimpleTextOutlined(title, "GRMEstate_Label", screen.x, screen.y,
-                            col, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1, Color(0, 0, 0, 220))
+                            col, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1, COL_LABEL_OUT_TITLE)
                         draw.SimpleTextOutlined(status, "GRMEstate_Sub", screen.x, screen.y + 20,
-                            Color(210, 220, 232), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1, Color(0, 0, 0, 200))
+                            COL_LABEL_STATUS, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1, COL_LABEL_OUT_STATUS)
                         if hint then
                             draw.SimpleTextOutlined("Чтобы купить — напишите " .. hint,
                                 "GRMEstate_Sub", screen.x, screen.y + 38,
-                                Color(255, 226, 130), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER,
-                                1, Color(0, 0, 0, 210))
+                                COL_GOLD_HINT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER,
+                                1, COL_LABEL_OUT_HINT)
                         end
                     end
                 end
@@ -1768,9 +1803,13 @@ if CLIENT then
         if w and h then b:SetSize(w, h) end
         b.Paint = function(self, pw, ph)
             local c = col
-            if not self:IsEnabled() then c = Color(70, 78, 92)
+            if not self:IsEnabled() then c = BTN_DISABLED
             elseif self:IsHovered() then
-                c = Color(math.min(255, col.r + 26), math.min(255, col.g + 26), math.min(255, col.b + 26))
+                BTN_HOVER.r = math.min(255, col.r + 26)
+                BTN_HOVER.g = math.min(255, col.g + 26)
+                BTN_HOVER.b = math.min(255, col.b + 26)
+                BTN_HOVER.a = 255
+                c = BTN_HOVER
             end
             draw.RoundedBox(6, 0, 0, pw, ph, c)
             draw.SimpleText(text, "GRMEstate_Row", pw / 2, ph / 2, color_white,

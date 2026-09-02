@@ -1355,6 +1355,13 @@ if CLIENT then
         end
     end)
 
+    -- Маркер текущей точки рисуется каждый кадр: сферы/плашка без аллокаций
+    -- — цвета константы, позиция и угол скретч-объекты (§6.1.8)
+    local MK_SPHERE = Color(70, 180, 255, 90)
+    local MK_PLATE_BG = Color(16, 20, 28, 215)
+    local MK_POS = Vector(0, 0, 0)
+    local MK_ANG = Angle(0, 0, 90)
+
     hook.Add("PostDrawTranslucentRenderables", "GRM_Jobs_Marker", function()
         if not istable(tracker) then return end
         -- Если это маршрут мусоровоза (есть точки сбора + свалка), их рисует
@@ -1365,12 +1372,17 @@ if CLIENT then
         local radius = math.max(40, tonumber(tracker.radius) or 180)
         render.SetColorMaterial()
         -- 32x12 строило сотни линий каждый кадр и давало клиентские spikes.
-        render.DrawWireframeSphere(tracker.target, radius, 16, 8, Color(70, 180, 255, 90), true)
-        local pos = tracker.target + Vector(0, 0, 46 + math.sin(CurTime() * 2.5) * 6)
+        render.DrawWireframeSphere(tracker.target, radius, 16, 8, MK_SPHERE, true)
+        local t = tracker.target
+        MK_POS.x = t.x
+        MK_POS.y = t.y
+        MK_POS.z = t.z + 46 + math.sin(CurTime() * 2.5) * 6
+        local pos = MK_POS
         local dist = math.floor(lp:GetPos():Distance(tracker.target))
-        local ang = Angle(0, EyeAngles().y - 90, 90)
+        MK_ANG.y = EyeAngles().y - 90
+        local ang = MK_ANG
         cam.Start3D2D(pos, ang, 0.14)
-            draw.RoundedBox(8, -130, -46, 260, 66, Color(16, 20, 28, 215))
+            draw.RoundedBox(8, -130, -46, 260, 66, MK_PLATE_BG)
             surface.SetDrawColor(C.yellow.r, C.yellow.g, C.yellow.b, 220)
             surface.DrawOutlinedRect(-130, -46, 260, 66, 2)
             draw.SimpleText("◎ " .. tostring(tracker.title), "GRMJobs_Sub", 0, -40, C.yellow, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
@@ -1381,6 +1393,14 @@ if CLIENT then
     -- Экранная GPS-метка точки (как в модуле GPS-меток): рисуется на 2D-экране,
     -- поэтому ВИДНА СКВОЗЬ любые браши — «три здания» между игроком и точкой не
     -- мешают. Если точка вне поля зрения — стрелка-указатель по краю экрана.
+    -- Обводка подписи — общая на все метки; цвета «свалка/контейнер» —
+    -- константы загрузки, не покадровые аллокации (§6.1.8)
+    local JOBS_OUTLINE = Color(8, 14, 23, 235)
+    local JOBS_LINE_BG = Color(14, 18, 26, 190)
+    local JOBS_GPS_COL = Color(80, 200, 240)
+    local JOBS_DUMP_COL = Color(90, 220, 120)
+    local JOBS_STOP_COL = Color(255, 210, 70)
+
     local function drawScreenMarker(target, name, dist, col, sw, sh)
         local screen = target:ToScreen()
         local visible = screen.visible == true and screen.x > 0 and screen.x < sw and screen.y > 0 and screen.y < sh
@@ -1410,8 +1430,8 @@ if CLIENT then
 
         local textX = math.Clamp(x + radius + 14, 14, sw - 14)
         local align = textX > sw - 220 and TEXT_ALIGN_RIGHT or TEXT_ALIGN_LEFT
-        draw.SimpleTextOutlined(tostring(name), "GRMJobs_Sub", textX, y - 11, color_white, align, TEXT_ALIGN_CENTER, 2, Color(8, 14, 23, 235))
-        draw.SimpleTextOutlined(dist .. " юн.", "GRMJobs_Small", textX, y + 9, Color(col.r, col.g, col.b), align, TEXT_ALIGN_CENTER, 2, Color(8, 14, 23, 235))
+        draw.SimpleTextOutlined(tostring(name), "GRMJobs_Sub", textX, y - 11, color_white, align, TEXT_ALIGN_CENTER, 2, JOBS_OUTLINE)
+        draw.SimpleTextOutlined(dist .. " юн.", "GRMJobs_Small", textX, y + 9, col, align, TEXT_ALIGN_CENTER, 2, JOBS_OUTLINE)
     end
 
     -- GPS-метки маршрута мусоровоза: СТРОГО ПО ОЧЕРЕДИ (заказ владельца).
@@ -1434,7 +1454,7 @@ if CLIENT then
         local isDump = (current == total)
         local collected = math.max(0, current - 1)
         local stops = math.max(1, total - 1)
-        local col = isDump and Color(90, 220, 120) or Color(255, 210, 70)
+        local col = isDump and JOBS_DUMP_COL or JOBS_STOP_COL
         local dist = math.floor(lp:GetPos():Distance(p))
         local name = tracker.pointNames[current]
         if name == nil or name == "" then name = isDump and "Полигон (свалка)" or ("Контейнер " .. current) end
@@ -1458,7 +1478,7 @@ if CLIENT then
             (tracker.needVehicle and "  •  нужен транспорт" or "") ..
             ((tracker.stayLeft or 0) > 0 and ("  •  в зоне: " .. tostring(tracker.stayLeft) .. " с") or "")
         local w, h = ScrW(), ScrH()
-        draw.RoundedBox(6, w / 2 - 300, h - 52, 600, 26, Color(14, 18, 26, 190))
+        draw.RoundedBox(6, w / 2 - 300, h - 52, 600, 26, JOBS_LINE_BG)
         draw.SimpleText(txt, "GRMJobs_Normal", w / 2, h - 39, C.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end)
 
@@ -1474,7 +1494,7 @@ if CLIENT then
         local sw, sh = ScrW(), ScrH()
         local name = tracker.stageName
         if name == nil or name == "" then name = tracker.zoneName or tracker.title or "Точка работы" end
-        drawScreenMarker(target, name, distance, Color(80, 200, 240), sw, sh)
+        drawScreenMarker(target, name, distance, JOBS_GPS_COL, sw, sh)
     end)
 
     -- Меню терминала --------------------------------------------------------

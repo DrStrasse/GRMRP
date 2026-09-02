@@ -546,6 +546,20 @@ end
 -- Прежнее имя: его зовут хуки и стенды.
 I.CloseRadial = I.ClosePanel
 
+--[[ Краски селектора: прозрачность «дышит» каждый кадр, поэтому это не
+    константы, а один скретч-Color (GMod-Color — таблица, draw/surface
+    читают поля в момент вызова). Все места потребляют цвет немедленно:
+    запись и отрисовка идут подряд, один объект на весь Paint безопасен
+    (§6.1.8). ]]
+local INT_C = Color(0, 0, 0, 255)
+local function intCol(r, g, b, a)
+    INT_C.r = r
+    INT_C.g = g
+    INT_C.b = b
+    INT_C.a = a
+    return INT_C
+end
+
 function I.OpenPanel(ent, kind)
     if IsValid(P.panel) then return end
     local ply = LocalPlayer()
@@ -585,7 +599,7 @@ function I.OpenPanel(ent, kind)
         local alpha = math.floor(pe * 255)
 
         -- Подложка: полупрозрачная, с обводкой.
-        draw.RoundedBox(8, x, y, pw, ph, Color(14, 18, 26, math.floor(226 * pe)))
+        draw.RoundedBox(8, x, y, pw, ph, intCol(14, 18, 26, math.floor(226 * pe)))
         surface.SetDrawColor(58, 74, 98, math.floor(200 * pe))
         surface.DrawOutlinedRect(x, y, pw, ph, 1)
 
@@ -593,14 +607,14 @@ function I.OpenPanel(ent, kind)
         local name = I.TargetName(P.ent, P.kind)
         local owner, locked = I.TargetSub(P.ent, P.kind)
         draw.SimpleText(GRM.Utf8Ellipsis(name, 24), "GRMInt_Name", x + 14, y + 16,
-            Color(236, 242, 250, alpha), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+            intCol(236, 242, 250, alpha), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
         draw.SimpleText(locked and "ЗАПЕРТО" or "ОТКРЫТО", "GRMInt_Small",
             x + pw - 14, y + 16,
-            locked and Color(226, 96, 92, alpha) or Color(104, 214, 138, alpha),
+            locked and intCol(226, 96, 92, alpha) or intCol(104, 214, 138, alpha),
             TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
         if owner ~= "" then
             draw.SimpleText(GRM.Utf8Ellipsis(owner, 34), "GRMInt_Small", x + 14, y + 36,
-                Color(150, 166, 186, alpha), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+                intCol(150, 166, 186, alpha), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
         end
         surface.SetDrawColor(48, 60, 80, math.floor(180 * pe))
         surface.DrawRect(x + 10, y + P.HeadH - 8, pw - 20, 1)
@@ -620,41 +634,41 @@ function I.OpenPanel(ent, kind)
                 local off = (act.enabled == false)
 
                 -- Полупрозрачная заливка + обводка, как и просили.
-                local bg = Color(30, 38, 52, math.floor(196 * e))
-                if off then bg = Color(30, 30, 36, math.floor(150 * e))
-                elseif on then bg = Color(52, 116, 198, math.floor(232 * e)) end
+                local bg = intCol(30, 38, 52, math.floor(196 * e))
+                if off then bg = intCol(30, 30, 36, math.floor(150 * e))
+                elseif on then bg = intCol(52, 116, 198, math.floor(232 * e)) end
                 draw.RoundedBox(6, ix, iy, iw, ih, bg)
 
-                local edge = Color(62, 78, 102, math.floor(190 * e))
-                if on then edge = Color(126, 182, 255, math.floor(230 * e)) end
+                local edge = intCol(62, 78, 102, math.floor(190 * e))
+                if on then edge = intCol(126, 182, 255, math.floor(230 * e)) end
                 surface.SetDrawColor(edge)
                 surface.DrawOutlinedRect(ix, iy, iw, ih, on and 2 or 1)
 
                 --[[ Цветная полоска слева отделяет опасное действие от
                      обычного, не мешая читать подпись. ]]
-                local accent = Color(90, 110, 140, a)
-                if off then accent = Color(96, 92, 96, a)
-                elseif act.accent == "good" then accent = Color(104, 214, 138, a)
-                elseif act.accent == "warn" then accent = Color(240, 170, 90, a) end
+                local accent = intCol(90, 110, 140, a)
+                if off then accent = intCol(96, 92, 96, a)
+                elseif act.accent == "good" then accent = intCol(104, 214, 138, a)
+                elseif act.accent == "warn" then accent = intCol(240, 170, 90, a) end
                 draw.RoundedBox(2, ix + 6, iy + 9, 3, ih - 18, accent)
 
                 -- Текст только светлый: тёмный на тёмном нечитаем.
-                local tcol = Color(232, 238, 246, a)
-                if off then tcol = Color(150, 146, 150, a)
-                elseif on then tcol = Color(255, 255, 255, a) end
+                local tcol = intCol(232, 238, 246, a)
+                if off then tcol = intCol(150, 146, 150, a)
+                elseif on then tcol = intCol(255, 255, 255, a) end
                 local hasWhy = off and act.why
                 draw.SimpleText(act.name, "GRMInt_Hint", ix + 18,
                     hasWhy and (iy + ih * 0.36) or (iy + ih * 0.5), tcol,
                     TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
                 if hasWhy then
                     draw.SimpleText(act.why, "GRMInt_Small", ix + 18, iy + ih * 0.7,
-                        Color(198, 132, 132, a), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+                        intCol(198, 132, 132, a), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
                 end
             end
         end
 
         draw.SimpleText("отпустите ЛКМ — применить  ·  ПКМ — отмена", "GRMInt_Small",
-            x + pw * 0.5, y + ph + 14, Color(150, 166, 186, alpha),
+            x + pw * 0.5, y + ph + 14, intCol(150, 166, 186, alpha),
             TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end
 
@@ -751,17 +765,17 @@ hook.Add("HUDPaint", "GRM_Interact_Hint", function()
     local bw = math.max(tw, hw) + 22
     local bh = 46
 
-    draw.RoundedBox(6, x, y - bh * 0.5, bw, bh, Color(14, 18, 26, math.floor(0.9 * a)))
+    draw.RoundedBox(6, x, y - bh * 0.5, bw, bh, intCol(14, 18, 26, math.floor(0.9 * a)))
     surface.SetDrawColor(58, 74, 98, math.floor(0.8 * a))
     surface.DrawOutlinedRect(x, y - bh * 0.5, bw, bh, 1)
     -- Полоска состояния слева: заперто или нет, видно без чтения.
     draw.RoundedBox(2, x + 5, y - bh * 0.5 + 8, 3, bh - 16,
-        locked and Color(226, 96, 92, a) or Color(104, 214, 138, a))
+        locked and intCol(226, 96, 92, a) or intCol(104, 214, 138, a))
 
     draw.SimpleText(name, "GRMInt_Hint", x + 14, y - 9,
-        Color(236, 242, 250, a), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+        intCol(236, 242, 250, a), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
     draw.SimpleText("ЛКМ — действия", "GRMInt_Small", x + 14, y + 10,
-        Color(150, 166, 186, a), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+        intCol(150, 166, 186, a), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 end)
 
 -----------------------------------------------------------------------

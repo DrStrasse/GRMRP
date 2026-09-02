@@ -3793,6 +3793,12 @@ if CLIENT then
            • дальше 400 юнитов не рисуем вовсе.  ]]
     local lookPlate, lookAt = nil, 0
 
+    -- метка знака: позиция/краски — скретч и константы загрузки (§6.1.8)
+    local PL_POS = Vector(0, 0, 0)
+    local PL_BG = Color(12, 16, 24, 225)
+    local PL_STATUS = Color(215, 75, 75)
+    local PL_HINT = Color(150, 200, 255)
+    local PL_TINT = Color(255, 255, 255, 255)
     hook.Add("PostDrawTranslucentRenderables", "GRM_Plates_WorldLabel", function(depth, sky, sky3d)
         if depth or sky or sky3d then return end
         local lp = LocalPlayer()
@@ -3831,18 +3837,23 @@ if CLIENT then
         local canEdit = mounted and canEditPlate(ent)
         local extraH = canEdit and 14 or 0
         local boxH = h + extraH
-        cam.Start3D2D(origin + Vector(0, 0, 14), ang, 0.12)
-            draw.RoundedBox(6, -w / 2, -boxH / 2, w, boxH, Color(12, 16, 24, 225))
-            draw.RoundedBox(6, -w / 2, -boxH / 2, 10, boxH, Color(def.band[1], def.band[2], def.band[3]))
-            draw.SimpleText(text, "GRMPlate_Hud", 6, -extraH / 2, Color(def.plate[1], def.plate[2], def.plate[3]),
+        PL_POS.x = origin.x
+        PL_POS.y = origin.y
+        PL_POS.z = origin.z + 14
+        cam.Start3D2D(PL_POS, ang, 0.12)
+            draw.RoundedBox(6, -w / 2, -boxH / 2, w, boxH, PL_BG)
+            PL_TINT.r = def.band[1]; PL_TINT.g = def.band[2]; PL_TINT.b = def.band[3]; PL_TINT.a = 255
+            draw.RoundedBox(6, -w / 2, -boxH / 2, 10, boxH, PL_TINT)
+            PL_TINT.r = def.plate[1]; PL_TINT.g = def.plate[2]; PL_TINT.b = def.plate[3]
+            draw.SimpleText(text, "GRMPlate_Hud", 6, -extraH / 2, PL_TINT,
                 TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             if status ~= "active" then
                 draw.SimpleText(string.upper(PL.Statuses[status] or status), "GRMPlate_Small",
-                    0, h / 2 - extraH / 2 + 8, Color(215, 75, 75), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                    0, h / 2 - extraH / 2 + 8, PL_STATUS, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             end
             if canEdit then
                 draw.SimpleText("ПКМ — подвинуть", "GRMPlate_Small", 0, boxH / 2 - 9,
-                    Color(150, 200, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+                    PL_HINT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
             end
         cam.End3D2D()
     end)

@@ -40,6 +40,21 @@ net.Receive("GRM_Heist_Event", function()
     end
 end)
 
+-- Плашка баннера гаснет по альфе — цвет не константа, а скретч с записью
+-- полей перед отрисовкой; статичные краски — константы загрузки (§6.1.8)
+local HEIST_C = Color(0, 0, 0, 255)
+local function heistCol(r, g, b, a)
+    HEIST_C.r = r
+    HEIST_C.g = g
+    HEIST_C.b = b
+    HEIST_C.a = a
+    return HEIST_C
+end
+local HEIST_TIMER_BG = Color(20, 10, 10, 210)
+local HEIST_TIMER_TX = Color(255, 150, 90)
+local HEIST_LIST_BG = Color(15, 10, 10, 185)
+local HEIST_LIST_TX = Color(255, 200, 120)
+
 hook.Add("HUDPaint", "GRM_Heist_HUD", function()
     local lp = LocalPlayer()
     if not IsValid(lp) then return end
@@ -49,13 +64,12 @@ hook.Add("HUDPaint", "GRM_Heist_HUD", function()
     if b and b["until"] > CurTime() then
         local alpha = 255
         if b["until"] - CurTime() < 1.5 then alpha = math.floor(255 * (b["until"] - CurTime()) / 1.5) end
-        local col = Color(255, 120, 80, alpha)
-        draw.SimpleText(b.text, "GRMHeist_Banner", ScrW() / 2, ScrH() * 0.14, col, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(b.text, "GRMHeist_Banner", ScrW() / 2, ScrH() * 0.14, heistCol(255, 120, 80, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         if b.sub and b.sub ~= "" then
-            draw.SimpleText(b.sub, "GRMHeist_Sub", ScrW() / 2, ScrH() * 0.14 + 52, Color(245, 240, 220, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            draw.SimpleText(b.sub, "GRMHeist_Sub", ScrW() / 2, ScrH() * 0.14 + 52, heistCol(245, 240, 220, alpha), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         end
         -- подложка для читаемости
-        draw.RoundedBox(4, ScrW()/2 - 420, ScrH() * 0.14 - 40, 840, 120, Color(10, 12, 18, 120))
+        draw.RoundedBox(4, ScrW()/2 - 420, ScrH() * 0.14 - 40, 840, 120, heistCol(10, 12, 18, 120))
     end
 
     -- отсчёт во время ивента (персистентный, пока активен)
@@ -63,8 +77,8 @@ hook.Add("HUDPaint", "GRM_Heist_HUD", function()
         local left = math.max(0, math.floor(Heist.EventEndsAt - CurTime()))
         local mm, ss = math.floor(left / 60), left % 60
         local txt = ("ОГРАБЛЕНИЕ  •  %02d:%02d"):format(mm, ss)
-        draw.RoundedBox(6, ScrW()/2 - 130, 8, 260, 34, Color(20, 10, 10, 210))
-        draw.SimpleText(txt, "GRMHeist_Timer", ScrW()/2, 25, Color(255, 150, 90), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.RoundedBox(6, ScrW()/2 - 130, 8, 260, 34, HEIST_TIMER_BG)
+        draw.SimpleText(txt, "GRMHeist_Timer", ScrW()/2, 25, HEIST_TIMER_TX, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end
 
     -- Находка 180f: список РП-имён участников («криминал») слева вверху
@@ -76,7 +90,7 @@ hook.Add("HUDPaint", "GRM_Heist_HUD", function()
         end
         local text = "УЧАСТНИКИ (КРИМИНАЛ):\n" .. table.concat(names, "\n")
         local x, y = 12, 56
-        draw.RoundedBox(6, x, y, 240, 18 + #Heist.Participants * 17, Color(15, 10, 10, 185))
-        draw.SimpleText(text, "GRMHeist_Sub", x + 12, y + 10, Color(255, 200, 120), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+        draw.RoundedBox(6, x, y, 240, 18 + #Heist.Participants * 17, HEIST_LIST_BG)
+        draw.SimpleText(text, "GRMHeist_Sub", x + 12, y + 10, HEIST_LIST_TX, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
     end
 end)

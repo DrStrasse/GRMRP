@@ -170,6 +170,14 @@ end)
 
 -- Passive owner label + подсказки управления для игрока, смотрящего на
 -- машину ВБЛИЗИ (заказ владельца: хинты по багажнику и замку при прицеле).
+-- Краски пассивной плашки: статичные константы (§6.1.8); VK.COL отвечает
+-- за семантику «владелец/замок», здесь — цвета подсказок
+local VH_OWNER_PLAYER = Color(120, 200, 255)
+local VH_OWNER_FACTION = Color(255, 195, 120)
+local VH_TRUNK = Color(255, 205, 90)
+local VH_TRUNK_HINT = Color(210, 200, 170)
+local VH_KEY_HINT = Color(200, 205, 215, 230)
+
 hook.Add("HUDPaint", "VK_PassiveVehicleOwnerHUD", function()
     local ply = LocalPlayer()
     if not IsValid(ply) then return end
@@ -199,10 +207,10 @@ hook.Add("HUDPaint", "VK_PassiveVehicleOwnerHUD", function()
         local ownerText, ownerColor
         if ownerType == VK.OWNER_TYPE.PLAYER then
             ownerText = "Владелец: " .. (ownerNick ~= "" and ownerNick or "Неизвестно")
-            ownerColor = Color(120, 200, 255)
+            ownerColor = VH_OWNER_PLAYER
         elseif ownerType == VK.OWNER_TYPE.FACTION then
             ownerText = "Фракция: " .. (factionName ~= "" and factionName or "Неизвестно")
-            ownerColor = Color(255, 195, 120)
+            ownerColor = VH_OWNER_FACTION
         else
             ownerText = "Без владельца"
             ownerColor = VK.COL.DIM
@@ -215,10 +223,10 @@ hook.Add("HUDPaint", "VK_PassiveVehicleOwnerHUD", function()
 
     -- Подсказки управления — у ЛЮБОЙ машины при взгляде вблизи (220 юн).
     if trunkOpen then
-        draw.SimpleText("● БАГАЖНИК ОТКРЫТ", "VK_HUD_Normal", x, y + 20, Color(255, 205, 90), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-        draw.SimpleText("E или /trunk — окно   ·   крышку закройте в окне", "VK_HUD_Small", x, y + 40, Color(210, 200, 170), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        draw.SimpleText("● БАГАЖНИК ОТКРЫТ", "VK_HUD_Normal", x, y + 20, VH_TRUNK, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        draw.SimpleText("E или /trunk — окно   ·   крышку закройте в окне", "VK_HUD_Small", x, y + 40, VH_TRUNK_HINT, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
     else
-        draw.SimpleText("Ключи: ЛКМ/ПКМ — замок  •  /trunk — багажник", "VK_HUD_Small", x, y + 20, Color(200, 205, 215, 230), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        draw.SimpleText("Ключи: ЛКМ/ПКМ — замок  •  /trunk — багажник", "VK_HUD_Small", x, y + 20, VH_KEY_HINT, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
     end
 end)
 
