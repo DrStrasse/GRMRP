@@ -352,7 +352,7 @@ do
 end
 
 -----------------------------------------------------------------------
-print("\n=== 6. ШЛАНГ НА КОЛОНКЕ: НЕ В РУКАХ И НЕ ВЫХОДИТ САМ ===")
+print("\n=== 6. ПОТОК 02.09: ВЗЯЛ → ВСТАВИЛ → ЗАЛИЛ; ШЛАНГ НЕ ВЫХОДИТ САМ ===")
 -----------------------------------------------------------------------
 do
     --[[ ЗАКАЗ ВЛАДЕЛЬЦА: «шланг не должен сам выходить из бака и не
@@ -367,16 +367,24 @@ do
     local ply = mkPlayer("777:char1", 100000)
     ply._pos = Vector(30, 0, 0)
 
-    -- Игроку ничего не выдаётся.
-    ply.Give = function() GIVEN = (GIVEN or 0) + 1; return nil end
+    -- Пистолет — не предмет:Give() не дёргаем, F.GiveNozzle не вернулась.
+    local okT0 = F.PlugHose(pump, car, ply)
+    ok(okT0 == false, "без «в руках» вставить нельзя", tostring(okT0))
+    local okT = F.TakeHose(pump, ply)
+    ok(okT == true, "E на колонке — пистолет в руках", tostring(okT))
+    ok(pump.GRMHoseCarry == ply, "колонка помнит, у кого пистолет")
     local okP, whyP = F.PlugHose(pump, car, ply)
     ok(okP == true, "шланг вставлен в бак", tostring(whyP))
     ok(F.GiveNozzle == nil, "ПИСТОЛЕТ ИГРОКУ НЕ ВЫДАЁТСЯ — функции больше нет",
         tostring(F.GiveNozzle))
     ok(pump.GRMHoseCar == car, "шланг числится за машиной")
+    ok(pump:GetBusy() == false, "вставка сама ничего не качает")
+    local okS = F.StartPour(pump, ply, 1000)   -- больше бака: упрётся в вместимость
+    ok(okS == true, "заливка стартует с колонки", tostring(okS))
+    ok(pump.GRMHoseGoal <= 80, "литраж ограничен свободным местом бака: " .. tostring(pump.GRMHoseGoal))
 
     -- Игрок ушёл далеко — шланг должен ОСТАТЬСЯ в баке.
-    local tick = timer._t["GRM_Fuel_Pump_" .. pump:EntIndex()]
+    local tick = timer._t["GRM_Fuel_Pour_" .. pump:EntIndex()]
     ok(type(tick) == "function", "таймер заливки запущен")
     ply._pos = Vector(3000, 3000, 0)
     for i = 1, 5 do if tick then tick() end end
@@ -395,10 +403,9 @@ do
     ok(pump:GetBusy() == false, "качать перестали", tostring(pump:GetBusy()))
 
     -- Убираем осознанно.
-    local before = pump:GetSessionL()
     F.UnplugHose(pump, ply, "Шланг убран.")
     ok(pump.GRMHoseCar == nil, "ПОСЛЕ КОМАНДЫ ШЛАНГ УБРАН", tostring(pump.GRMHoseCar))
-    ok(timer.Exists("GRM_Fuel_Pump_" .. pump:EntIndex()) == false,
+    ok(timer.Exists("GRM_Fuel_Pour_" .. pump:EntIndex()) == false,
         "таймер остановлен")
 end
 
@@ -407,10 +414,15 @@ do
     local pump = mkPumpAt(Vector(0, 0, 0))
     local car = mkCar({ uid = "car:money", pos = Vector(200, 0, 0),
         fuelPos = Vector(-40, 20, 25), maxFuel = 80 })
-    local ply = mkPlayer("888:char1", 5)      -- хватит на пару тактов
+    local ply = mkPlayer("888:char1", 20)     -- на весь заказ нет, на литр — есть
     ply._pos = Vector(20, 0, 0)
+    F.TakeHose(pump, ply)
     F.PlugHose(pump, car, ply)
-    local tick = timer._t["GRM_Fuel_Pump_" .. pump:EntIndex()]
+    local big = F.StartPour(pump, ply, 70)
+    ok(big == false, "на весь заказ денег не хватает — старт отклонён", tostring(big))
+    local okS2 = F.StartPour(pump, ply, 1)
+    ok(okS2 == true, "на один литр хватает — качаем", tostring(okS2))
+    local tick = timer._t["GRM_Fuel_Pour_" .. pump:EntIndex()]
     for i = 1, 12 do if tick then tick() end end
     ok(pump.GRMHoseCar == car, "КОНЧИЛИСЬ ДЕНЬГИ — ШЛАНГ НЕ ВЫЛЕТЕЛ",
         tostring(pump.GRMHoseCar))
@@ -422,6 +434,7 @@ do
     local car = mkCar({ uid = "car:pull", pos = Vector(200, 0, 0),
         fuelPos = Vector(-40, 20, 25), maxFuel = 80 })
     local ply = mkPlayer("999:char1", 100000)
+    F.TakeHose(pump, ply)
     F.PlugHose(pump, car, ply)
     ok(pump.GRMHoseCar == car, "шланг в баке")
     car._pos = Vector(5000, 0, 0)
@@ -436,9 +449,13 @@ do
     local far = mkCar({ uid = "car:toofar", pos = Vector(900, 0, 0), fuelPos = Vector(-40, 20, 25) })
     local ply = mkPlayer("555:char1", 100000)
     ply._pos = Vector(10, 0, 0)
+    F.TakeHose(pump, ply)
     local okP, whyP = F.PlugHose(pump, far, ply)
     ok(okP == false, "до далёкой машины шланг не дотягивается", tostring(whyP))
     ok(pump.GRMHoseCar == nil, "шланг не повис в пустоте", tostring(pump.GRMHoseCar))
+    ok(pump.GRMHoseCarry == ply, "не вышло — пистолет остался в руках")
+    F.RehangHose(pump, ply)
+    ok(pump.GRMHoseCarry == nil and ply.GRMHosePump == nil, "E на колонке вешает обратно")
 end
 
 print(("\n\nFUEL PORT: %d/%d, провалов: %d"):format(pass, pass + fail, fail))

@@ -1315,10 +1315,10 @@ end
 
 print("\n=== 20. РЕЕСТР РЕЖИМОВ ПОДГОНКИ РЕНДЕРА (ГРМ §5.4) ===")
 --[[ renderCommand жил лестницей из восьми веток; наклон и сдвиг имели
-     общие ветки `tiltP or tiltY or tiltR`. Реестр RENDER_ADJUST обязан
-     вести себя байт-в-байт как старая лестница — проверим каждый режим
-     ЖИВЫМ вызовом, включая квантование yaw (NormalizeRender) и то, что
-     «show» и неизвестный ключ ничего не меняют. ]]
+     общие ветки `tiltP or tiltY or tiltR`. От реестра RENDER_ADJUST мы
+     требуем совпадения ПОВЕДЕНИЯ, а не кода байт в байт — проверим каждый
+     режим ЖИВЫМ вызовом, включая квантование yaw (NormalizeRender) и то,
+     что «show» и неизвестный ключ ничего не меняют. ]]
 local supRender = { _valid = true, IsSuperAdmin = function() return true end,
     ChatPrint = function() end, GetNWString = function() return "" end }
 PL.Render = PL.NormalizeRender({ axis = "auto", yaw = 90, scale = 1, offset = 1.5 })

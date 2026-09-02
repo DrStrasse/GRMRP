@@ -13,38 +13,35 @@ function ENT:Initialize()
     if IsValid(phys) then phys:Wake() end
 end
 
---[[ Е НА КОЛОНКЕ: подключить или убрать шланг.
+--[[ Е НА КОЛОНКЕ — конечный автомат (заказ владельца 02.09.2026):
 
-     Раньше E выдавало игроку ОРУЖИЕ-пистолет, и он сам вставлял его
-     в бак. По заказу владельца (31.08) шланг игроку не отдаётся:
-     он живёт на колонке. E — подключить к ближайшей машине (или к
-     той, на которую смотрит игрок), повторное E — убрать.
+     • шланг висит на колонке      — E берёт пистолет в руки;
+     • пистолет в руках, E здесь — вешает обратно;
+     • пистолет в баке, покой      — E открывает диалог закачки:
+       колонка читает бак машины, даёт выбрать литры, плата — по выбору;
+     • идёт закачка                — E останавливает (шланг остаётся в баке).
 
-     Убрать шланг можно только так — осознанно. Никакой таймер и
-     никакое расстояние до игрока его из бака не выдернет. ]]
+     В машину пистолет вставляет ИГРОК (E по машине, см. PlayerUse-хук в
+     sh_grm_fuel.lua): автоподключение «к ближайшей машине» убрано — оно
+     и было жалоба «колонка сама ставит шланг». ]]
 function ENT:Use(ply)
     if not IsValid(ply) or not GRM.Fuel then return end
     if ply:KeyDown(IN_SPEED) then return end
     local F = GRM.Fuel
     if ply:GetPos():DistToSqr(self:GetPos()) > 260 * 260 then return end
 
-    -- Шланг в баке — убираем.
     if IsValid(self.GRMHoseCar) then
-        F.UnplugHose(self, ply, "Шланг убран.")
+        if self:GetBusy() then
+            F.StopPour(self, "Закачку остановили.")
+        else
+            F.OpenPourDialog(self, ply)
+        end
         return
     end
 
-    local veh, err = F.FindTarget(self, ply)
-    if not IsValid(veh) then
-        if GRM.Notify then GRM.Notify(ply, err or "Рядом нет машины.", 255, 180, 80) end
-        return
-    end
-    local ok, why = F.PlugHose(self, veh, ply)
-    if not GRM.Notify then return end
-    if ok then
-        GRM.Notify(ply, "Шланг в баке. Идёт заливка.", 120, 220, 140)
-    else
-        GRM.Notify(ply, tostring(why or "Не вышло"), 255, 180, 80)
+    local okT, whyT = F.TakeHose(self, ply)
+    if not okT and whyT and GRM.Notify then
+        GRM.Notify(ply, tostring(whyT), 255, 180, 80)
     end
 end
 

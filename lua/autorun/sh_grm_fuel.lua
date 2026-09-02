@@ -1,10 +1,12 @@
---[[ Топливо GRM v1.2: шланг с провисом, сессия заливки, частные колонки. ]]
+--[[ Топливо GRM v1.3: шланг берут в руки (E на колонке), вставляют в бак
+     (E на машине), заливку запускают на колонке диалогом с литражом.
+     Заказ владельца 02.09.2026. ]]
 if SERVER then AddCSLuaFile() end
 
 GRM = GRM or {}
 GRM.Fuel = GRM.Fuel or {}
 local F = GRM.Fuel
-F.Version = "1.2.4"
+F.Version = "1.3.0"
 F.File = "grm_fuel.json"
 F.PumpFile = "grm_fuel_pumps_" .. string.lower(game.GetMap() or "unknown") .. ".json"
 F.PricePerLiter = 8
@@ -14,6 +16,10 @@ F.StationRadius = 700
      Раньше радиус был зашит числами 420 и 430 в двух местах, и шланг
      «не дотягивался» сообщением, а не физически. ]]
 F.HoseLength = 360
+--[[ Звук закачки: ОДНА петляющий гул компрессора на сессию. Раньше на
+     каждое подключение играл короткий leak_1.wav — на слух это читалось
+     как «звук багается».]]
+F.PourSound = "ambient/machines/aircompressor_01.wav"
 F.Types = { petrol = "Бензин", diesel = "Дизель", electric = "Заряд" }
 
 function F.UID(ent)
@@ -224,6 +230,7 @@ end
 
 if SERVER then
     util.AddNetworkString("GRM_Fuel_Station")
+    util.AddNetworkString("GRM_Fuel_Pour")
     F.Data = F.Data or {}
 
     local function jsonT(txt)
@@ -455,12 +462,17 @@ if SERVER then
          А пистолет в руках — это и есть «отдаётся игроку»: предмет,
          который можно выбросить, уронить, унести и потерять.
 
-         КАК ТЕПЕРЬ. Игрок ничего не получает в руки. Он подходит к
-         колонке и жмёт E — шланг сам тянется к горловине и остаётся
-         там. Заливка идёт БЕЗ игрока: он может сидеть в машине,
-         отойти или уехать по делам. Шланг из бака выходит только
-         осознанно — повторным E на колонке, — либо по физике, если
-         машину утащили дальше длины шланга. ]]
+         КАК БЫЛО В v1.2. E на колонке само цепляло шланг к ближайшей
+         машине и сразу начинало лить.
+
+         КАК СЕЙЧАС (заказ владельца 02.09.2026 — v1.2 отменён частично).
+         E на колонке берёт пистолет в руки; игрок относит его к машине и
+         вставляет E по машине; затем возвращается, жмёт E на колонке и
+         выбирает литраж — заливка льёт ровно столько и выставляет плату
+         по выбранному. Автоподключения к «ближайшей машине» больше нет:
+         шланг в бак попадает только руками игрока. Пистолет по-прежнему
+         НЕ предмет: он привязан к колонке длиной шланга и исчезает из
+         рук, стоит отойти дальше HoseLength. ]]
 
     --- Куда цеплять шланг: машина, на которую смотрит игрок, иначе
     --  ближайшая с горловиной в пределах длины шланга.
@@ -502,10 +514,57 @@ if SERVER then
         return nil, "Рядом нет машины с доступной горловиной"
     end
 
-    --- Вставить шланг в бак и начать заливку. Пистолет игроку не выдаётся.
+    --- ВЗЯТЬ ПИСТОЛЕТ С КОЛОНКИ (E на колонке; повторное E — повесить
+    --  обратно). Шланг привязан к колонке: унести дальше HoseLength нельзя,
+    --  на растяжении пистолет сам возвращается на крючок.
+    function F.TakeHose(pump, ply)
+        if not (IsValid(pump) and IsValid(ply)) then return false, "Колонка не найдена" end
+        if IsValid(pump.GRMHoseCar) then return false, "Шланг уже в баке машины" end
+        if pump:GetBusy() then return false, "Шланг сейчас качает" end
+        if IsValid(pump.GRMHoseCarry) and pump.GRMHoseCarry ~= ply then
+            return false, "Шланг уже у кого-то в руках"
+        end
+        if pump.GRMHoseCarry == ply then
+            return F.RehangHose(pump, ply, "Шланг вернули на крючок.")
+        end
+        pump.GRMHoseCarry = ply
+        ply.GRMHosePump = pump
+        if pump.SetUser then pump:SetUser(ply) end
+        timer.Create("GRM_Fuel_Hold_" .. pump:EntIndex(), 0.5, 0, function()
+            if not (IsValid(pump) and IsValid(ply)) then
+                F.RehangHose(pump, ply)
+                return
+            end
+            local anchor = pump:LocalToWorld(Vector(14, -10, 22))
+            local lim = (F.HoseLength or 360) + 80
+            if ply:EyePos():DistToSqr(anchor) > lim * lim then
+                F.RehangHose(pump, ply, "Шланг натянут — пистолет вернулся на крючок.")
+            end
+        end)
+        if GRM.Notify then
+            GRM.Notify(ply, "Пистолет в руках. Вставьте его в бак (E по машине), затем E на колонке.", 120, 220, 140)
+        end
+        return true
+    end
+
+    --- Повесить пистолет на крючок (E в руках, растяжение, removal).
+    function F.RehangHose(pump, ply, msg)
+        if IsValid(pump) then
+            timer.Remove("GRM_Fuel_Hold_" .. pump:EntIndex())
+            pump.GRMHoseCarry = nil
+            if pump.SetUser then pump:SetUser(NULL) end
+        end
+        if IsValid(ply) and ply.GRMHosePump == pump then ply.GRMHosePump = nil end
+        if msg and IsValid(ply) and GRM.Notify then GRM.Notify(ply, msg, 255, 200, 120) end
+        return true
+    end
+
+    --- Вставить пистолет в бак. ЗАЛИВКА НЕ НАЧИНАЕТСЯ: её запускают
+    --  на колонке (E → диалог литража) — заказ владельца 02.09.
     function F.PlugHose(pump, veh, ply)
         if not IsValid(pump) then return false, "Колонка не найдена" end
         if IsValid(pump.GRMHoseCar) then return false, "Шланг уже в баке" end
+        if pump.GRMHoseCarry ~= ply then return false, "Сначала возьмите шланг на колонке (E)" end
         if not IsValid(veh) then return false, "Машина не найдена" end
         veh = F.RootVehicle(veh) or veh
         F.ApplyNW(veh)
@@ -515,22 +574,95 @@ if SERVER then
             return false, "Не тот тип. Нужен: " .. tostring((F.Types or {})[need] or need)
         end
         if not F.HoseToTank(pump, veh) then
-            return false, "Шланг не дотягивается до горловины"
+            return false, "Не дотянуться — подведите машину ближе к колонке"
         end
+
+        pump.GRMHoseCarry = nil
+        if IsValid(ply) then ply.GRMHosePump = nil end
+        timer.Remove("GRM_Fuel_Hold_" .. pump:EntIndex())
+        if pump.SetUser then pump:SetUser(NULL) end
 
         pump.GRMHoseCar = veh
         pump.GRMHoseBy = ply
         pump.GRMFuelFull, pump.GRMFuelNoMoney = nil, nil
         if pump.SetHoseCar then pump:SetHoseCar(veh) end
-        pump:SetBusy(true)
+        pump:SetBusy(false)
         pump:SetSessionL(0)
         pump:SetSessionPay(0)
         pump:SetTankNow(veh:GetNWFloat("GRM_Fuel", 0))
         pump:SetTankMax(veh:GetNWFloat("GRM_FuelMax", F.TankSize(veh)))
-        pump:EmitSound("ambient/water/leak_1.wav", 50, 95)
-        timer.Create("GRM_Fuel_Pump_" .. pump:EntIndex(), 0.35, 0, function()
+        return true
+    end
+
+    --- Диалог заливки: колонка перечитывает бак машины и шлёт клиенту
+    --  текущий уровень, вместимость и цену — «сколько надо залить» считается
+    --  здесь, а не наугад (заказ 02.09).
+    function F.OpenPourDialog(pump, ply)
+        if not (IsValid(pump) and IsValid(ply)) then return end
+        local veh = pump.GRMHoseCar
+        if not IsValid(veh) then return end
+        F.ApplyNW(veh)
+        net.Start("GRM_Fuel_Pour")
+            net.WriteEntity(pump)
+            net.WriteFloat(veh:GetNWFloat("GRM_Fuel", 0))
+            net.WriteFloat(veh:GetNWFloat("GRM_FuelMax", F.TankSize(veh)))
+            net.WriteFloat(F.PriceOf(pump))
+        net.Send(ply)
+    end
+
+    --- Запустить закачку выбранного литража. Плата — за фактические литры,
+    --  но заказ целиком проверяется до старта.
+    function F.StartPour(pump, ply, liters)
+        if not (IsValid(pump) and IsValid(ply)) then return false, "Нет колонки" end
+        local veh = pump.GRMHoseCar
+        if not IsValid(veh) then return false, "Сначала вставьте шланг в бак" end
+        if pump:GetBusy() then return false, "Заливка уже идёт" end
+        liters = math.floor(tonumber(liters) or 0)
+        if liters < 1 then return false, "Укажите литры" end
+        F.ApplyNW(veh)
+        local mx = veh:GetNWFloat("GRM_FuelMax", F.TankSize(veh))
+        local now = veh:GetNWFloat("GRM_Fuel", 0)
+        liters = math.min(liters, math.floor(mx - now + 0.001))
+        if liters < 1 then return false, "Бак полон" end
+        local price = F.PriceOf(pump)
+        local total = math.ceil(price * liters)
+        if GRM.HasMoney and not GRM.HasMoney(ply, total) then
+            return false, "Не хватает на полный заказ: " .. total .. " GRM"
+        end
+        pump.GRMHoseGoal = liters
+        pump.GRMFuelFull, pump.GRMFuelNoMoney = nil, nil
+        pump:SetSessionL(0)
+        pump:SetSessionPay(0)
+        pump:SetTankNow(now)
+        pump:SetTankMax(mx)
+        pump:SetBusy(true)
+        -- петля через GRM.Sound: прекэшированный файл, при удалении колонки
+        -- реестр сам гасит патч (никаких «звук играет вечно / багается»)
+        if GRM.Sound and GRM.Sound.Loop then
+            GRM.Sound.Loop(pump, F.PourSound)
+        end
+        timer.Create("GRM_Fuel_Pour_" .. pump:EntIndex(), 0.35, 0, function()
             F.PumpTick(pump)
         end)
+        if GRM.Notify then
+            GRM.Notify(ply, "Закачка: " .. liters .. " л · к оплате " .. total .. " GRM", 120, 220, 140)
+        end
+        return true
+    end
+
+    --- Остановить закачку, шланг оставить в баке.
+    function F.StopPour(pump, msg)
+        if not IsValid(pump) then return false end
+        timer.Remove("GRM_Fuel_Pour_" .. pump:EntIndex())
+        pump.GRMHoseGoal = nil
+        pump:SetBusy(false)
+        if GRM.Sound and GRM.Sound.StopLoop then
+            GRM.Sound.StopLoop(pump, F.PourSound)
+        end
+        if msg and GRM.Notify and IsValid(pump.GRMHoseBy) then
+            local sess, pay = pump:GetSessionL() or 0, pump:GetSessionPay() or 0
+            GRM.Notify(pump.GRMHoseBy, sess > 0 and (msg .. (" Залито %.1f л на %.0f GRM."):format(sess, pay)) or msg, 120, 220, 140)
+        end
         return true
     end
 
@@ -540,6 +672,7 @@ if SERVER then
          шланг и вылетал из бака сам. Заливка прекращается только по
          делу:
 
+           • залит выбранный литраж — шланг ОСТАЁТСЯ в баке, ждёт E;
            • бак полон        — шланг ОСТАЁТСЯ в баке, ждёт человека;
            • деньги кончились — шланг ОСТАЁТСЯ в баке;
            • машина пропала   — шланга больше не существует;
@@ -568,20 +701,29 @@ if SERVER then
         if GRM.HasMoney and not GRM.HasMoney(ply, price) then
             if not pump.GRMFuelNoMoney then
                 pump.GRMFuelNoMoney = true
-                pump:SetBusy(false)
-                if GRM.Notify then GRM.Notify(ply,
-                    "Деньги кончились. Шланг в баке — убери его на колонке.", 255, 180, 80) end
+                F.StopPour(pump, "Деньги кончились. Шланг в баке — убери его на колонке.")
             end
             return
         end
 
-        local added = select(1, F.AddLiters(veh, 1.15, pump:GetFuelKind())) or 0
+        -- заказанный литраж — потолок сессии (заказ 02.09: «плату по
+        -- выбранному литражу», перелив через край заказа запрещён)
+        local want = 1.15
+        local goal = pump.GRMHoseGoal or 0
+        if goal > 0 then
+            local left = goal - (pump:GetSessionL() or 0)
+            if left <= 0.05 then
+                F.StopPour(pump, "Выбранные " .. goal .. " л залиты. Убери шланг на колонке (E).")
+                return
+            end
+            if want > left then want = left end
+        end
+
+        local added = select(1, F.AddLiters(veh, want, pump:GetFuelKind())) or 0
         if added <= 0 then
             if not pump.GRMFuelFull then
                 pump.GRMFuelFull = true
-                pump:SetBusy(false)
-                if GRM.Notify then GRM.Notify(ply,
-                    "Бак полон. Шланг в баке — убери его на колонке.", 120, 220, 140) end
+                F.StopPour(pump, "Бак полон. Шланг в баке — убери его на колонке.")
             end
             return
         end
@@ -600,11 +742,20 @@ if SERVER then
     function F.ForgetHose(pump)
         if not IsValid(pump) then return end
         timer.Remove("GRM_Fuel_Pump_" .. pump:EntIndex())
+        timer.Remove("GRM_Fuel_Pour_" .. pump:EntIndex())
+        timer.Remove("GRM_Fuel_Hold_" .. pump:EntIndex())
+        if IsValid(pump.GRMHoseCarry) and pump.GRMHoseCarry.GRMHosePump == pump then
+            pump.GRMHoseCarry.GRMHosePump = nil
+        end
         F.ClearHose(pump)
-        pump.GRMHoseCar, pump.GRMHoseBy = nil, nil
-        pump.GRMFuelFull, pump.GRMFuelNoMoney = nil, nil
+        pump.GRMHoseCar, pump.GRMHoseBy, pump.GRMHoseCarry = nil, nil, nil
+        pump.GRMFuelFull, pump.GRMFuelNoMoney, pump.GRMHoseGoal = nil, nil, nil
         if pump.SetHoseCar then pump:SetHoseCar(NULL) end
+        if pump.SetUser then pump:SetUser(NULL) end
         pump:SetBusy(false)
+        if GRM.Sound and GRM.Sound.StopLoop then
+            GRM.Sound.StopLoop(pump, F.PourSound)
+        end
     end
 
     --[[ УБРАТЬ ШЛАНГ ИЗ БАКА.
@@ -918,6 +1069,49 @@ if SERVER then
         return true
     end
 
+    --[[ Ответ диалога колонки: «лить N литров» (или -1 — «убрать шланг»).
+         Проверки на сервере, не на клиенте: расстояние, владение шлангом,
+         лимиты литража пересчитывает StartPour. ]]
+    net.Receive("GRM_Fuel_Pour", function(_, ply)
+        if not IsValid(ply) then return end
+        ply._grmFuelPour = ply._grmFuelPour or 0
+        if CurTime() < ply._grmFuelPour then return end
+        ply._grmFuelPour = CurTime() + 0.5
+        local pump = net.ReadEntity()
+        local liters = net.ReadFloat()
+        if not (IsValid(pump) and pump:GetClass() == "grm_fuel_pump") then return end
+        if ply:GetPos():DistToSqr(pump:GetPos()) > 260 * 260 then return end
+        if pump.GRMHoseBy ~= ply then
+            if GRM.Notify then GRM.Notify(ply, "Шланг в баке не ваш.", 255, 180, 80) end
+            return
+        end
+        if liters < 0 then
+            F.UnplugHose(pump, ply, "Шланг убран.")
+            return
+        end
+        local okp, why = F.StartPour(pump, ply, liters)
+        if not okp and GRM.Notify then GRM.Notify(ply, tostring(why or "Не вышло"), 255, 180, 80) end
+    end)
+
+    --[[ E по машине с пистолетом в руках — вставить nozzle в бак. Без
+         пистолета в руках хук молчит (двери и прочое не трогаем). ]]
+    hook.Add("PlayerUse", "GRM_Fuel_NozzlePlug", function(ply, ent)
+        if not IsValid(ply) then return end
+        local pump = ply.GRMHosePump
+        if not IsValid(pump) or pump.GRMHoseCarry ~= ply then return end
+        local veh = F.RootVehicle(ent) or ent
+        if not IsValid(veh) or not (veh:IsVehicle() or F.IsRealVehicle(veh)) then return end
+        local okp, why = F.PlugHose(pump, veh, ply)
+        if GRM.Notify then
+            if okp then
+                GRM.Notify(ply, "Пистолет в баке. Нажми E на колонке, чтобы начать закачку.", 120, 220, 140)
+            else
+                GRM.Notify(ply, tostring(why or "Не входит"), 255, 180, 80)
+            end
+        end
+        return false
+    end)
+
     hook.Add("PlayerEnteredVehicle", "GRM_Fuel_IgnOff", function(ply, seat)
         local veh = F.RootVehicle(seat)
         if IsValid(veh) then
@@ -1223,7 +1417,7 @@ if CLIENT then
         end
         local hint = vgui.Create("DLabel", fr)
         hint:SetPos(16, 224) hint:SetSize(348, 24)
-        hint:SetText("E — пистолет. Shift+E — касса. /permadd — закрепить.")
+        hint:SetText("E — взять шланг. Вставил в бак — жми E на колонке. Shift+E — касса.")
     end
 
     --[[ Сервер просит перерисовать окно после удачного действия.
@@ -1240,6 +1434,79 @@ if CLIENT then
         timer.Simple(0.15, function()
             if IsValid(ent) and IsValid(F._menu) then F.OpenStation(ent) end
         end)
+    end)
+
+    --[[ Диалог закачки (E на колонке, когда пистолет в баке). Литраж и цену
+         считает сервер (OpenPourDialog перечитывает бак машины); клиент
+         выбирает число не больше свободного места и платит по факту
+         закачанного, но не дороже выбранного. Заказ владельца 02.09. ]]
+    local pourDlg
+    local function closePour()
+        if IsValid(pourDlg) then pourDlg:Remove() end
+        pourDlg = nil
+    end
+    net.Receive("GRM_Fuel_Pour", function()
+        local pump = net.ReadEntity()
+        local now = math.max(0, net.ReadFloat())
+        local mx = math.max(0, net.ReadFloat())
+        local price = math.max(0.01, net.ReadFloat())
+        if not IsValid(pump) then return end
+        local free = math.floor(math.max(0, mx - now + 0.001))
+        if free < 1 then return end
+        closePour()
+        local f = vgui.Create("DFrame")
+        pourDlg = f
+        f:SetTitle("Закачка · " .. tostring(pump:GetFuelKind()))
+        f:SetSize(340, 238)
+        f:Center()
+        f:MakePopup()
+        local info = vgui.Create("DLabel", f)
+        info:SetPos(16, 30) info:SetSize(308, 34)
+        info:SetText(string.format("Бак: %.0f / %.0f л · можно залить %d л", now, mx, free))
+        local sld = vgui.Create("DNumSlider", f)
+        sld:SetPos(10, 64) sld:SetSize(320, 20)
+        sld:SetMin(1) sld:SetMax(free) sld:SetDecimals(0)
+        sld:SetValue(math.min(free, 20))
+        local total = vgui.Create("DLabel", f)
+        total:SetPos(16, 90) total:SetSize(308, 18)
+        local function refresh()
+            local l = math.floor(sld:GetValue() or 0)
+            total:SetText(string.format("К оплате: %d л · %.0f GRM (по %.2f за л)", l, math.ceil(price * math.max(1, l)), price))
+        end
+        sld.OnValueChanged = refresh
+        local qx = 12
+        for _, q in ipairs({ {"10 л", 10}, {"25 л", 25}, {"50 л", 50}, {"ПОЛНЫЙ", free} }) do
+            local b = vgui.Create("DButton", f)
+            b:SetText(q[1]) b:SetPos(qx, 114) b:SetSize(76, 24)
+            qx = qx + 80
+            b.DoClick = function() sld:SetValue(math.min(free, q[2])) refresh() end
+        end
+        local go = vgui.Create("DButton", f)
+        go:SetText("НАЧАТЬ ЗАКАЧКУ")
+        go:SetPos(12, 148) go:SetSize(316, 34)
+        go.DoClick = function()
+            net.Start("GRM_Fuel_Pour")
+                net.WriteEntity(pump)
+                net.WriteFloat(math.floor(math.Clamp(sld:GetValue() or 0, 0, free)))
+            net.SendToServer()
+            closePour()
+        end
+        local off = vgui.Create("DButton", f)
+        off:SetText("Убрать шланг и выйти")
+        off:SetPos(12, 188) off:SetSize(316, 24)
+        off.DoClick = function()
+            net.Start("GRM_Fuel_Pour")
+                net.WriteEntity(pump)
+                net.WriteFloat(-1)
+            net.SendToServer()
+            closePour()
+        end
+        f.Think = function()
+            local lp = LocalPlayer()
+            if not IsValid(pump) or not IsValid(lp) then closePour() return end
+            if lp:GetPos():DistToSqr(pump:GetPos()) > 300 * 300 then closePour() end
+        end
+        refresh()
     end)
 
     hook.Add("PlayerButtonDown", "GRM_Fuel_StationKey", function(ply, btn)

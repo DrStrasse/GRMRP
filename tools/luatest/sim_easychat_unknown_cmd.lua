@@ -40,14 +40,19 @@ ok(loaded, "модуль поднялся (server)", err)
 local G = _G.GRM and _G.GRM.EasyChat
 ok(G and type(G.CmdList) == "table" and #G.CmdList >= 500, "реестр заполнен: " .. tostring(G and #G.CmdList or 0))
 
--- неизвестная команда ванильного чата
+-- «менеджерские» (ULib/ULX) команды: гасим чат, но НЕ дублируем исполнение
+-- our concommand.Run рядом с ULib сложился бы вдвое (noclip вкл+выкл)
 local res = hook.Run("PlayerSay", ply, "/noclip", false)
 ok(res == "", "PlayerSay /noclip гасится (='')", tostring(res))
-ok(#server_calls == 1 and server_calls[1].cmd == "noclip", "concommand.Run(noclip): " .. tostring(server_calls[1] and server_calls[1].cmd))
+ok(#server_calls == 0, "noclip не дублируется concommand.Run", tostring(#server_calls))
+
+local resU = hook.Run("PlayerSay", ply, "!ulx addowner", false)
+ok(resU == "", "PlayerSay !ulx гасится", tostring(resU))
+ok(#server_calls == 0, "ulx не дублируется")
 
 local res2 = hook.Run("PlayerSay", ply, "!neznakomaya", false)
 ok(res2 == "", "PlayerSay !neznakomaya гасится", tostring(res2))
-ok(#server_calls == 2 and server_calls[2].cmd == "neznakomaya", "concommand.Run(neznakomaya)")
+ok(#server_calls == 1 and server_calls[1].cmd == "neznakomaya", "concommand.Run(neznakomaya): " .. tostring(server_calls[1] and server_calls[1].cmd))
 
 -- известные команды не трогаем
 local before = #server_calls
@@ -68,11 +73,20 @@ hook.Run("PlayerSayPostTransform", ply, dpn, false, false)
 ok(dpn[1] == "", "PostTransform гасит !что_то_там", tostring(dpn[1]))
 ok(#server_calls == before + 2, "PostTransform дважды выполнил локально: " .. #server_calls)
 
+-- менеджерская в PostTransform: гасится, но исполнение — за ULib-цепочкой
+local dpm = { "!noclip" }
+hook.Run("PlayerSayPostTransform", ply, dpm, false, false)
+ok(dpm[1] == "" and dpm.SkipPlayerSay == true, "PostTransform гасит !noclip")
+ok(#server_calls == before + 2, "PostTransform не дублирует noclip: " .. #server_calls)
+
 -- РАЗДЕЛ 2: клиент (EasyChat SendGlobalMessage)
 print("=== 2. CLIENT ===")
 _G.SERVER, _G.CLIENT = false, true
 stub.hooks = {}
 local client_calls = {}
+-- на клиенте «свои» команды движка — только они и исполняются локально
+local CLIENT_CMDS = { mat_wireframe = true, rcon = true, quit = true }
+_G.ConCommandExists = function(n) return CLIENT_CMDS[tostring(n or "")] == true end
 local lp = {
     __valid = true,
     __entity = true,
@@ -91,15 +105,31 @@ local function post(dp)
     return dp
 end
 
+-- noclip — менеджерская: НЕ гасим и НЕ исполняем локально,
+-- пусть уходит на сервер как say (ULib исполнит со своими правами)
 local dp1 = { "!noclip" }
 post(dp1)
-ok(dp1[1] == "", "client !noclip гасится", tostring(dp1[1]))
-ok(dp1.SkipPlayerSay == true, "client SkipPlayerSay")
-ok(#client_calls == 1 and client_calls[1] == "noclip", "ConCommand('noclip'): " .. tostring(client_calls[1]))
+ok(dp1[1] == "!noclip", "client !noclip пропущен на сервер", tostring(dp1[1]))
+ok(dp1.SkipPlayerSay == nil, "client noclip не помечен скипом")
+ok(#client_calls == 0, "noclip не выполнялся локально", tostring(client_calls[1]))
 
 local dp2 = { "/noclip x" }
 post(dp2)
-ok(dp2[1] == "" and client_calls[2] == "noclip x", "ConCommand с аргументами")
+ok(dp2[1] == "/noclip x", "client /noclip x пропущен", tostring(dp2[1]))
+ok(#client_calls == 0, "по-прежнему без локального запуска")
+
+-- чистая клиентская команда — гасим и выполняем локально (как раньше)
+local dp3 = { "!mat_wireframe 1" }
+post(dp3)
+ok(dp3[1] == "" and dp3.SkipPlayerSay == true, "клиент гасит mat_wireframe")
+ok(client_calls[1] == "mat_wireframe 1", "ConCommand('mat_wireframe 1'): " .. tostring(client_calls[1]))
+
+-- неизвестное и не клиентское — пропускаем: серверный PostTransform
+-- исполнит своей concommand и в чат не пустит
+local dp4 = { "!servernaya_komanda 42" }
+post(dp4)
+ok(dp4[1] == "!servernaya_komanda 42", "неклиентская команда уходит на сервер", tostring(dp4[1]))
+ok(#client_calls == 1, "без ложного локального запуска")
 
 -- известные команды пропускаются (уходят на сервер / модулям)
 local beforeC = #client_calls

@@ -161,6 +161,7 @@ local STOCK = {
     "ambient/fire/gascan_ignite1.wav", "ambient/levels/citadel/field_loop1.wav",
     "ambient/levels/labs/coinslot1.wav", "ambient/machines/combine_terminal_idle4.wav",
     "ambient/machines/floodgate_stop1.wav", "ambient/machines/steam_release_2.wav",
+    "ambient/machines/aircompressor_01.wav",
     "ambient/materials/dirt_impact1.wav", "ambient/water/leak_1.wav", "ambient/water/water_splash1.wav",
     "doors/door1_move.wav", "doors/door_latch1.wav", "doors/door_latch3.wav",
     "doors/door_metal_thin_close2.wav", "doors/door_metal_thin_open1.wav",

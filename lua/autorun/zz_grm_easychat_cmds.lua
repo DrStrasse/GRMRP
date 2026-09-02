@@ -7,13 +7,23 @@
       - известные команды модулей (реестр ниже) работают как раньше
         (клиентские гаснут в своих PlayerSayTransform, серверные уходят
         на сервер и обрабатываются там);
-      - всё остальное, начинающееся с / или !, гасится ещё на клиенте
-        и выполняется локально как консольная команда
-        (LocalPlayer():ConCommand), в глобальный чат не попадает;
+      - «менеджерские» команды (noclip, god, ulx, uli, aegis, sam, …) —
+        их исполняет СЕРВЕР (ULib/ULX своими PlayerSay-хуками со своей
+        проверкой прав). На клиенте они не гасятся и локально не
+        запускаются: движковый noclip из клиента режется sv_cheat, а
+        локальный запуск рядом с ULib давал двойное переключение (вкл+выкл
+        = «баг срабатывания»); если менеджер команду не съел, её
+        перехватит серверный PostTransform — в чат она всё равно не
+        выйдет;
+      - прочее, начинающееся с / или !: если команда известна КЛИЕНТУ
+        (mat_*, studio, rcon…) — гасится и выполняется локально; если
+        нет — проходит на сервер как обычный say, где серверный
+        PostTransform исполнит её консольной командой и в глобальный чат
+        не пустит;
       - сервер дублирует защиту для не-EasyChat путей: PlayerSay гасит
-        неизвестные, а PlayerSayPostTransform EasyChat гасит любой
-        оставшийся / и ! текст (известные команды к этому моменту уже
-        обработаны модулями).
+        неизвестные (кроме менеджерских — их исполняет ULib), а
+        PlayerSayPostTransform EasyChat гасит любой оставшийся / и ! текст
+        (известные команды к этому моменту уже обработаны модулями).
 
     Не путать с RP-чатом: /me, /do, /w, /y, /ooc и алиасы — известные
     команды, их реестр пропускает к серверному обработчику.
@@ -115,6 +125,16 @@ C.CmdList = {
 "точкиспавна", "служба", "prone", "лечь", "duty", "doccopy", "bag_unload",
 }
 
+-- Команды админ-менеджеров: исполняются серверными PlayerSay-хуками
+-- (ULib/ULX и т.п.) со своей проверкой прав. Клиент их не гасит и никто
+-- не дублирует их выполнение локальными ConCommand — двойной noclip
+-- выключает noclip.
+C.ManagerCmds = {
+    noclip = true, god = true,
+    ulx = true, uli = true, a = true,
+    aegis = true, sam = true, sa = true, slb = true,
+}
+
 local known = {}
 for _, name in ipairs(C.CmdList) do
     if name ~= "" then known[name] = true end
@@ -149,23 +169,31 @@ if SERVER then
         concommand.Run(ply, args[1] or "", args, argstr)
     end
 
-    -- Ванильный чат (без EasyChat) и ретрансляция: неизвестные / и !
-    -- команды в глобальный чат не пускаем.
+    -- Ванильный чат (без EasyChat): неизвестные / и ! команды в
+    -- глобальный чат не пускаем. Менеджерские только гасим — их в этой же
+    -- цепочке исполняет ULib/ULX; наш повторный запуск сложил бы эффект
+    -- вдвое (noclip вкл+выкл).
     hook.Add("PlayerSay", "GRM_EasyChat_UnknownCmd_Say", function(ply, text, teamChat)
         local name = splitCommand(text)
         if not name then return end
         if known[string.lower(name)] then return end
-        runServerCommand(ply, text)
+        if not C.ManagerCmds[string.lower(name)] then
+            runServerCommand(ply, text)
+        end
         return ""
     end)
 
     -- EasyChat: это последний шаг серверной цепочки (после PlayerSay).
-    -- Сюда доходит только необработанный текст — гасим любой / или !.
+    -- Сюда доходит только необработанный текст — гасим любой / или !;
+    -- менеджерские исполнены (или не исполнены) ULib-цепочкой, не
+    -- повторяем.
     hook.Add("PlayerSayPostTransform", "GRM_EasyChat_UnknownCmd_PostServer", function(ply, datapack, is_team, is_local)
         if not istable(datapack) or not isstring(datapack[1]) then return end
         local name = splitCommand(datapack[1])
         if not name then return end
-        runServerCommand(ply, datapack[1])
+        if not C.ManagerCmds[string.lower(name)] then
+            runServerCommand(ply, datapack[1])
+        end
         datapack[1] = ""
         datapack.SkipPlayerSay = true
     end)
@@ -173,12 +201,18 @@ end
 
 if CLIENT then
     -- EasyChat-клиент: после всех PlayerSayTransform и PlayerSay хуков.
-    -- Неизвестные / и ! команды гасим и выполняем локально.
+    -- Менеджерские команды (см. C.ManagerCmds) не трогаем вовсе — пусть
+    -- уйдут на сервер как say и ULib/ULX отработают со своей авторизацией.
+    -- Остальное неизвестное: клиентская консольная команда — гасим чат и
+    -- выполняем локально; не клиентская — пропускаем, серверный
+    -- PostTransform подхватит, в глобальный чат текст не выйдет.
     hook.Add("PlayerSayPostTransform", "GRM_EasyChat_UnknownCmd_Post", function(ply, datapack, is_team, is_local)
         if not istable(datapack) or not isstring(datapack[1]) then return end
         local name, stripped = splitCommand(datapack[1])
         if not name then return end
         if C.IsKnownCmd(name) then return end
+        if C.ManagerCmds[name] then return end
+        if not (isfunction(ConCommandExists) and ConCommandExists(name)) then return end
         datapack[1] = ""
         datapack.SkipPlayerSay = true
         local lp = LocalPlayer()

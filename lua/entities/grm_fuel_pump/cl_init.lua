@@ -30,9 +30,12 @@ function ENT:Draw()
     local a = self:LocalToWorld(Vector(14, -10, 22))
     local dest
     local car = self.GetHoseCar and self:GetHoseCar() or nil
+    local holder = self:GetUser()
     if IsValid(car) then
         dest = (GRM.Fuel and GRM.Fuel.FillPort) and GRM.Fuel.FillPort(car)
             or car:WorldSpaceCenter()
+    elseif IsValid(holder) then
+        dest = holder:EyePos()                        -- пистолет в руках
     else
         dest = self:LocalToWorld(Vector(6, -12, 4))   -- крючок на колонке
     end
@@ -66,8 +69,15 @@ function ENT:Draw()
             draw.SimpleText(string.format("бак  %.0f / %.0f л", now, mx), "DermaDefault", 0, 50, Color(200, 210, 220), TEXT_ALIGN_CENTER)
         else
             local own = self:GetOwnerKey() or ""
-            local hint = IsValid(car) and "шланг в баке  ·  E убрать"
-                or "E — заправить   SHIFT+E — касса"
+            local hint
+            if IsValid(car) then
+                hint = "шланг в баке  ·  E — выбрать литры"
+            elseif IsValid(holder) then
+                hint = (holder == LocalPlayer()) and "пистолет в руках  ·  E на машине — вставить"
+                    or "пистолет у другого игрока"
+            else
+                hint = "E — взять шланг   SHIFT+E — касса"
+            end
             draw.SimpleText(hint, "DermaDefault", 0, 4, Color(200, 210, 220), TEXT_ALIGN_CENTER)
             draw.SimpleText(own ~= "" and "частная колонка" or "свободна · можно выкупить", "DermaDefault", 0, 24, Color(140, 160, 180), TEXT_ALIGN_CENTER)
         end
