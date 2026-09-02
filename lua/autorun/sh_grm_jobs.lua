@@ -1855,30 +1855,34 @@ if CLIENT then
             scroll:AddItem(canvas)
         end
 
+        -- Реестр вкладок: порядок, доступ и билдер в одной таблице (§5.4).
+        -- Раньше порядок жил в defs, право — в if canP/isSuper, а содержимое —
+        -- отдельной лестницей if currentTab; новая вкладка требовала правки
+        -- трёх мест, которые могли разойтись. Теперь место одно.
+        local TABS = {
+            { id = "work",    label = "Работы",          icon = "icon16/briefcase.png",   build = buildWorkTab },
+            { id = "mine",    label = "Моя работа",      icon = "icon16/user_go.png",     build = buildMineTab },
+            { id = "posts",   label = "Заказы фракций",  icon = "icon16/group.png",       build = buildPostsTab },
+            { id = "publish", label = "Публикация",      icon = "icon16/report_edit.png", build = buildPublishTab, show = canP },
+            { id = "access",  label = "Доступы",         icon = "icon16/key.png",         build = buildAccessTab,  show = isSuper },
+        }
+        local TAB_BY_ID = {}
+        for _, d in ipairs(TABS) do TAB_BY_ID[d.id] = d end
+
         renderTabs = function()
             content:Clear()
-            -- раскладка кнопок вкладок
-            local defs = {
-                { id = "work",    label = "Работы",          icon = "icon16/briefcase.png" },
-                { id = "mine",    label = "Моя работа",      icon = "icon16/user_go.png" },
-                { id = "posts",   label = "Заказы фракций",  icon = "icon16/group.png" },
-            }
-            if canP then defs[#defs + 1] = { id = "publish", label = "Публикация", icon = "icon16/report_edit.png" } end
-            if isSuper then defs[#defs + 1] = { id = "access", label = "Доступы", icon = "icon16/key.png" } end
             local x = 12
-            for _, d in ipairs(defs) do
-                local b = tabBtns[d.id]
-                if not IsValid(b) then b = tabButton(d.id, d.label, d.icon) end
-                b:SetPos(x, 72) b:SetSize(150, 32)
-                b._tabId = d.id
-                x = x + 158
+            for _, d in ipairs(TABS) do
+                if d.show ~= false then
+                    local b = tabBtns[d.id]
+                    if not IsValid(b) then b = tabButton(d.id, d.label, d.icon) end
+                    b:SetPos(x, 72) b:SetSize(150, 32)
+                    x = x + 158
+                end
             end
-            if currentTab == "work" then buildWorkTab()
-            elseif currentTab == "mine" then buildMineTab()
-            elseif currentTab == "posts" then buildPostsTab()
-            elseif currentTab == "publish" then buildPublishTab()
-            elseif currentTab == "access" then buildAccessTab()
-            end
+            -- право проверено выше: построить можно только видимую вкладку
+            local def = TAB_BY_ID[currentTab]
+            if def and def.show ~= false then def.build() end
         end
 
         renderTabs()

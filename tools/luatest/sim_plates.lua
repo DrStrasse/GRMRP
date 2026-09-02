@@ -1313,5 +1313,48 @@ do
     ok(okUp == true, "вверх знак двигается", tostring(okUp))
 end
 
+print("\n=== 20. РЕЕСТР РЕЖИМОВ ПОДГОНКИ РЕНДЕРА (ГРМ §5.4) ===")
+--[[ renderCommand жил лестницей из восьми веток; наклон и сдвиг имели
+     общие ветки `tiltP or tiltY or tiltR`. Реестр RENDER_ADJUST обязан
+     вести себя байт-в-байт как старая лестница — проверим каждый режим
+     ЖИВЫМ вызовом, включая квантование yaw (NormalizeRender) и то, что
+     «show» и неизвестный ключ ничего не меняют. ]]
+local supRender = { _valid = true, IsSuperAdmin = function() return true end,
+    ChatPrint = function() end, GetNWString = function() return "" end }
+PL.Render = PL.NormalizeRender({ axis = "auto", yaw = 90, scale = 1, offset = 1.5 })
+PL.RenderCommand(supRender, "yaw", "45")
+-- 90 + 45 = 135, но yaw квантован шагом 90 — станет 180
+ok(PL.Render.yaw == 180, "yaw: шаг применяется и нормализуется", tostring(PL.Render.yaw))
+PL.RenderCommand(supRender, "yaw")
+ok(PL.Render.yaw == 270, "yaw без аргумента — дефолтный шаг 90", tostring(PL.Render.yaw))
+PL.RenderCommand(supRender, "axis")
+ok(PL.Render.axis == "x", "ось: цикл auto→x", tostring(PL.Render.axis))
+PL.RenderCommand(supRender, "flip")
+ok(PL.Render.flip == true, "зеркало переключается")
+PL.RenderCommand(supRender, "scale", "10")
+ok(PL.Render.scale == 3, "масштаб ограничен сверху (0.2..3)", tostring(PL.Render.scale))
+PL.RenderCommand(supRender, "offset", "-5")
+ok(PL.Render.offset == 0, "вынос не уходит в отрицательный", tostring(PL.Render.offset))
+PL.RenderCommand(supRender, "tiltR", "-200")
+ok(PL.Render.tiltR == -180, "наклон по любой из трёх осей зажат −180..180", tostring(PL.Render.tiltR))
+PL.RenderCommand(supRender, "moveY", "50")
+ok(PL.Render.moveY == 24, "сдвиг зажат ±24", tostring(PL.Render.moveY))
+PL.RenderCommand(supRender, "show")
+ok(PL.Render.tiltR == -180 and PL.Render.moveY == 24, "show ничего не меняет, только показывает")
+PL.RenderCommand(supRender, "неттакой")
+ok(PL.Render.yaw == 270, "неизвестный режим молчит, как раньше")
+PL.RenderCommand(supRender, "reset")
+ok(PL.Render.yaw == 90 and PL.Render.axis == "auto" and PL.Render.scale == 1
+    and PL.Render.offset == 1.5 and PL.Render.tiltR == 0,
+    "reset возвращает дефолт и стирает наклон")
+local civRender = { _valid = true, IsSuperAdmin = function() return false end,
+    ChatPrint = function() end, GetNWString = function() return "" end }
+local before = PL.Render.yaw
+PL.RenderCommand(civRender, "yaw", "90")
+ok(PL.Render.yaw == before, "настройки знаков — право только у суперадмина")
+ok(type(PL.RenderCommand) == "function" and psrc:find("elseif what ==", 1, true) == nil
+    and psrc:find('tiltP" or what', 1, true) == nil,
+    "лестницы what нет — только реестр RENDER_ADJUST")
+
 print(("\nPLATES: %d/%d, провалов: %d"):format(pass, pass + fail, fail))
 if fail > 0 then os.exit(1) end

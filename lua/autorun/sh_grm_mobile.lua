@@ -142,22 +142,40 @@ local function normalizeForumPosts()
 end
 normalizeForumPosts()
 
-local AppBase = { "Телефон", "Калькулятор" }
+--[[ РЕЕСТР ПРИЛОЖЕНИЙ ТЕЛЕФОНА — единственный источник (ГРМ §5.4).
+     Одна строка описывает: подпись, экран открытия, запрос данных при
+     входе, фильтр по флагу тарифа. Раньше гейтинг был переписан трижды —
+     в AvailableApps (описание тарифа), в appList (домашний экран) и
+     лестницей из 11 веток в обработчике нажатия; новое приложение
+     требовало синхронно править все три. Порядок списка = порядок иконок
+     на домашнем экране. `homeOnly` — пункт интерфейса, не «приложение»:
+     в описании тарифа не показывается. ]]
+MB.AppDefs = {
+    { id = "dial",     name = "Телефон",      screen = "dial" },
+    { id = "sms",      name = "SMS",          tier = "sms",      screen = "sms",     query = "sms_read" },
+    { id = "contacts", name = "Контакты",     tier = "contacts", screen = "contacts" },
+    { id = "notes",    name = "Заметки",      tier = "notes",    screen = "notes",   query = "note_query" },
+    { id = "jobs",     name = "Биржа",        tier = "apps",     screen = "jobs",    query = "jobs_query" },
+    { id = "fac",      name = "Моя фракция",  tier = "apps",     screen = "fac",     query = "fac_query" },
+    { id = "gps",      name = "GPS",          tier = "apps",     screen = "gps" },
+    { id = "forum",    name = "Форум",        tier = "apps",     screen = "forum",   query = "forum_query" },
+    { id = "taxi",     name = "Такси",        screen = "taxi",   query = "taxi_query" },
+    { id = "calc",     name = "Калькулятор",  screen = "calc" },
+    { id = "power",    name = "Управление",   screen = "power",  homeOnly = true },
+}
+
+-- Приложения тарифа: def допускается, если флага нет вовсе или он включён.
+local function appAllowed(def, tier)
+    if not def.tier then return true end
+    return tier ~= nil and tier[def.tier] == true
+end
 
 function MB.AvailableApps(tierKey)
     local tier = MB.Tiers[tostring(tierKey or "")]
-    local apps = { AppBase[1], AppBase[2] }
-    if not tier then return apps end
-    if tier.sms then apps[#apps + 1] = "SMS" end
-    if tier.contacts then apps[#apps + 1] = "Контакты" end
-    if tier.notes then apps[#apps + 1] = "Заметки" end
-    if tier.apps then
-        apps[#apps + 1] = "Биржа"
-        apps[#apps + 1] = "Моя фракция"
-        apps[#apps + 1] = "Форум"
-        apps[#apps + 1] = "GPS"
+    local apps = {}
+    for _, d in ipairs(MB.AppDefs) do
+        if not d.homeOnly and appAllowed(d, tier) then apps[#apps + 1] = d.name end
     end
-    apps[#apps + 1] = "Такси"
     return apps
 end
 
@@ -1131,18 +1149,11 @@ if CLIENT then
     end
 
     local function appList()
-        local tier = tostring(M.state.tier or "")
-        local t = MB.Tiers[tier] or MB.Tiers.tinkle or {}
-        local out = { { id="dial", name="Телефон" } }
-        if t.sms then out[#out+1] = { id="sms", name="SMS" } end
-        if t.contacts then out[#out+1] = { id="contacts", name="Контакты" } end
-        if t.notes then out[#out+1] = { id="notes", name="Заметки" } end
-        if t.apps then
-            out[#out+1]={id="jobs",name="Биржа"};out[#out+1]={id="fac",name="Моя фракция"};out[#out+1]={id="gps",name="GPS"};out[#out+1]={id="forum",name="Форум"}
+        local tier = MB.Tiers[tostring(M.state.tier or "")] or MB.Tiers.tinkle
+        local out = {}
+        for _, d in ipairs(MB.AppDefs) do
+            if appAllowed(d, tier) then out[#out + 1] = d end
         end
-        out[#out+1] = { id="taxi", name="Такси" }
-        out[#out+1] = { id="calc", name="Калькулятор" }
-        out[#out+1] = { id="power", name="Управление" }
         return out
     end
 
@@ -1199,6 +1210,148 @@ if CLIENT then
     local back
     local selectCurrent
 
+    -- РЕЕСТР ЭКРАНОВ ТЕЛЕФОНА (ГРМ §5.4): экран описывает только свой
+    -- список пунктов. Диспетчеру неизвестный экран = пустой список,
+    -- а не расхождение лестницы с правкой; новый экран — одна функция
+    -- SCREENS.<имя> здесь, тело screenItems не трогаем.
+    local SCREENS = {}
+
+    function SCREENS.home(add)
+        for _, a in ipairs(appList()) do
+            add(a.name, function()
+                -- экран и запрос данных описаны в MB.AppDefs — здесь нет
+                -- ветки на приложение и разойтись они не могут
+                if a.screen then setScreen(a.screen) end
+                if a.query then sendAct({ op = a.query }) end
+            end, a.id == "sms" and tonumber(M.state.unread or 0) > 0 and ("Новых: " .. tostring(M.state.unread)) or nil, "app", a.id)
+        end
+    end
+
+    function SCREENS.power(add)
+        add("Убрать телефон", function() closePhone(true) end, "Закрыть интерфейс, оставив телефон активным", "small")
+        add("Деактивировать", function() setScreen("deactivate_confirm") end, "Выключить связь до повторной активации через инвентарь", "call_bad")
+        add("Главное меню", function() goHome(); snd("back") end, nil, "back")
+    end
+
+    function SCREENS.deactivate_confirm(add)
+        add("Да, деактивировать", function() sendAct({op="deactivate"}); closePhone(false) end, "Телефон перестанет принимать звонки", "call_bad")
+        add("Отмена", function() setScreen("power"); snd("back") end, "Оставить телефон активным", "back")
+    end
+
+    function SCREENS.dial(add)
+        for _, d in ipairs({"1","2","3","4","5","6","7","8","9"}) do add(d, function() M.dial = (M.dial or "") .. d; snd("select") end, "цифра", "digit") end
+        add("←", function() M.dial = string.sub(M.dial or "", 1, math.max(0, #(M.dial or "") - 1)); snd("back") end, "стереть", "digit")
+        add("0", function() M.dial = (M.dial or "") .. "0"; snd("select") end, "цифра", "digit")
+        add("☎", function() if (M.dial or "") ~= "" then snd("ring"); sendAct({op="dial", number=M.dial}) else snd("err") end end, "позвонить", "call_good")
+        add("Очистить", function() M.dial = ""; snd("back") end, nil, "small")
+        add("Назад", function() goHome(); snd("back") end, nil, "back")
+    end
+
+    function SCREENS.sms(add)
+        for threadIndex, th in ipairs(smsThreads()) do add(th.num, function() M.smsThread = th.num;M.smsThreadListSel=threadIndex;setScreen("sms_dialog") end, (th.unread > 0 and ("новых: " .. th.unread .. " • ") or "") .. tostring(th.last or "")) end
+        add("Новое SMS", function()
+            askString("SMS", "Номер", "", function(num)
+                askString("SMS", "Текст", "", function(txt) sendAct({op="sms", num=num, text=txt}) end)
+            end)
+        end)
+        add("Назад", function() goHome(); snd("back") end, nil, "back")
+    end
+
+    function SCREENS.sms_dialog(add)
+        add("Ответить", function()
+            local num = M.smsThread or ""
+            askString("SMS", "Текст для " .. num, "", function(txt) sendAct({op="sms", num=num, text=txt}) end)
+        end, M.smsThread)
+        add("Позвонить", function() if M.smsThread then sendAct({op="dial", number=M.smsThread}) end end)
+        add("Назад к SMS", function() setScreen("sms"); snd("back") end, nil, "back")
+        add("Главное меню", function() goHome(); snd("back") end, nil, "back")
+    end
+
+    function SCREENS.contacts(add)
+        for contactIndex, r in ipairs(rows("contacts")) do add(tostring(r.name or r.num or "Контакт"), function() M.contact = r;M.contactListSel=contactIndex;setScreen("contact_actions") end, tostring(r.num or "")) end
+        add("Добавить контакт", function()
+            askString("Контакт", "Имя", "", function(name)
+                askString("Контакт", "Номер", "", function(num) sendAct({op="contact_add", name=name, num=num}) end)
+            end)
+        end)
+        add("Назад", function() goHome(); snd("back") end, nil, "back")
+    end
+
+    function SCREENS.contact_actions(add)
+        local r = M.contact or {}
+        add("Позвонить", function() if r.num then sendAct({op="dial", number=r.num}) end end, tostring(r.num or ""))
+        add("SMS", function() askString("SMS", "Текст для " .. tostring(r.num or ""), "", function(txt) sendAct({op="sms", num=r.num or "", text=txt}) end) end)
+        add("Удалить", function() if r.i then sendAct({op="contact_del", i=r.i}) end; setScreen("contacts") end, nil, "call_bad")
+        add("Назад", function() setScreen("contacts"); snd("back") end, nil, "back")
+    end
+
+    function SCREENS.notes(add)
+        for _, r in ipairs(rows("notes")) do add(tostring(r.text or "Заметка"), function() end, "заметка") end
+        add("Добавить заметку", function() askString("Заметка", "Текст", "", function(txt) sendAct({op="note_add", text=txt}) end) end)
+        add("Удалить выбранную", function() sendAct({op="note_del", i=math.max(1, M.listSel)}) end, nil, "call_bad")
+        add("Обновить", function() sendAct({op="note_query"}); snd("select") end, nil, "small")
+        add("Назад", function() goHome(); snd("back") end, nil, "back")
+    end
+
+    function SCREENS.jobs(add)
+        for _,r in ipairs(rows("jobs"))do add(tostring(r.fac or"")..": "..tostring(r.title or""),function()end,tostring(r.kind or"").." "..tostring(r.pay or r.reward or""))end;add("Обновить",function()sendAct({op="jobs_query"});snd("select")end,nil,"small");add("Назад",function()goHome();snd("back")end,nil,"back")
+    end
+
+    function SCREENS.taxi(add)
+        local td=(M.data.taxi or{}).data
+        if istable(td)then add("Статус: "..tostring(td.status or"ожидание"),function()end,(td.driverName~=""and("Водитель: "..td.driverName)or"Идёт поиск водителя")..((tonumber(td.fare)or 0)>0 and(" • "..tostring(td.fare))or""));add("Отменить заказ",function()sendAct({op="taxi_cancel"})end,nil,"call_bad")
+        else add("ВЫЗВАТЬ ТАКСИ",function()sendAct({op="taxi_call"})end,"Место подачи определяется по вашей текущей позиции","call_good")end
+        add("Обновить",function()sendAct({op="taxi_query"});snd("select")end,nil,"small");add("Назад",function()goHome();snd("back")end,nil,"back")
+    end
+
+    function SCREENS.fac(add)
+        local d = (M.data.fac or {}).data or {}
+        for _, r in ipairs(d.rows or {}) do add((r.online and "● " or "○ ") .. tostring(r.name or "?"), function() end, tostring(r.role or "") .. " / " .. tostring(r.dept or "")) end
+        add("Обновить", function() sendAct({op="fac_query"}); snd("select") end, nil, "small")
+        add("Назад", function() goHome(); snd("back") end, nil, "back")
+    end
+
+    function SCREENS.forum(add)
+        add("Написать", function() askString("Новая публикация", "Что происходит в городе?", "", function(txt) sendAct({op="forum_post", text=txt}) end) end, nil, "forum_new")
+        add("Обновить", function() sendAct({op="forum_query"}); snd("select") end, nil, "forum_refresh")
+        add("Назад", function() goHome(); snd("back") end, nil, "forum_back")
+        for _, r in ipairs(rows("forum")) do
+            add(tostring(r.author or "Горожанин"), function()
+                M.forumPost = r
+                M.forumPostID = tonumber(r.id) or 0
+                M.forumFeedSel = M.listSel
+                setScreen("forum_detail")
+            end, tostring(r.text or ""), "forum_post", tonumber(r.id) or 0)
+        end
+    end
+
+    function SCREENS.forum_detail(add)
+        local post = M.forumPost or {}
+        add(post.liked and "Убрать реакцию" or "Нравится", function()
+            if tonumber(post.id) then sendAct({op="forum_like", id=tonumber(post.id)}) end
+            post.liked = not post.liked
+            post.likes = math.max(0, (tonumber(post.likes) or 0) + (post.liked and 1 or -1))
+        end, nil, "forum_like")
+        add("Ответить", function()
+            askString("Ответ для " .. tostring(post.author or "пользователя"), "Текст ответа", "", function(txt)
+                sendAct({op="forum_post", text=txt, replyTo=tonumber(post.id) or 0})
+                setScreen("forum")
+            end)
+        end, nil, "forum_reply")
+        add("К ленте", function() setScreen("forum"); snd("back") end, nil, "forum_back")
+    end
+
+    function SCREENS.calc(add)
+        for _, b in ipairs({"7","8","9","+","4","5","6","-","1","2","3","*","0","/","C","="}) do
+            add(b, function()
+                if b == "C" then M.calc = ""; snd("back")
+                elseif b == "=" then M.calc = calcEval(M.calc); snd("select")
+                else M.calc = (M.calc or "") .. b; snd("select") end
+            end, nil, (b == "=" and "call_good") or (b == "C" and "call_bad") or "digit")
+        end
+        add("Назад", function() goHome(); snd("back") end, nil, "back")
+    end
+
     local function screenItems()
         local items = {}
         local function add(label, fn, hint, kind, id) items[#items + 1] = { label = label, fn = fn, hint = hint, kind = kind, id = id } end
@@ -1215,120 +1368,8 @@ if CLIENT then
             return items
         end
 
-        if M.screen == "home" then
-            for _, a in ipairs(appList()) do
-                add(a.name, function()
-                    if a.id == "dial" then setScreen("dial")
-                    elseif a.id == "sms" then setScreen("sms"); sendAct({op="sms_read"})
-                    elseif a.id == "contacts" then setScreen("contacts")
-                    elseif a.id == "notes" then setScreen("notes"); sendAct({op="note_query"})
-                    elseif a.id=="jobs"then setScreen("jobs");sendAct({op="jobs_query"})
-                    elseif a.id=="taxi"then setScreen("taxi");sendAct({op="taxi_query"})
-                    elseif a.id == "fac" then setScreen("fac"); sendAct({op="fac_query"})
-                    elseif a.id == "gps" then setScreen("gps")
-                    elseif a.id == "forum" then setScreen("forum"); sendAct({op="forum_query"})
-                    elseif a.id == "calc" then setScreen("calc")
-                    elseif a.id == "power" then setScreen("power") end
-                end, a.id == "sms" and tonumber(M.state.unread or 0) > 0 and ("Новых: " .. tostring(M.state.unread)) or nil, "app", a.id)
-            end
-        elseif M.screen == "power" then
-            add("Убрать телефон", function() closePhone(true) end, "Закрыть интерфейс, оставив телефон активным", "small")
-            add("Деактивировать", function() setScreen("deactivate_confirm") end, "Выключить связь до повторной активации через инвентарь", "call_bad")
-            add("Главное меню", function() goHome(); snd("back") end, nil, "back")
-        elseif M.screen == "deactivate_confirm" then
-            add("Да, деактивировать", function() sendAct({op="deactivate"}); closePhone(false) end, "Телефон перестанет принимать звонки", "call_bad")
-            add("Отмена", function() setScreen("power"); snd("back") end, "Оставить телефон активным", "back")
-        elseif M.screen == "dial" then
-            for _, d in ipairs({"1","2","3","4","5","6","7","8","9"}) do add(d, function() M.dial = (M.dial or "") .. d; snd("select") end, "цифра", "digit") end
-            add("←", function() M.dial = string.sub(M.dial or "", 1, math.max(0, #(M.dial or "") - 1)); snd("back") end, "стереть", "digit")
-            add("0", function() M.dial = (M.dial or "") .. "0"; snd("select") end, "цифра", "digit")
-            add("☎", function() if (M.dial or "") ~= "" then snd("ring"); sendAct({op="dial", number=M.dial}) else snd("err") end end, "позвонить", "call_good")
-            add("Очистить", function() M.dial = ""; snd("back") end, nil, "small")
-            add("Назад", function() goHome(); snd("back") end, nil, "back")
-        elseif M.screen == "sms" then
-            for threadIndex, th in ipairs(smsThreads()) do add(th.num, function() M.smsThread = th.num;M.smsThreadListSel=threadIndex;setScreen("sms_dialog") end, (th.unread > 0 and ("новых: " .. th.unread .. " • ") or "") .. tostring(th.last or "")) end
-            add("Новое SMS", function()
-                askString("SMS", "Номер", "", function(num)
-                    askString("SMS", "Текст", "", function(txt) sendAct({op="sms", num=num, text=txt}) end)
-                end)
-            end)
-            add("Назад", function() goHome(); snd("back") end, nil, "back")
-        elseif M.screen == "sms_dialog" then
-            add("Ответить", function()
-                local num = M.smsThread or ""
-                askString("SMS", "Текст для " .. num, "", function(txt) sendAct({op="sms", num=num, text=txt}) end)
-            end, M.smsThread)
-            add("Позвонить", function() if M.smsThread then sendAct({op="dial", number=M.smsThread}) end end)
-            add("Назад к SMS", function() setScreen("sms"); snd("back") end, nil, "back")
-            add("Главное меню", function() goHome(); snd("back") end, nil, "back")
-        elseif M.screen == "contacts" then
-            for contactIndex, r in ipairs(rows("contacts")) do add(tostring(r.name or r.num or "Контакт"), function() M.contact = r;M.contactListSel=contactIndex;setScreen("contact_actions") end, tostring(r.num or "")) end
-            add("Добавить контакт", function()
-                askString("Контакт", "Имя", "", function(name)
-                    askString("Контакт", "Номер", "", function(num) sendAct({op="contact_add", name=name, num=num}) end)
-                end)
-            end)
-            add("Назад", function() goHome(); snd("back") end, nil, "back")
-        elseif M.screen == "contact_actions" then
-            local r = M.contact or {}
-            add("Позвонить", function() if r.num then sendAct({op="dial", number=r.num}) end end, tostring(r.num or ""))
-            add("SMS", function() askString("SMS", "Текст для " .. tostring(r.num or ""), "", function(txt) sendAct({op="sms", num=r.num or "", text=txt}) end) end)
-            add("Удалить", function() if r.i then sendAct({op="contact_del", i=r.i}) end; setScreen("contacts") end, nil, "call_bad")
-            add("Назад", function() setScreen("contacts"); snd("back") end, nil, "back")
-        elseif M.screen == "notes" then
-            for _, r in ipairs(rows("notes")) do add(tostring(r.text or "Заметка"), function() end, "заметка") end
-            add("Добавить заметку", function() askString("Заметка", "Текст", "", function(txt) sendAct({op="note_add", text=txt}) end) end)
-            add("Удалить выбранную", function() sendAct({op="note_del", i=math.max(1, M.listSel)}) end, nil, "call_bad")
-            add("Обновить", function() sendAct({op="note_query"}); snd("select") end, nil, "small")
-            add("Назад", function() goHome(); snd("back") end, nil, "back")
-        elseif M.screen=="jobs"then
-            for _,r in ipairs(rows("jobs"))do add(tostring(r.fac or"")..": "..tostring(r.title or""),function()end,tostring(r.kind or"").." "..tostring(r.pay or r.reward or""))end;add("Обновить",function()sendAct({op="jobs_query"});snd("select")end,nil,"small");add("Назад",function()goHome();snd("back")end,nil,"back")
-        elseif M.screen=="taxi"then
-            local td=(M.data.taxi or{}).data
-            if istable(td)then add("Статус: "..tostring(td.status or"ожидание"),function()end,(td.driverName~=""and("Водитель: "..td.driverName)or"Идёт поиск водителя")..((tonumber(td.fare)or 0)>0 and(" • "..tostring(td.fare))or""));add("Отменить заказ",function()sendAct({op="taxi_cancel"})end,nil,"call_bad")
-            else add("ВЫЗВАТЬ ТАКСИ",function()sendAct({op="taxi_call"})end,"Место подачи определяется по вашей текущей позиции","call_good")end
-            add("Обновить",function()sendAct({op="taxi_query"});snd("select")end,nil,"small");add("Назад",function()goHome();snd("back")end,nil,"back")
-        elseif M.screen == "fac" then
-            local d = (M.data.fac or {}).data or {}
-            for _, r in ipairs(d.rows or {}) do add((r.online and "● " or "○ ") .. tostring(r.name or "?"), function() end, tostring(r.role or "") .. " / " .. tostring(r.dept or "")) end
-            add("Обновить", function() sendAct({op="fac_query"}); snd("select") end, nil, "small")
-            add("Назад", function() goHome(); snd("back") end, nil, "back")
-        elseif M.screen == "forum" then
-            add("Написать", function() askString("Новая публикация", "Что происходит в городе?", "", function(txt) sendAct({op="forum_post", text=txt}) end) end, nil, "forum_new")
-            add("Обновить", function() sendAct({op="forum_query"}); snd("select") end, nil, "forum_refresh")
-            add("Назад", function() goHome(); snd("back") end, nil, "forum_back")
-            for _, r in ipairs(rows("forum")) do
-                add(tostring(r.author or "Горожанин"), function()
-                    M.forumPost = r
-                    M.forumPostID = tonumber(r.id) or 0
-                    M.forumFeedSel = M.listSel
-                    setScreen("forum_detail")
-                end, tostring(r.text or ""), "forum_post", tonumber(r.id) or 0)
-            end
-        elseif M.screen == "forum_detail" then
-            local post = M.forumPost or {}
-            add(post.liked and "Убрать реакцию" or "Нравится", function()
-                if tonumber(post.id) then sendAct({op="forum_like", id=tonumber(post.id)}) end
-                post.liked = not post.liked
-                post.likes = math.max(0, (tonumber(post.likes) or 0) + (post.liked and 1 or -1))
-            end, nil, "forum_like")
-            add("Ответить", function()
-                askString("Ответ для " .. tostring(post.author or "пользователя"), "Текст ответа", "", function(txt)
-                    sendAct({op="forum_post", text=txt, replyTo=tonumber(post.id) or 0})
-                    setScreen("forum")
-                end)
-            end, nil, "forum_reply")
-            add("К ленте", function() setScreen("forum"); snd("back") end, nil, "forum_back")
-        elseif M.screen == "calc" then
-            for _, b in ipairs({"7","8","9","+","4","5","6","-","1","2","3","*","0","/","C","="}) do
-                add(b, function()
-                    if b == "C" then M.calc = ""; snd("back")
-                    elseif b == "=" then M.calc = calcEval(M.calc); snd("select")
-                    else M.calc = (M.calc or "") .. b; snd("select") end
-                end, nil, (b == "=" and "call_good") or (b == "C" and "call_bad") or "digit")
-            end
-            add("Назад", function() goHome(); snd("back") end, nil, "back")
-        end
+        local build = SCREENS[M.screen]
+        if build then build(add) end
         return items
     end
 

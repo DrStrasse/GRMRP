@@ -303,7 +303,40 @@ ok(MB.Tiers.crappy.sms == false and MB.Tiers.tinkle.apps == true, "флаги: c
 ok(MB.Tiers.crappy.minQ > MB.Tiers.whiz_gold.minQ, "порог сигнала: дешёвый требовательнее (0.35 vs 0.10)")
 ok(#MB.AvailableApps("crappy")==3,"crappy: Телефон+Калькулятор+Такси")
 ok(#MB.AvailableApps("badger")==5,"badger: +SMS+Контакты+Такси")
-ok(#MB.AvailableApps("tinkle")==9,"tinkle: все приложения + Такси")
+ok(#MB.AvailableApps("tinkle")==10,"tinkle: все приложения + Такси") -- 9 было устаревшим: Форум добавили в реестр раньше, чем в эту строку
+
+-- ══ 1b. Реестр приложений и экранов (ГРМ §5.4) ═══════════════════════
+P("== 1b. Реестр MB.AppDefs ==")
+local defById = {}
+for _, d in ipairs(MB.AppDefs or {}) do defById[d.id] = d end
+ok(#(MB.AppDefs or {}) == 11, "11 записей: все приложения и пункты телефона")
+ok(defById.dial and defById.dial.screen == "dial" and not defById.dial.tier,
+    "Телефон доступен всегда и открывает свой экран")
+ok(defById.sms and defById.sms.tier == "sms" and defById.sms.query == "sms_read",
+    "SMS: флаг тарифа и запрос ленты при входе")
+ok(defById.power and defById.power.homeOnly,
+    "Управление — пункт интерфейса, в описании тарифа не показывается")
+ok(defById.taxi and defById.taxi.query == "taxi_query",
+    "Такси тянет живой диспетчер")
+-- AvailableApps обязана быть выводом реестра, а не вторым его описанием:
+local names = MB.AvailableApps("tinkle")
+local want = 0
+for _, d in ipairs(MB.AppDefs) do if not d.homeOnly then want = want + 1 end end
+ok(#names == want, "описание полного тарифа = весь реестр без homeOnly")
+local seen = {} for _, n in ipairs(names) do seen[n] = true end
+ok(not seen["Управление"] and seen["Такси"] and seen["Форум"],
+    "в описании тарифа нет интерфейса, но есть приложения")
+-- лестница a.id и двойной учёт гейтинга запрещены сторожем sim_slop_budget;
+-- текстовая рамка: обработчик входа не знает отдельных приложений
+local ms = (function() local f = io.open("lua/autorun/sh_grm_mobile.lua", "rb") local s = f:read("*a") f:close() return s end)()
+ok(ms:find('a.id == "dial"', 1, true) == nil and ms:find("elseif a.id", 1, true) == nil,
+    "вход в приложение — без лестницы по id")
+ok(ms:find("function SCREENS.home(add)", 1, true) ~= nil
+    and ms:find("function SCREENS.forum_detail(add)", 1, true) ~= nil
+    and ms:find('local build = SCREENS[M.screen]', 1, true) ~= nil,
+    "экраны телефона — реестр SCREENS с диспетчером")
+ok(ms:find('\n        elseif M.screen == "', 1, true) == nil,
+    "лестницы экранов в screenItems больше нет (двухветочный набор цифр — не лестница)")
 
 -- ══ 2. Номера и сигнал ════════════════════════════════════════════════
 P("== 2. Номера и сигнал ==")

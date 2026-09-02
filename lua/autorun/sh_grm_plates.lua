@@ -2793,30 +2793,43 @@ if SERVER then
     end)
     concommand.Add("grm_plate_status", function(ply) chatCommand(ply, "/номер_статус") end)
 
-    --[[ Подгонка надписи прямо в игре: смотришь на знак, крутишь — видно
-         сразу, и настройка сохраняется для всех. ]]
+    --[[ РЕЕСТР РЕЖИМОВ ПОДГОНКИ (ГРМ §5.4). Подгонка надписи прямо в игре:
+         смотришь на знак, крутишь — видно сразу, и настройка сохраняется
+         для всех. Раньше восемь веток if/elseif переписывали поле по имени
+         `what`; наклон и сдвиг имели общие ветки `tiltP or tiltY or tiltR`
+         — верный признак, что это режимы одной таблицы. Новый режим теперь
+         одна запись, а неизвестный ключ (в т.ч. «show») молча ничего не
+         меняет и лишь показывает текущие значения, как и раньше. ]]
+    local RENDER_ADJUST = {
+        yaw = function(r, v) r.yaw = ((tonumber(r.yaw) or 0) + (v or 90)) % 360 end,
+        axis = function(r)
+            local order = { auto = "x", x = "y", y = "z", z = "auto" }
+            r.axis = order[tostring(r.axis or "auto")] or "auto"
+        end,
+        flip = function(r) r.flip = not r.flip end,
+        scale = function(r, v) r.scale = math.Clamp(v or 1, 0.2, 3) end,
+        offset = function(r, v) r.offset = math.Clamp(v or 1.5, 0, 12) end,
+        -- reset возвращает новую таблицу: диспетчер заменит PL.Render целиком
+        reset = function() return PL.NormalizeRender({ axis = "auto", yaw = 90, scale = 1, offset = 1.5 }) end,
+    }
+    -- три оси наклона и две оси сдвига — одна формула, не три и две ветки:
+    -- расхождение шага между ними было бы неотличимо глазом в лестнице
+    for _, f in ipairs({ "tiltP", "tiltY", "tiltR" }) do
+        RENDER_ADJUST[f] = function(r, v) r[f] = math.Clamp((tonumber(r[f]) or 0) + (v or 15), -180, 180) end
+    end
+    for _, f in ipairs({ "moveX", "moveY" }) do
+        RENDER_ADJUST[f] = function(r, v) r[f] = math.Clamp((tonumber(r[f]) or 0) + (v or 1), -24, 24) end
+    end
+
     function renderCommand(ply, what, value)
         if not (IsValid(ply) and ply:IsSuperAdmin()) then
             notify(ply, "Настройка знаков — только суперадмин.")
             return
         end
-        if what == "yaw" then
-            PL.Render.yaw = ((tonumber(PL.Render.yaw) or 0) + (tonumber(value) or 90)) % 360
-        elseif what == "axis" then
-            local order = { auto = "x", x = "y", y = "z", z = "auto" }
-            PL.Render.axis = order[tostring(PL.Render.axis or "auto")] or "auto"
-        elseif what == "flip" then
-            PL.Render.flip = not PL.Render.flip
-        elseif what == "scale" then
-            PL.Render.scale = math.Clamp(tonumber(value) or 1, 0.2, 3)
-        elseif what == "offset" then
-            PL.Render.offset = math.Clamp(tonumber(value) or 1.5, 0, 12)
-        elseif what == "tiltP" or what == "tiltY" or what == "tiltR" then
-            PL.Render[what] = math.Clamp((tonumber(PL.Render[what]) or 0) + (tonumber(value) or 15), -180, 180)
-        elseif what == "moveX" or what == "moveY" then
-            PL.Render[what] = math.Clamp((tonumber(PL.Render[what]) or 0) + (tonumber(value) or 1), -24, 24)
-        elseif what == "reset" then
-            PL.Render = PL.NormalizeRender({ axis = "auto", yaw = 90, scale = 1, offset = 1.5 })
+        local adj = RENDER_ADJUST[what]
+        if adj then
+            local replaced = adj(PL.Render, tonumber(value))
+            if replaced then PL.Render = replaced end
         end
         PL.Render = PL.NormalizeRender(PL.Render)
         PL.SaveRender()

@@ -52,54 +52,113 @@ local COL = {
 
 --[[ ТИПЫ БЛОКОВ. Одна таблица описывает и палитру, и отрисовку, и
      разбор в формат сервера: добавить новый вид блока — значит дописать
-     сюда строку, а не править четыре места. ]]
+     сюда строку, а не править четыре места.
+     caption — заголовок блока в графе (строка или функция от данных);
+     save    — перенос данных блока в формат квеста (см. Q.BlocksToQuest).
+     Раньше и то, и другое жило отдельными лестницами if kind == ..., и
+     новый вид блока приходилось синхронно вписывать в три места. ]]
 Q.BlockTypes = {
-    { id = "start",    name = "СТАРТ",     color = Color(90, 170, 250),  hint = "Точка входа. С неё NPC начинает разговор.", once = true },
-    { id = "dialogue", name = "РЕПЛИКА",   color = Color(70, 190, 200),  hint = "Слова NPC и ответы игрока." },
-    { id = "step",     name = "ЭТАП",      color = Color(245, 195, 70),  hint = "Цель: дойти, принести, убить, поговорить." },
-    { id = "cutscene", name = "КАТ-СЦЕНА", color = Color(180, 130, 240), hint = "Ролик с камерами. Точки ставятся тулом." },
-    { id = "music",    name = "МУЗЫКА",    color = Color(240, 140, 190), hint = "Звук или трек в этой точке сюжета." },
-    { id = "reward",   name = "НАГРАДА",   color = Color(70, 185, 110),  hint = "Деньги и предметы." },
-    { id = "achieve",  name = "АЧИВКА",    color = Color(250, 160, 80),  hint = "Достижение со своей выплатой." },
-    { id = "checkpoint", name = "ЧЕКПОИНТ", color = Color(235, 90, 90),  hint = "Точка на карте. Дошёл — сработали связанные блоки." },
-    { id = "finish",   name = "ФИНИШ",     color = Color(210, 75, 75),   hint = "Конец квеста.", once = true },
+    { id = "start",    name = "СТАРТ",     color = Color(90, 170, 250),  hint = "Точка входа. С неё NPC начинает разговор.", once = true,
+      caption = "Начало квеста" },
+    { id = "dialogue", name = "РЕПЛИКА",   color = Color(70, 190, 200),  hint = "Слова NPC и ответы игрока.",
+      caption = function(d) return tostring(d.text or "") ~= "" and tostring(d.text) or "Новая реплика" end,
+      save = function(out, b, d)
+          -- фаза обязана быть одной из трёх, иначе квест проигнорирует реплику
+          local phase = ({ offer = 1, active = 1, complete = 1 })[tostring(d.phase)] and d.phase or "offer"
+          local list = out.dialogue[phase]
+          list[#list + 1] = {
+              id = tostring(d.id or b.uid), speaker = d.speaker, text = d.text,
+              next = d.next, choices = table.Copy(d.choices or {}),
+              _gx = math.floor(b.x or 0), _gy = math.floor(b.y or 0),
+          }
+      end },
+    { id = "step",     name = "ЭТАП",      color = Color(245, 195, 70),  hint = "Цель: дойти, принести, убить, поговорить.",
+      caption = function(d) return tostring(d.title or "") ~= "" and tostring(d.title) or "Новый этап" end,
+      save = function(out, b, d)
+          local s = table.Copy(d)
+          s._gx, s._gy = math.floor(b.x or 0), math.floor(b.y or 0)
+          out.steps[#out.steps + 1] = s
+      end },
+    { id = "cutscene", name = "КАТ-СЦЕНА", color = Color(180, 130, 240), hint = "Ролик с камерами. Точки ставятся тулом.",
+      caption = function(d)
+          local n = #(istable(d.cams) and d.cams or {})
+          return n > 0 and (n .. " камер") or "Камер нет — поставьте тулом"
+      end,
+      save = function(out, b, d)
+          local phase = d.phase == "complete" and "complete" or "accept"
+          local cams = table.Copy(d.cams or {})
+          -- координату графа носим первой камерой: тул ставит одну точку на блок
+          if cams[1] then
+              cams[1]._gx, cams[1]._gy = math.floor(b.x or 0), math.floor(b.y or 0)
+          end
+          out.cutscene[phase] = cams
+      end },
+    { id = "music",    name = "МУЗЫКА",    color = Color(240, 140, 190), hint = "Звук или трек в этой точке сюжета.",
+      caption = function(d) return tostring(d.sound or "") ~= "" and tostring(d.sound) or "Звук не выбран" end,
+      save = function(out, b, d)
+          out.music = table.Copy(d)
+          out.music._gx, out.music._gy = math.floor(b.x or 0), math.floor(b.y or 0)
+      end },
+    { id = "reward",   name = "НАГРАДА",   color = Color(70, 185, 110),  hint = "Деньги и предметы.",
+      caption = function(d)
+          local money = math.floor(tonumber(d.money) or 0)
+          local items = 0
+          for _ in pairs(istable(d.items) and d.items or {}) do items = items + 1 end
+          if money <= 0 and items == 0 then return "Награда не задана" end
+          local parts = {}
+          if money > 0 then parts[#parts + 1] = money .. " GRM" end
+          if items > 0 then parts[#parts + 1] = items .. " предм." end
+          return table.concat(parts, " + ")
+      end,
+      save = function(out, b, d)
+          out.rewards.money = math.max(0, math.floor(tonumber(d.money) or 0))
+          out.rewards.items = table.Copy(d.items or {})
+          out.rewards._gx, out.rewards._gy = math.floor(b.x or 0), math.floor(b.y or 0)
+      end },
+    { id = "achieve",  name = "АЧИВКА",    color = Color(250, 160, 80),  hint = "Достижение со своей выплатой.",
+      caption = function(d) return tostring(d.name or "") ~= "" and tostring(d.name) or "Достижение" end,
+      save = function(out, b, d)
+          out.achievement = table.Copy(d)
+          out.achievement.enabled = true
+          out.achievement._gx, out.achievement._gy = math.floor(b.x or 0), math.floor(b.y or 0)
+      end },
+    { id = "checkpoint", name = "ЧЕКПОИНТ", color = Color(235, 90, 90),  hint = "Точка на карте. Дошёл — сработали связанные блоки.",
+      save = function(out, b, d)
+          --[[ Чекпоинтов может быть много, поэтому это СПИСОК, а не
+               одиночное поле. id блока = id точки: по нему граф ищет
+               связи, а прогресс помнит, что точка пройдена. ]]
+          out.checkpoints = out.checkpoints or {}
+          local cp = table.Copy(d)
+          --[[ Пустая строка это НЕ nil: `d.id or b.uid` её не заменит,
+               и точка сохранилась бы с пустым id — связи графа тут же
+               потеряли бы источник. Проверяем явно. ]]
+          local rawID = tostring(d.id or "")
+          if rawID == "" then rawID = tostring(b.uid or "") end
+          cp.id = rawID:gsub("^cp_", "")
+          if cp.id == "" then cp.id = "cp" .. (#(out.checkpoints) + 1) end
+          cp._gx, cp._gy = math.floor(b.x or 0), math.floor(b.y or 0)
+          out.checkpoints[#out.checkpoints + 1] = cp
+      end },
+    { id = "finish",   name = "ФИНИШ",     color = Color(210, 75, 75),   hint = "Конец квеста.", once = true,
+      caption = "Квест завершён" },
 }
 
+local Q_BY_ID = {}
+for _, b in ipairs(Q.BlockTypes) do Q_BY_ID[b.id] = b end
+
 function Q.BlockDef(kind)
-    for _, b in ipairs(Q.BlockTypes) do if b.id == kind then return b end end
-    return Q.BlockTypes[2]
+    return Q_BY_ID[kind] or Q.BlockTypes[2]
 end
 
---- Заголовок блока в графе: коротко и по делу.
+--- Заголовок блока в графе: коротко и по делу. Формулировка — в Q.BlockTypes
+--- рядом с названием и подсказкой, поэтому заголовок не может отстать от вида.
 function Q.BlockCaption(block)
     if not istable(block) then return "" end
-    local d = block.data or {}
-    if block.kind == "dialogue" then
-        return tostring(d.text or "") ~= "" and tostring(d.text) or "Новая реплика"
-    elseif block.kind == "step" then
-        return tostring(d.title or "") ~= "" and tostring(d.title) or "Новый этап"
-    elseif block.kind == "reward" then
-        local money = math.floor(tonumber(d.money) or 0)
-        local items = 0
-        for _ in pairs(istable(d.items) and d.items or {}) do items = items + 1 end
-        if money <= 0 and items == 0 then return "Награда не задана" end
-        local parts = {}
-        if money > 0 then parts[#parts + 1] = money .. " GRM" end
-        if items > 0 then parts[#parts + 1] = items .. " предм." end
-        return table.concat(parts, " + ")
-    elseif block.kind == "achieve" then
-        return tostring(d.name or "") ~= "" and tostring(d.name) or "Достижение"
-    elseif block.kind == "cutscene" then
-        local n = #(istable(d.cams) and d.cams or {})
-        return n > 0 and (n .. " камер") or "Камер нет — поставьте тулом"
-    elseif block.kind == "music" then
-        return tostring(d.sound or "") ~= "" and tostring(d.sound) or "Звук не выбран"
-    elseif block.kind == "start" then
-        return "Начало квеста"
-    elseif block.kind == "finish" then
-        return "Квест завершён"
-    end
-    return ""
+    local def = Q_BY_ID[block.kind]
+    local cap = def and def.caption
+    if not cap then return "" end
+    if isfunction(cap) then return cap(block.data or {}) end
+    return cap
 end
 
 --[[ ПЕРЕНОС ТЕКСТА. Блок показывает начало содержимого, а не обрубок на
@@ -404,54 +463,12 @@ function Q.BlocksToQuest(work, blocks)
     out.rewards = { money = 0, items = {} }
     out.music = nil
 
+    -- Диспетчер: как именно блок переносится в квест, знает сам вид
+    -- (Q.BlockTypes[...].save). Порядок обхода — порядок блоков, он и был
+    -- единым проходом; неизвестный вид молча пропустим, как и раньше.
     for _, b in ipairs(blocks or {}) do
-        local d = b.data or {}
-        if b.kind == "dialogue" then
-            local phase = ({ offer = 1, active = 1, complete = 1 })[tostring(d.phase)] and d.phase or "offer"
-            local list = out.dialogue[phase]
-            list[#list + 1] = {
-                id = tostring(d.id or b.uid), speaker = d.speaker, text = d.text,
-                next = d.next, choices = table.Copy(d.choices or {}),
-                _gx = math.floor(b.x or 0), _gy = math.floor(b.y or 0),
-            }
-        elseif b.kind == "step" then
-            local s = table.Copy(d)
-            s._gx, s._gy = math.floor(b.x or 0), math.floor(b.y or 0)
-            out.steps[#out.steps + 1] = s
-        elseif b.kind == "cutscene" then
-            local phase = d.phase == "complete" and "complete" or "accept"
-            local cams = table.Copy(d.cams or {})
-            if cams[1] then
-                cams[1]._gx, cams[1]._gy = math.floor(b.x or 0), math.floor(b.y or 0)
-            end
-            out.cutscene[phase] = cams
-        elseif b.kind == "music" then
-            out.music = table.Copy(d)
-            out.music._gx, out.music._gy = math.floor(b.x or 0), math.floor(b.y or 0)
-        elseif b.kind == "reward" then
-            out.rewards.money = math.max(0, math.floor(tonumber(d.money) or 0))
-            out.rewards.items = table.Copy(d.items or {})
-            out.rewards._gx, out.rewards._gy = math.floor(b.x or 0), math.floor(b.y or 0)
-        elseif b.kind == "achieve" then
-            out.achievement = table.Copy(d)
-            out.achievement.enabled = true
-            out.achievement._gx, out.achievement._gy = math.floor(b.x or 0), math.floor(b.y or 0)
-        elseif b.kind == "checkpoint" then
-            --[[ Чекпоинтов может быть много, поэтому это СПИСОК, а не
-                 одиночное поле. id блока = id точки: по нему граф ищет
-                 связи, а прогресс помнит, что точка пройдена. ]]
-            out.checkpoints = out.checkpoints or {}
-            local cp = table.Copy(d)
-            --[[ Пустая строка это НЕ nil: `d.id or b.uid` её не заменит,
-                 и точка сохранилась бы с пустым id — связи графа тут же
-                 потеряли бы источник. Проверяем явно. ]]
-            local rawID = tostring(d.id or "")
-            if rawID == "" then rawID = tostring(b.uid or "") end
-            cp.id = rawID:gsub("^cp_", "")
-            if cp.id == "" then cp.id = "cp" .. (#(out.checkpoints) + 1) end
-            cp._gx, cp._gy = math.floor(b.x or 0), math.floor(b.y or 0)
-            out.checkpoints[#out.checkpoints + 1] = cp
-        end
+        local def = Q_BY_ID[b.kind]
+        if def and def.save then def.save(out, b, b.data or {}) end
     end
 
     --[[ СВЯЗИ ГРАФА (исправлено 29.08: «связь в графе с кат-сценой не

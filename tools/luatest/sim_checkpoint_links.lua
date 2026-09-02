@@ -151,9 +151,13 @@ print("\n=== 4b. ПУСТОЙ id НЕ ЛОМАЕТ СОХРАНЕНИЕ ===")
      Точка сохранилась бы с пустым id, и связи снова потеряли бы
      источник — тот же баг, только с другой стороны. ]]
 local b2q = studio:match("function Q%.BlocksToQuest.-\n    return out\nend") or ""
-ok(b2q:find('rawID == ""', 1, true) ~= nil,
+-- сохранение чекпоинта живёт в его типе (Q.BlockTypes[..].save, ГРМ §5.4),
+-- поэтому регион проверки — запись реестра от id до id, а не функция-цикл
+local cpDef = studio:match('id = "checkpoint".-id = "finish"') or ""
+ok(b2q ~= "", "BlocksToQuest найдена")
+ok(cpDef:find('rawID == ""', 1, true) ~= nil,
     "пустой id распознаётся отдельно от nil")
-ok(b2q:find('cp.id == ""', 1, true) ~= nil,
+ok(cpDef:find('cp.id == ""', 1, true) ~= nil,
     "и заменяется запасным, а не уходит в квест пустым")
 
 print("\n=== 5. ЯДРО ЗАПУСКАЕТ СВЯЗАННЫЕ БЛОКИ ===")

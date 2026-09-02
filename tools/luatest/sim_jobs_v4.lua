@@ -23,7 +23,7 @@ ok(v4:find("function JB.CallTaxi",1,true)and v4:find('s=="/calltaxi"',1,true),"p
 ok(v4:find("TaxiRequests",1,true)and v4:find("acceptTaxi",1,true)and v4:find("GRM_Taxi_RequestSweep",1,true),"taxi dispatch lifecycle")
 ok(v4:find("PlayerEnteredVehicle",1,true)and v4:find("Поездка на такси",1,true),"passenger boarding pays driver")
 ok(v4:find("JB.PushTracker(driver)",1,true)and v4:find("Маркер клиента",1,true),"accepted call creates driver marker")
-ok(mobile:find('apps[#apps + 1] = "Такси"',1,true)and mobile:find('op=="taxi_call"',1,true)and mobile:find('M.screen=="taxi"',1,true),"smartphone taxi app calls live dispatch")
+ok(mobile:find('id = "taxi"',1,true)and mobile:find('name = "Такси"',1,true)and mobile:find('query = "taxi_query"',1,true)and mobile:find("SCREENS.taxi",1,true)and mobile:find('op=="taxi_call"',1,true),"smartphone taxi app calls live dispatch")
 ok(dealer:find("VD.VehicleKinds",1,true)and dealer:find("job_taxi",1,true)and dealer:find("job_garbage",1,true)and dealer:find("job_courier",1,true),"dealer distinguishes personal/government/public/job vehicles")
 ok(dealer:find("GRM_VehicleKind",1,true)and dealer:find("GRM_WorkVehicle",1,true),"spawned vehicle carries authoritative classification")
 ok(dealerUI:find("Государственный",1,true)and dealerUI:find("Общественный",1,true)and dealerUI:find("Работа: такси",1,true),"dealer admin UI selects classification")

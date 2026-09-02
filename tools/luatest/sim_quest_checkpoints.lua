@@ -95,8 +95,13 @@ print("\n=== 4. ЧЕКПОИНТ ПЕРЕЖИВАЕТ СОХРАНЕНИЕ КВ�
      момента кат-сцены. ]]
 local b2q = studio:match("function Q%.BlocksToQuest.-\n    return out\nend") or ""
 ok(b2q ~= "", "BlocksToQuest найдена")
-ok(b2q:find('b.kind == "checkpoint"', 1, true) ~= nil,
-    "чекпоинты собираются из блоков при сохранении")
+--[[ Вид блока знает, как его сохранять (save в Q.BlockTypes, ГРМ §5.4);
+     BlocksToQuest — только диспетчер. Проверяем и диспетчер, и что у
+     чекпоинта есть своя save, пишущая список out.checkpoints. ]]
+ok(b2q:find("def.save(out", 1, true) ~= nil,
+    "BlocksToQuest диспетчеризует сохранение по виду блока")
+local cpDef = palette:match('id = "checkpoint".-save = function.-out%.checkpoints') or ""
+ok(cpDef ~= "", "чекпоинты собираются из блоков при сохранении")
 ok(b2q:find("out.checkpoints", 1, true) ~= nil, "и складываются в поле квеста")
 
 local q2b = studio:match("function Q%.QuestToBlocks.-\n    return blocks") or
