@@ -355,6 +355,10 @@ function GRMChat.OpenInput()
         end
         return
     end
+    if not GRMChat._bannered and GRMChat.AddSystem then
+        GRMChat._bannered = true
+        GRMChat.AddSystem("чат GRM · сборка вечер-9 (03.09) · самодиагностика: /chatdiag")
+    end
     if not IsValid(frame) then build() end
     frame:Show()
     frame:SetPos(16, ScrH() - frame:GetTall() - 196)

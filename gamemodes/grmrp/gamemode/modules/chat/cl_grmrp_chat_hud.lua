@@ -22,6 +22,11 @@ GRMRPChat.INPUT_OPEN = false
 local MAX_LINES = 300 -- рисуем 18, история (окно) видит все 300
 local TTL, FADE = 45, 4          -- сек; fade — последние FADE секунд жизни
 
+-- forward: push зовёт ensureFeed (создать ленту до первой строки) — без
+-- объявления выше local читался бы как глобал-nil (стенды forward_locals /
+-- global_hygiene ловят именно это).
+local feedLayout, ensureFeed
+
 local function push(chan, name, text, t, mine)
     table.insert(GRMRPChat.lines, {
         chan = chan, name = name, text = text, t = t, mine = mine and true or false
@@ -29,6 +34,7 @@ local function push(chan, name, text, t, mine)
     if #GRMRPChat.lines > MAX_LINES then
         table.remove(GRMRPChat.lines, 1)
     end
+    ensureFeed() -- лента живёт панелью: создана до первой строки
 end
 
 function GRMRPChat.AddLine(chanId, name, text, t)
@@ -77,7 +83,7 @@ function GRMRPChat.Diagnose()
     local n = #(GRMRPChat.lines or {})
     local hold = GRMRPChat.INPUT_OPEN and "ввод открыт" or "ввод закрыт"
     local bits = {
-        "чат вечер-8 (03.09)",
+        "чат вечер-9 (03.09), лента = панель",
         "лента: " .. n .. " строк",
         "часы: CurTime (RealTime-дефект ленты исправлен)",
         "enable=" .. (cv and tostring(cv:GetBool()) or "cvar нет → вкл"),
@@ -114,29 +120,45 @@ net.Receive(GRMRP.Net.MSG, function()
     GRMRPChat.AddLine(chanId, name, text, CurTime())
 end)
 
-hook.Add("HUDPaint", "GRMRPChat_HUD", function()
-    local lines = GRMRPChat.lines
-    if #lines == 0 then return end
+--[[ Вечер-9: лента РИСУЕТСЯ ПАНЕЛЬЮ, а не HUDPaint. Третья identical
+     жалоба «не отрисовывает» при доказанном (грепом из зипов) вечер-7/8 —
+     значит ищем не текст, а среду: surface-вызовы из HUDPaint живут в
+     пространстве масштаба HUD (HudScaleMode), и «якорь снизу от ScrH()»
+     на чужих масштабах/разрешениях уезжает за край экрана. Полоса ввода
+     при этом видна — потому что она derma (физические пиксели). Лента
+     переезжает в тот же мир: обычная нено/modal панель над полосой ввода
+     искажается тем, что и ввод, то есть ничем. Буфер, часы и hold-логика
+     не меняются. ]]
+local feed = nil
 
-    local h = ScrH()
-    -- лента поднята: раньше упиралась в панель «СОСТОЯНИЕ» и полосу ввода
-    -- («чат подними по высоте», 03.09); нижняя строка — над верхом полосы
-    -- ввода (ввод стоит на h-262).
-    local x, yBase = 16, h - 268
-    local nowRT = CurTime() -- те же часы, что в штампах push/AddLine
-    local hold = GRMRPChat.INPUT_OPEN or GRMRPChat.HIST_OPEN
+feedLayout = function(p)
+    local w = math.min(780, ScrW() - 32)
+    local hgt = 22 * 18 + 14
+    p:SetBounds(8, math.max(0, ScrH() - 268 - hgt), w, hgt)
+end
 
-    local shown = 0
-    for i = #lines, 1, -1 do
-        local ln = lines[i]
-        if shown < 18 then
-            local age = nowRT - ln.t
-            -- Открыт ввод/история → лента ДЕРЖИТСЯ (не гаснет — ровно та
-            -- «непоказываемость чата», что мешала печатать, §5.17).
+ensureFeed = function()
+    if IsValid(feed) then return feed end
+    feed = vgui.Create("EditablePanel")
+    if not IsValid(feed) then return nil end
+    feed:SetMouseInputEnabled(false)
+    feed:SetKeyInputEnabled(false)
+    feedLayout(feed)
+    feed.Paint = function(p, w, h)
+        local lines = GRMRPChat.lines
+        if not lines or #lines == 0 then return end
+        local nowRT = CurTime() -- те же часы, что в штампах push/AddLine
+        local hold = GRMRPChat.INPUT_OPEN or GRMRPChat.HIST_OPEN
+        local shown = 0
+        for i = #lines, 1, -1 do
+            local ln = lines[i]
+            if shown >= 18 then break end
+            local age = nowRT - (ln.t or 0)
+            -- Открыт ввод/история → лента ДЕРЖИТСЯ (не гаснет, §5.17).
             local lifeLeft = (hold and 1) or math.Clamp((TTL + FADE - age) / FADE, 0, 1)
             if lifeLeft > 0 then
                 shown = shown + 1
-                local y = yBase - shown * 22
+                local x, y = 8, h - 10 - shown * 22
                 local chan = ln.chan
                 local col = chan.color or { r = 255, g = 255, b = 255 }
                 local a = math.floor(255 * lifeLeft + 0.5)
@@ -145,9 +167,9 @@ hook.Add("HUDPaint", "GRMRPChat_HUD", function()
                 local tw = surface.GetTextSize(ln.text) or 40
                 surface.SetDrawColor(8, 14, 23, math.floor(a * 0.55))
                 surface.DrawRect(x - 6, y - 3, math.min(760, 130 + tw), 20)
-                draw.DrawText("[" .. chan.title .. "]", "GRMRP_ChatChip", x, y - 1,
+                draw.DrawText("[" .. (chan.title or "·") .. "]", "GRMRP_ChatChip", x, y - 1,
                     Color(col.r, col.g, col.b, a), TEXT_ALIGN_LEFT)
-                local tx = x + 14 + #chan.title * 9
+                local tx = x + 14 + #tostring(chan.title or "·") * 9
                 if #ln.name > 0 then
                     draw.DrawText(ln.name .. ":", "GRMRP_ChatChip", tx, y - 1,
                         Color(170, 190, 210, a), TEXT_ALIGN_LEFT)
@@ -158,14 +180,30 @@ hook.Add("HUDPaint", "GRMRPChat_HUD", function()
                     TEXT_ALIGN_LEFT)
             end
         end
-    end
-
-    -- подметание просроченных (не держим мусор буфера между боями)
-    if not hold then
-        for i = #lines, 1, -1 do
-            if nowRT - lines[i].t > TTL + FADE then
-                table.remove(lines, i)
+        -- подметание просроченных (не держим мусор буфера между боями)
+        if not hold then
+            for i = #lines, 1, -1 do
+                if nowRT - lines[i].t > TTL + FADE then
+                    table.remove(lines, i)
+                end
             end
         end
     end
+    return feed
+end
+
+hook.Add("OnScreenSizeChanged", "GRMRPChat_FeedPos", function()
+    if IsValid(feed) then feedLayout(feed) end
 end)
+
+-- Оттиск сборки прямо в ленте (вечер-9): открыв ввод, владелец видит,
+-- КАКОЙ сборкой рисует чат, — за спор «починили/не починили» отвечает
+-- одна строка, без консоли. Один раз за сессию клиента.
+function GRMRPChat.AddSystem(text)
+    push({ title = "!", color = { r = 250, g = 185, b = 63 } },
+        tostring(text or ""), "", CurTime(), false)
+end
+
+function GRMRPChat.EnsureFeed()
+    return ensureFeed()
+end

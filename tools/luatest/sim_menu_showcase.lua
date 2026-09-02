@@ -38,7 +38,7 @@ check("GetModel для сверки смены модели", has("mm:GetModel()
 print("\n=== 3. КАДР: РАСЧЁТНАЯ КАМЕРА (авторазмера у панели нет) ===")
 check("FOV портретный задан", has("m:SetFOV(fov)"))
 check("дистанция из высоты модели и fill-коэффициента",
-    has("(hh / 0.86) / (2 * math.tan(math.rad(fov * 0.5)))"))
+    has("(hh / 0.92) / (2 * math.tan(math.rad(fov * 0.5)))"))
 check("camPos ставится явно (дефолт 50,50,50 мелок)", has("m:SetCamPos(Vector(-d * 0.71"))
 check("взгляд — в середину роста", has("m:SetLookAt(Vector(0, 0, hh * 0.5))"))
 check("подсветка поднята (тёмный ambient дефолта)", has("m:SetAmbientLight(Color(120, 124, 132))"))
@@ -59,7 +59,8 @@ check("смена модели — полная пересъёмка", has("appl
 print("\n=== 5. РАЗМЕР И ОТТИСК ===")
 check("окно модели не меньше 240px", has("240, 440"))
 check("карточка раздвинута до 430px", has("320, 430"))
-check("оттиск сборки вечер-8", has("вечер-8 (03.09)"))
+check("оттиск сборки вечер-9", has("вечер-9 (03.09)"))
+check("фолбек-копия групп 1..8 для кривых списков", has("ply:GetBodygroup(i)"))
 
 print(("\nMENU SHOWCASE: %d/%d, провалов: %d"):format(total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

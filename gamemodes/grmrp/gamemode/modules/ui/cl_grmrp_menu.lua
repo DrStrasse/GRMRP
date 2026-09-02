@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-8 (03.09)'
+Menu.BuildStamp = 'вечер-9 (03.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -282,13 +282,26 @@ function Menu.Open()
             local okS, sk = pcall(function() return ply:GetSkin() end)
             if okS and isnumber(sk) then pcall(function() e:SetSkin(sk) end) end
         end
-        if not ply.GetBodyGroups then return end
-        for _, bg in ipairs(ply:GetBodyGroups()) do
-            local idx = tonumber(bg.id)
-            if idx then
-                local ok, val = pcall(function() return ply:GetBodygroup(idx) end)
-                if ok and isnumber(val) then
-                    pcall(function() e:SetBodygroup(idx, val) end)
+        local applied = 0
+        if ply.GetBodyGroups then
+            for _, bg in ipairs(ply:GetBodyGroups()) do
+                local idx = tonumber(bg.id)
+                if idx then
+                    local ok, val = pcall(function() return ply:GetBodygroup(idx) end)
+                    if ok and isnumber(val) then
+                        pcall(function() e:SetBodygroup(idx, val) end)
+                        applied = applied + 1
+                    end
+                end
+            end
+        end
+        if applied == 0 and ply.GetBodygroup then
+            -- кастомная модель без внятного списка групп: грубая копия
+            -- индексов 1..8 (движок сам игнорит несуществующие группы)
+            for i = 1, 8 do
+                local ok, val = pcall(function() return ply:GetBodygroup(i) end)
+                if ok and isnumber(val) and val > 0 then
+                    pcall(function() e:SetBodygroup(i, val) end)
                 end
             end
         end
@@ -312,7 +325,7 @@ function Menu.Open()
             hh = math.Clamp((mx.z or 72) - (mn.z or 0), 48, 200)
         end
         local fov = 28
-        local d = math.max(60, (hh / 0.86) / (2 * math.tan(math.rad(fov * 0.5))))
+        local d = math.max(60, (hh / 0.92) / (2 * math.tan(math.rad(fov * 0.5))))
         m:SetFOV(fov)
         m:SetCamPos(Vector(-d * 0.71, -d * 0.71, hh * 0.58))
         m:SetLookAt(Vector(0, 0, hh * 0.5))

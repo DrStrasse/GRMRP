@@ -29,7 +29,25 @@ for _, pair in ipairs({
     check(ns .. ": само-эхо на CurTime", s:find("name, text, CurTime(), true", 1, true) ~= nil)
 end
 
-print("\n=== САМОДИАГНОСТИКА /chatdiag (вечер-8) ===")
+print("\n=== 3. ЛЕНТА = DERMA-ПАНЕЛЬ (не HUDPaint) — вечер-9 ===")
+for _, pair in ipairs({
+    { "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua", "GRMRPChat" },
+    { "lua/autorun/client/cl_08_grm_chat_hud.lua", "GRMChat" },
+}) do
+    local s2 = read(pair[1])
+    check(pair[2] .. ": рисует EditablePanel", s2:find('vgui.Create("EditablePanel")', 1, true) ~= nil)
+    check(pair[2] .. ": HUDPaint-хука ленты больше нет", s2:find('hook.Add("HUDPaint"', 1, true) == nil)
+    check(pair[2] .. ": панель не перехватывает мышь и клавиши",
+        s2:find("SetMouseInputEnabled(false)", 1, true) ~= nil
+        and s2:find("SetKeyInputEnabled(false)", 1, true) ~= nil)
+    check(pair[2] .. ": панель создаётся лениво из push",
+        s2:find("ensureFeed() --", 1, true) ~= nil)
+    check(pair[2] .. ": переклейка на смену размера экрана",
+        s2:find('OnScreenSizeChanged", "' .. (pair[2] == "GRMRPChat" and "GRMRPChat_FeedPos" or "GRMChat_FeedPos") .. '"', 1, true) ~= nil
+        or s2:find("OnScreenSizeChanged", 1, true) ~= nil)
+end
+
+print("\n=== 4. ОТТИСК СБОРКИ В ЛЕНТЕ + /chatdiag ===")
 do
     local diag = {
         { "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua", "GRMRPChat" },
@@ -40,6 +58,10 @@ do
     check(pair[2] .. ": /chatdiag перехвачендо отправки", s2:find('"/chatdiag"', 1, true) ~= nil
         and s2:find(pair[2] .. ".Diagnose()", 1, true) ~= nil)
     end
+    check("баннер вечер-9 в режиме", read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua")
+        :find("сборка вечер-9 (03.09)", 1, true) ~= nil)
+    check("баннер вечер-9 в порту", read("lua/autorun/client/cl_08_grm_chat_input.lua")
+        :find("сборка вечер-9 (03.09)", 1, true) ~= nil)
     local hud1 = read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua")
     local hud2 = read("lua/autorun/client/cl_08_grm_chat_hud.lua")
     check("режим: Diagnose печатает в ленту через AddLine", hud1:find("function GRMRPChat.Diagnose", 1, true) ~= nil
