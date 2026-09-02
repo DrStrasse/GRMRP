@@ -156,12 +156,12 @@ end
 local function buildBanByID(parent, canFn)
     if not canFn("mod.ban") then return end
     local box = vgui.Create("DPanel", parent)
-    box:Dock(BOTTOM) box:SetTall(92) box:DockMargin(0, 8, 6, 0)
+    box:Dock(BOTTOM) box:SetTall(118) box:DockMargin(0, 8, 6, 0)
     box.Paint = function(_, w, h)
         draw.RoundedBox(8, 0, 0, w, h, C.card)
         draw.SimpleText("БАН ПО ID ИГРОКА (работает и офлайн)", "GRMAdm_Small", 12, 10, C.gold)
         draw.SimpleText("Принимает ИГ-1042, ГР-4821 (найдёт игрока по персонажу) или SteamID64",
-            "GRMAdm_Small", 12, 72, C.dim)
+            "GRMAdm_Small", 12, 98, C.dim)
     end
 
     local query = vgui.Create("DTextEntry", box)
@@ -182,13 +182,21 @@ local function buildBanByID(parent, canFn)
     end)
     find:SetPos(470, 30) find:SetSize(90, 28)
 
+    -- Глобальный бан по железу (заказ 02.09): снимок машины и IP цели
+    -- уезжают в глобальную запись, пока цель в сети; офлайн — только SteamID.
+    local hw = vgui.Create("DCheckBoxLabel", box)
+    hw:SetPos(12, 62) hw:SetSize(430, 20)
+    hw:SetText("бан по железу: снимок машины и IP (нужен игрок в сети)")
+    hw:SetValue(1) hw:SizeToContents()
+
     local ban = btn(box, "ЗАБАНИТЬ", C.red, function()
         local q = string.Trim(query:GetValue() or "")
         if q == "" then return end
         Derma_Query(("Забанить по номеру «%s» на %s мин?"):format(q, minutes:GetValue() or "60"),
             "Бан по ID", "Забанить", function()
                 act("ban_id", "", { query = q, minutes = tonumber(minutes:GetValue()) or 60,
-                    reason = reason:GetValue() })
+                    reason = reason:GetValue(),
+                    hwid = not (hw.GetBool and not hw:GetBool()) })
             end, "Отмена")
     end)
     ban:SetPos(566, 30) ban:SetSize(110, 28)
@@ -363,6 +371,9 @@ local function buildPlayers(pnl)
         action("Кик", "mod.kick", "kick", C.red, { reason = "Нарушение правил" })
         action("Глобальный бан 60 мин", "mod.ban", "ban", C.red, { minutes = 60, reason = "Нарушение правил" })
         action("Глобальный бан навсегда", "mod.ban", "ban", C.red, { minutes = 0, reason = "Нарушение правил" })
+        -- Считывание машины (заказ 02.09): снимок железа цели — в консоль
+        -- админу; тем же путём сервер привязывает отпечаток к бану.
+        action("Снимок машины", "mod.ban", "machine", C.accent)
 
         --[[ БАН НА СЕРВЕРЕ (заказ владельца 21.08): срок и ПРИЧИНУ пишет
              админ, а не подставляет система. Кнопки разбана и бана стоят

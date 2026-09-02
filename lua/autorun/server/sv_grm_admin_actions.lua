@@ -405,6 +405,17 @@ A.ban = { perm = "mod.ban", target = true, label = "Бан",
     fn = function(actor, target, args)
         local minutes = math.Clamp(math.floor(tonumber(args and args.minutes) or 60), 0, 525600)
         local reason = string.sub(tostring(args and args.reason or "Нарушение правил"), 1, 120)
+        --[[ Глобальный бан по железу (заказ владельца 02.09): снимок машины
+             и IP цели записываются ДО кика — после спрашивать не с кого.
+             По умолчанию включён; args.hwid = false — только SteamID. ]]
+        local hwidNote
+        local sb = GRM.ServerBan
+        if sb and sb.GlobalBan and not (args and args.hwid == false) then
+            local okH, msgH = sb.GlobalBan(tostring(target:SteamID64() or ""), rpNameOf(target),
+                minutes, reason, actor, target.GRM_MachineRep,
+                target.IPAddress and target:IPAddress() or "")
+            hwidNote = okH and tostring(msgH) or ("запись не заведена: " .. tostring(msgH))
+        end
         if ULib and ULib.ban then
             pcall(ULib.ban, target, minutes, reason, actor)
         else
@@ -413,6 +424,7 @@ A.ban = { perm = "mod.ban", target = true, label = "Бан",
             target:Kick(reason)
         end
         return true, ("%s забанен на %d мин: %s"):format(rpNameOf(target), minutes, reason)
+            .. (hwidNote and (" · " .. hwidNote) or "")
     end }
 
 --[[ БАН НА СЕРВЕРЕ (заказ владельца 21.08). Человек остаётся в игре, но
@@ -459,7 +471,20 @@ A.unban = { perm = "mod.ban", target = false, label = "Снять глобаль
             game.ConsoleCommand("writeid\n")
         end
         if GRM.ServerBan and GRM.ServerBan.Unban then GRM.ServerBan.Unban(actor, sid64) end
+        -- Глобальная книга: снимки машины/IP тоже снимаются, иначе новый
+        -- аккаунт человека остался бы под молчаливым добаном.
+        local lifted = GRM.ServerBan and GRM.ServerBan.GlobalLift and GRM.ServerBan.GlobalLift(sid64)
         return true, "Бан снят: " .. tostring(steamid or sid64)
+            .. (lifted and " · запись по железу удалена" or "")
+    end }
+
+--[[ СНИМОК МАШИНЫ (заказ 02.09). Читает отпечаток клиента: в сети — свежий
+     запрос через GRM.ServerBan, иначе кэш последнего отчёта. ]]
+A.machine = { perm = "mod.ban", target = true, label = "Снимок машины",
+    fn = function(actor, target)
+        local sb = GRM.ServerBan
+        if not (sb and sb.RequestMachine) then return false, "Модуль банов не загружен" end
+        return sb.RequestMachine(actor, target)
     end }
 
 --[[ Бан по НОМЕРУ ИГРОКА (заказ владельца 19.08). Работает и по офлайн-
@@ -483,15 +508,26 @@ A.ban_id = { perm = "mod.ban", target = false, label = "Бан по ID игро�
         for _, p in ipairs(player.GetAll()) do
             if tostring(p:SteamID64() or "") == account then target = p break end
         end
+        local sb = GRM.ServerBan
+        local function globalRow(rep, ip)
+            if not (sb and sb.GlobalBan and not (args and args.hwid == false)) then return end
+            sb.GlobalBan(account, charRec and charRec.name or account, minutes, reason, actor, rep, ip)
+        end
         if IsValid(target) then
             local okTarget, why = AD.CanTarget(actor, target)
             if not okTarget then return false, why end
+            -- Снимок машины — до кика (онлайн-путь, заказ 02.09).
+            globalRow(target.GRM_MachineRep, target.IPAddress and target:IPAddress() or "")
             if ULib and ULib.ban then pcall(ULib.ban, target, minutes, reason, actor)
             else
                 game.ConsoleCommand(("banid %d %s kick\n"):format(minutes, target:SteamID()))
                 target:Kick(reason)
             end
         else
+            -- Офлайн: считать железо не с кого — запись по одному SteamID;
+            -- отпечаток добавится, если человек всплывёт в сети и админ
+            -- перепишет бан с живого снимка (или нажмёт «Снимок машины»).
+            globalRow(nil, "")
             local steamID = util.SteamIDFrom64 and util.SteamIDFrom64(account) or account
             if ULib and ULib.addBan then pcall(ULib.addBan, steamID, minutes, reason, nil, actor)
             else game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamID)) end

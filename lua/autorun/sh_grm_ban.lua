@@ -11,7 +11,10 @@
         территории — точку и радиус задаёт суперадмин.
 
       • «Глобальный бан» — жёсткий: игрок выкидывается с сервера штатным
-        баном (ULib/ULX, иначе banid).
+        баном (ULib/ULX, иначе banid). С 02.09 бан сопровождается СНИМКОМ
+        МАШИНЫ (см. секцию «ГЛОБАЛЬНЫЙ БАН ПО ЖЕЛЕЗУ» ниже): отпечаток
+        клиента связывается с записью и при повторном входе с того же
+        «железа» под другим SteamID аккаунт добанавливается автоматически.
 
     Хранение: data/grm_admin/serverbans.json (кто и до какого времени) и
     data/grm_admin/serverban_zone.json (точка и радиус для каждой карты).
@@ -25,7 +28,7 @@ if SERVER then AddCSLuaFile() end
 GRM = GRM or {}
 GRM.ServerBan = GRM.ServerBan or {}
 local SB = GRM.ServerBan
-SB.Version = "1.1.0"
+SB.Version = "1.2.0"
 
 --[[ Звук отбывающего наказание (заказ владельца 21.08): забаненный должен
      «звучать» — от скелета идут зомби-стоны, его слышно и не спутать с
@@ -41,7 +44,65 @@ SB.ZombieSounds = {
 
 SB.Model = "models/player/skeleton.mdl"
 SB.Material = "debugwhite"
-SB.Net = { SYNC = "GRM_ServerBan_Sync", LIST_REQ = "GRM_ServerBan_ListReq", LIST = "GRM_ServerBan_List" }
+SB.Net = { SYNC = "GRM_ServerBan_Sync", LIST_REQ = "GRM_ServerBan_ListReq", LIST = "GRM_ServerBan_List",
+    MACHINE = "GRM_ServerBan_Machine", MACHINE_REQ = "GRM_ServerBan_MachineReq" }
+
+--[[ СНИМОК МАШИНЫ (заказ владельца 02.09.2026: «глобал бан — по железу,
+     со считыванием компьютера игрока»).
+
+     Честно о границах метода: чистый Lua GMod НЕ имеет доступа к
+     серийным номерам платы/диска — их не отдаёт движок. Отпечаток
+     («HWID») собирается из стабильных машинных признаков, которые
+     клиент может сообщить сам: ОС, разрешение, режим HDR, набор
+     GPU-фич, язык, чувствительность мыши, список установленных
+     аддонов. Это надёжнее SteamID там, где человек уходит в бан и
+     возвращается вторым аккаунтом со СВОЕГО компьютера, и заметно
+     дешевле прокси-смены IP. Клиент может наврать — поэтому отпечаток
+     НЕ отменяет обычный бан по SteamID/IP, а дополняет его; добан по
+     совпадению оформляется на новый аккаунт тем же способом.
+
+     Поля и порядок канонизации фиксированы SB.MachineFields: менять
+     состав — значит рассинхронизировать все сохранённые отпечатки. ]]
+SB.MachineFields = { "os", "res", "hdr", "gpu", "lang", "sens", "addons", "addonHash" }
+
+--- Каноническая строка снимка: k=v в фиксированном порядке, только скаляры.
+--  Пустые поля в канон НЕ попадают: снимок из одного поля — не отпечаток
+--  (иначе «пустышки» коллизировали бы живые машины).
+function SB.CanonicalMachine(rep)
+    if not istable(rep) then return "" end
+    local parts = {}
+    for _, k in ipairs(SB.MachineFields) do
+        local v = rep[k]
+        if isnumber(v) then v = math.floor(v) end
+        if v ~= nil and tostring(v) ~= "" then
+            parts[#parts + 1] = k .. "=" .. tostring(v)
+        end
+    end
+    if #parts < 2 then return "" end
+    return table.concat(parts, "|")
+end
+
+local function digest(s)
+    if util and isfunction(util.SHA1) then return util.SHA1(s) end
+    -- Фолбэк для окружений без util.SHA1: 32-битный FNV-1a, текстовый префикс
+    -- отличает его от SHA1-хешей (индексы смешивать нельзя).
+    local h = 2166136261
+    for i = 1, #s do h = (h * 16777619 + s:byte(i)) % 4294967296 end
+    return ("fnv%08x"):format(h)
+end
+
+--- Хеш машины по снимку; пустой снимок не имеет хеша (nil).
+function SB.HwidOf(rep)
+    local canon = SB.CanonicalMachine(rep)
+    if canon == "" then return nil end
+    return digest(canon)
+end
+
+--- «1.2.3.4:27015» -> «1.2.3.4»; IPv6 и мусор нормализуются как есть.
+function SB.IpPlain(ip)
+    ip = tostring(ip or "")
+    return ip:match("^(%d+%.%d+%.%d+%.%d+)") or (ip ~= "" and string.lower(ip) or "")
+end
 
 SB.Zone = SB.Zone or { pos = nil, radius = 600, map = "" }
 SB.Bans = SB.Bans or {}
@@ -126,7 +187,7 @@ if SERVER then
     -- Диск — через общую очередь: бан пишется в момент действия, а не пачкой.
     if GRM.Save and GRM.Save.Register then
         GRM.Save.Register("serverban.list", { file = BANS_FILE, label = "Баны на сервере", delay = 2, priority = 2,
-            build = function() ensureDir() return { version = 1, bans = SB.Bans, history = SB.History } end })
+            build = function() ensureDir() return { version = 2, bans = SB.Bans, history = SB.History, global = SB.Global or {} } end })
         GRM.Save.Register("serverban.zone", { file = ZONE_FILE, label = "Точка отбывания бана", delay = 2,
             build = function() ensureDir() return { version = 1, zones = SB.Zones or {} } end })
     end
@@ -134,7 +195,7 @@ if SERVER then
     local function saveBans(why)
         if GRM.Save and GRM.Save.Mark then return GRM.Save.Mark("serverban.list", why) end
         ensureDir()
-        local ok, raw = pcall(util.TableToJSON, { version = 1, bans = SB.Bans, history = SB.History }, true)
+        local ok, raw = pcall(util.TableToJSON, { version = 2, bans = SB.Bans, history = SB.History, global = SB.Global or {} }, true)
         if ok and isstring(raw) then file.Write(BANS_FILE, raw) return true end
         return false
     end
@@ -209,6 +270,30 @@ if SERVER then
                 if istable(row) then SB.History[#SB.History + 1] = row end
             end
         end
+        --[[ Глобальная книга (v2): сетевые записи и ИНДЕКСЫ отпечатков/IP —
+             индексы производные, пересобираются от записей, отдельного
+             хранения не требуют. В файлах v1 раздела просто нет. ]]
+        SB.Global = {}
+        SB.HwidIndex, SB.IpIndex = {}, {}
+        if istable(data) and istable(data.global) then
+            for sid64, rec in pairs(data.global) do
+                if isstring(sid64) and istable(rec) then
+                    local until_ = math.floor(tonumber(rec["until"]) or 0)
+                    local row = {
+                        ["until"] = until_,
+                        permanent = rec.permanent == true or (until_ <= 0 and rec.paused ~= true) or nil,
+                        reason = tostring(rec.reason or ""), by = tostring(rec.by or ""),
+                        at = math.floor(tonumber(rec.at) or 0), name = tostring(rec.name or ""),
+                        hwid = isstring(rec.hwid) and rec.hwid or nil,
+                        ip = isstring(rec.ip) and rec.ip or nil,
+                        machine = istable(rec.machine) and rec.machine or nil,
+                    }
+                    SB.Global[sid64] = row
+                    if row.hwid then SB.HwidIndex[row.hwid] = sid64 end
+                    if row.ip then SB.IpIndex[row.ip] = sid64 end
+                end
+            end
+        end
         --[[ 21.08. Точка хранится ПЛОСКОЙ таблицей {x,y,z}, а не Vector.
              Причина, по которой она «слетала» после рестарта: Vector — это
              userdata, и util.TableToJSON пишет его пустышкой. Файл на диске
@@ -230,8 +315,9 @@ if SERVER then
             end
         end
         local mine = SB.Zones[mapName()]
-        print(("[GRM Server Ban] загружено: банов %d, точка отбывания на карте %s"):format(
-            table.Count(SB.Bans), mine and ("есть, радиус " .. mine.radius) or "НЕ ЗАДАНА"))
+        print(("[GRM Server Ban] загружено: банов %d, глобальных записей %d, точка отбывания на карте %s"):format(
+            table.Count(SB.Bans), table.Count(SB.Global or {}),
+            mine and ("есть, радиус " .. mine.radius) or "НЕ ЗАДАНА"))
         return true
     end
 
@@ -546,6 +632,237 @@ if SERVER then
         net.WriteTable({ bans = SB.List(), history = history })
         net.Send(ply)
     end)
+
+    -------------------------------------------------------------------
+    -- ГЛОБАЛЬНЫЙ БАН ПО ЖЕЛЕЗУ: УЧЁТНАЯ КНИГА И ИНДЕКСЫ
+    -------------------------------------------------------------------
+    --[[ Глобальные (сетевые) записи живут ОТДЕЛЬНО от деморганов:
+             SB.Bans   — ключ персонаж (RP-наказание внутри игры);
+             SB.Global — ключ SteamID64 (аккант-бан на вход).
+         Индексы SB.HwidIndex/SB.IpIndex — производные от записей карты
+         «отпечаток/IP -> SteamID64»; пересобираются при загрузке, чтобы
+         никакой отдельной правки не требовалось. ]]
+    SB.Global = SB.Global or {}
+    SB.HwidIndex = SB.HwidIndex or {}
+    SB.IpIndex = SB.IpIndex or {}
+    SB.MachineLog = SB.MachineLog or {}   -- sid64 -> последний снимок (для админки)
+    SB.MachineWait = SB.MachineWait or {} -- sid64 цели -> админ, ждущий снимок
+
+    local function reindexRecord(sid64, rec)
+        if not istable(rec) then return end
+        if isstring(rec.hwid) and rec.hwid ~= "" then SB.HwidIndex[rec.hwid] = sid64 end
+        if isstring(rec.ip) and rec.ip ~= "" then SB.IpIndex[rec.ip] = sid64 end
+    end
+
+    local function deindexRecord(sid64)
+        for h, s in pairs(SB.HwidIndex) do if s == sid64 then SB.HwidIndex[h] = nil end end
+        for i, s in pairs(SB.IpIndex) do if s == sid64 then SB.IpIndex[i] = nil end end
+    end
+
+    --- Глобальная запись забанена и жива? (истёкшие — на чистку сторожу)
+    function SB.GlobalRec(sid64)
+        sid64 = tostring(sid64 or "")
+        local rec = SB.Global[sid64]
+        if not istable(rec) then return nil end
+        if not rec.permanent and tonumber(rec["until"]) and tonumber(rec["until"]) <= os.time() then
+            SB.Global[sid64] = nil
+            deindexRecord(sid64)
+            saveBans("глобал бан истёк " .. sid64)
+            return nil
+        end
+        return rec, sid64
+    end
+
+    --- Заббить отпечаток/IP по аккаунту. rep — снимок машины (или nil, если
+    --  игрока нет в сети: офлайн-бан по железу не читается, это честно).
+    function SB.GlobalBan(sid64, name, minutes, reason, actor, rep, ip)
+        sid64 = tostring(sid64 or "")
+        if sid64 == "" or not sid64:match("^%d+$") then return false, "Нет SteamID64 для глобальной записи" end
+        minutes = math.Clamp(math.floor(tonumber(minutes) or 60), 0, 525600)
+        local rec = {
+            ["until"] = minutes > 0 and (os.time() + minutes * 60) or 0,
+            permanent = minutes <= 0 or nil,
+            reason = string.sub(string.Trim(tostring(reason or "Нарушение правил")), 1, 120),
+            by = actorName(actor), at = os.time(),
+            name = tostring(name or ""),
+        }
+        local hwid = SB.HwidOf(rep)
+        if hwid then rec.hwid = hwid end
+        ip = SB.IpPlain(ip)
+        if ip ~= "" then rec.ip = ip end
+        if istable(rep) then
+            rec.machine = {}
+            for _, k in ipairs(SB.MachineFields) do rec.machine[k] = rep[k] end
+            SB.MachineLog[sid64] = { t = os.time(), rep = rep }
+        end
+        SB.Global[sid64] = rec
+        deindexRecord(sid64)
+        reindexRecord(sid64, rec)
+        pushHistory("globalban", sid64, rec, actor)
+        saveBans("глобал бан " .. sid64)
+        return true, "Глобальная запись оформлена" .. (hwid and " · с отпечатком машины" or "")
+    end
+
+    --- Снятие глобальной записи (движковый banid снимает вызывающий код).
+    function SB.GlobalLift(sid64)
+        sid64 = tostring(sid64 or "")
+        if not SB.Global[sid64] then return false, "Глобальной записи нет" end
+        SB.Global[sid64] = nil
+        deindexRecord(sid64)
+        pushHistory("globalunban", sid64, nil, nil)
+        saveBans("глобал разбан " .. sid64)
+        return true, "Глобальная запись снята"
+    end
+
+    --- Человек доигрывает минуты исходного бана — или получает его остаток.
+    local function reEngineBan(ply, rec)
+        local steamid = util.SteamIDFrom64 and util.SteamIDFrom64(tostring(ply:SteamID64() or "")) or nil
+        if not steamid then return end
+        local minutes = 60
+        if rec.permanent then minutes = 0
+        elseif tonumber(rec["until"]) and rec["until"] > os.time() then
+            minutes = math.max(1, math.ceil((rec["until"] - os.time()) / 60))
+        end
+        if ULib and ULib.addBan then
+            pcall(ULib.addBan, steamid, minutes,
+                ("HWID-добан по записи %s: %s"):format(tostring(rec.name or rec.by or ""), rec.reason or ""), nil, nil)
+        else
+            game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamid))
+        end
+        game.ConsoleCommand("writeid\n")
+    end
+
+    --- Отчёт клиента о машине: принять, запомнить, сравнить с индексами.
+    --  Приём один раз на соединение (плюс явный запрос админа) — потоку
+    --  повторных пакетов здесь неоткуда взяться, но жадность клиента
+    --  ограничена этим же флагом.
+    local function acceptMachine(ply, rep)
+        if not IsValid(ply) or not istable(rep) then return end
+        local clean = {}
+        for _, k in ipairs(SB.MachineFields) do
+            local v = rep[k]
+            if isnumber(v) then clean[k] = math.floor(v) end
+            if isstring(v) then clean[k] = string.sub(v, 1, 600) end
+            if isbool(v) then clean[k] = v and "1" or "0" end
+        end
+        local sid64 = accountKey(ply)
+        if sid64 == "" then return end
+        -- Один принятый отчёт на соединение + явно разрешённый запрос админа:
+        -- поток пакетов от «изобретательного» клиента до индексов не доходит.
+        if ply.GRM_MachineDone and not SB.MachineWait[sid64] then return end
+        ply.GRM_MachineDone = true
+        ply.GRM_MachineRep = clean
+        SB.MachineLog[sid64] = { t = os.time(), rep = clean }
+
+        local waiter = SB.MachineWait[sid64]
+        if IsValid(waiter) then
+            SB.MachineWait[sid64] = nil
+            local lines = { "Снимок машины " .. tostring(ply:Nick()) .. " · " .. sid64 }
+            for _, k in ipairs(SB.MachineFields) do
+                lines[#lines + 1] = ("  %s = %s"):format(k, tostring(clean[k] or "—"))
+            end
+            lines[#lines + 1] = "  hwid = " .. tostring(SB.HwidOf(clean) or "—")
+            for _, l in ipairs(lines) do waiter:PrintMessage(HUD_PRINTCONSOLE, "[GRM Ban] " .. l) end
+            if GRM.Notify then GRM.Notify(waiter, "Снимок машины получен (консоль).", 100, 220, 130) end
+        end
+
+        local hit = SB.HwidIndex[SB.HwidOf(clean) or ""]
+        if hit and hit ~= sid64 then
+            local rec = SB.GlobalRec(hit)
+            if rec then
+                announce(("HWID-срабатывание: %s (%s) зашёл с машины забаненного %s — аккаунт добанавливается")
+                    :format(ply:Nick(), sid64, tostring(rec.name or hit)))
+                reEngineBan(ply, rec)
+                pushHistory("hwid-hit", sid64, rec, nil)
+                saveBans("hwid-hit " .. sid64)
+                ply:Kick("Вход с этого компьютера заблокирован (бан по железу). Причина: "
+                    .. tostring(rec.reason or "нарушение правил"))
+            end
+        end
+    end
+    SB.AcceptMachine = acceptMachine
+
+    net.Receive(SB.Net.MACHINE, function(_, ply)
+        acceptMachine(ply, net.ReadTable())
+    end)
+
+    --- Админский запрос снимка: цель в сети — пингуем клиента, есть кэш —
+    --  отвечаем сразу.
+    function SB.RequestMachine(admin, target)
+        if not (IsValid(admin) and IsValid(target) and target:IsPlayer()) then return false, "Цель не в сети" end
+        local sid64 = accountKey(target)
+        local cached = SB.MachineLog[sid64]
+        if cached and istable(cached.rep) then
+            -- Кэш есть — админ получает его тем же путём, что и свежесть:
+            -- acceptMachine от клиента придёт только при переподключении.
+            admin:PrintMessage(HUD_PRINTCONSOLE, "[GRM Ban] снимок из кэга " .. sid64
+                .. ": " .. SB.CanonicalMachine(cached.rep))
+            if GRM.Notify then GRM.Notify(admin, "Показан кэшированный снимок (мог устареть).", 100, 220, 130) end
+            return true, "Снимок из кэша"
+        end
+        SB.MachineWait[sid64] = admin
+        net.Start(SB.Net.MACHINE_REQ)
+        net.Send(target)
+        timer.Simple(10, function() if SB.MachineWait[sid64] == admin then SB.MachineWait[sid64] = nil end end)
+        return true, "Запрос отправлен клиенту"
+    end
+
+    --- Мгновенная проверка по IP на входе (до всяких клиентских отчётов).
+    function SB.CheckJoinIP(ply)
+        if not IsValid(ply) then return end
+        local ip = SB.IpPlain(ply.IPAddress and ply:IPAddress() or "")
+        if ip == "" then return end
+        local hit = SB.IpIndex[ip]
+        local mine = accountKey(ply)
+        if hit and hit ~= mine then
+            local rec = SB.GlobalRec(hit)
+            if rec then
+                announce(("IP-срабатывание: %s (%s) с адреса %s — тот же адрес у забаненного %s")
+                    :format(ply:Nick(), mine, ip, tostring(rec.name or hit)))
+                reEngineBan(ply, rec)
+                pushHistory("ip-hit", mine, rec, nil)
+                ply:Kick("Вход с этого IP-адреса заблокирован (бан по железу/IP)")
+                return true
+            end
+        end
+    end
+
+    hook.Add("PlayerInitialSpawn", "GRM_ServerBan_GlobalJoin", function(ply)
+        SB.CheckJoinIP(ply)
+        -- Снимок машины приедет сам через клиентский хук; пинговать раньше
+        -- смысла нет — до InitPostEntity net-приёмник клиента молчит.
+    end)
+
+    --- Строки глобальной книги для админ-окна и команд.
+    function SB.GlobalList()
+        local rows = {}
+        for sid64, rec in pairs(SB.Global or {}) do
+            local left = -1
+            if not rec.permanent and tonumber(rec["until"]) then
+                left = math.max(0, math.floor(rec["until"] - os.time()))
+            end
+            rows[#rows + 1] = {
+                sid64 = sid64, name = tostring(rec.name or ""), reason = tostring(rec.reason or ""),
+                by = tostring(rec.by or ""), at = math.floor(tonumber(rec.at) or 0),
+                left = left, hwid = tostring(rec.hwid or ""), ip = tostring(rec.ip or ""),
+                hasMachine = istable(rec.machine),
+                online = false,
+            }
+        end
+        for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
+            if IsValid(p) then
+                for _, row in ipairs(rows) do
+                    if row.sid64 == tostring(p:SteamID64() or "") then
+                        row.online = true
+                        row.ip = row.ip ~= "" and row.ip or SB.IpPlain(p.IPAddress and p:IPAddress() or "")
+                        row.hwid = row.hwid ~= "" and row.hwid or tostring(SB.HwidOf(p.GRM_MachineRep) or "")
+                    end
+                end
+            end
+        end
+        table.sort(rows, function(a, b) return a.at > b.at end)
+        return rows
+    end
 
     -------------------------------------------------------------------
     -- ОГРАНИЧЕНИЯ
@@ -1075,6 +1392,69 @@ if CLIENT then
             end
         end
     end)
+
+    -------------------------------------------------------------------
+    -- СНИМОК МАШИНЫ (клиентская половина; сервер — в секции «по железу»)
+    --
+    -- Состав полей жёстко задан SB.MachineFields: клиент собирает, сервер
+    -- канонит и хеширует. Никаких «серийников» здесь намеренно нет —
+    -- движок их не отдаёт, врать про них не будем.
+    -------------------------------------------------------------------
+    local function gpuFlags()
+        local ok, sup = pcall(function() return render.QueryTextureSupport and render.QueryTextureSupport() or {} end)
+        if not ok or not istable(sup) then return "" end
+        local names = {}
+        for k, v in pairs(sup) do if v then names[#names + 1] = tostring(k) end end
+        table.sort(names)
+        return string.sub(table.concat(names, ";"), 1, 600)
+    end
+
+    local function addonDigest()
+        if not (engine and isfunction(engine.GetAddons)) then return 0, "" end
+        local ok, list = pcall(engine.GetAddons)
+        if not ok or not istable(list) then return 0, "" end
+        local names = {}
+        for _, a in ipairs(list) do
+            if istable(a) then names[#names + 1] = tostring(a.title or a.name or "") .. "@" .. tostring(a.workshopid or "") end
+        end
+        table.sort(names)
+        local canon = table.concat(names, "|")
+        return #names, (util and util.SHA1) and util.SHA1(string.sub(canon, 1, 4000)) or #canon
+    end
+
+    local function collectMachine()
+        local count, addonsHash = addonDigest()
+        return {
+            os = (IsWindows and IsWindows() and "win") or (IsLinux and IsLinux() and "linux")
+                or (IsMac and IsMac() and "mac") or "?",
+            res = tostring(ScrW()) .. "x" .. tostring(ScrH()),
+            hdr = (render and render.GetHDR and render.GetHDR()) and "1" or "0",
+            gpu = gpuFlags(),
+            lang = GetConVarString and tostring(GetConVarString("gmod_language")) or "",
+            -- чувствительность мыши — стабильный пользовательско-машинный
+            -- маркер: на новой машине дефолт, у человека — привычное значение
+            sens = GetConVarNumber and tostring(GetConVarNumber("sensitivity")) or "",
+            addons = count,
+            addonHash = tostring(addonsHash or ""),
+        }
+    end
+    SB.CollectMachine = collectMachine
+
+    --- Отправить снимок серверу. Один раз при соединении (сервер принимает
+    --  повторные только когда сам запросил — см. GRM_MachineDone).
+    function SB.SendMachine()
+        net.Start(SB.Net.MACHINE)
+        net.WriteTable(collectMachine())
+        net.SendToServer()
+    end
+
+    -- Первый пакет — сам, без запроса: добан по железу должен случиться
+    -- ДО того, как человек успеет что-то сделать в мире.
+    hook.Add("InitPostEntity", "GRM_ServerBan_MachineJoin", function()
+        timer.Simple(1.5, SB.SendMachine)
+    end)
+    -- Явный запрос админа (окно админки «Снимок машины»).
+    net.Receive(SB.Net.MACHINE_REQ, function() SB.SendMachine() end)
 
     function SB.OpenList()
         net.Start(SB.Net.LIST_REQ)
