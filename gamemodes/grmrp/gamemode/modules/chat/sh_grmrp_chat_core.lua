@@ -24,15 +24,13 @@ local function utf8Clamp(s, maxBytes)
         local extra = 0
         if b >= 194 and b < 224 then extra = 1
         elseif b >= 224 and b < 240 then extra = 2
-        elseif b >= 240 and b < 248 then extra = 3
-        elseif b >= 128 and b < 192 then
-            i = i + 1 -- осиротевший continuation — не расширяем
-            goto continue
+        elseif b >= 240 and b < 248 then extra = 3 end
+        --goto! Парсер GMod не знает goto/labels (урок sh_grm_arrest.lua:285)
+        local orphan = b >= 128 and b < 194 -- continuation без пары — просто шаг
+        if not orphan and i + extra <= maxBytes then
+            lastEnd = i + extra
         end
-        if i + extra > maxBytes then break end
-        lastEnd = i + extra
         i = i + extra + 1
-        ::continue::
     end
     if lastEnd == 0 then return "" end
     return string.sub(s, 1, lastEnd)

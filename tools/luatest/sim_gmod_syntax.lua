@@ -24,7 +24,7 @@ local function scan(cmd)
 end
 
 -- Список всех lua-файлов сборки.
-local files = scan("find lua addons -name '*.lua' 2>/dev/null")
+local files = scan("find lua addons gamemodes -name '*.lua' 2>/dev/null")
 
 local badGoto, badLabel, badContinue = {}, {}, {}
 for _, path in ipairs(files) do

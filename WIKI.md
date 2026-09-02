@@ -21965,7 +21965,13 @@ UTF-8), реестр каналов-деклараций, ParseSay, лестни
 net-фазой с эхо-кастом автора, единая точка входа PlayerSay+net;
 cl_grmrp_chat_hud.lua — лента 60/18 shown, closed-form fade, кириллические
 шрифты extended=true; cl_grmrp_chat.lua — полоса ввода: чипы каналов,
-история ↑/↓ cap 50, Tab-дополнение}. Стенды: tools/luatest/
+история ↑/↓ cap 50, Tab-дополнение}; modules/ui/cl_grmrp_menu.lua — меню
+паузы: перехват gameui по Think (движок не даёт хука на ESC), плавный
+въезд кнопок слева (easeOutQuart, стаггер 50мс, Think только пока идут
+анимации), DModelPanel-персонаж в центре + «отражение» камерой снизу с
+затемнением, карточка (RP-имя/HP/AR/деньги/время/карта, тик 0.5с), быстрые
+настройки DNumSlider:SetConVar + FOV через fov_set_favorite, декларативный
+реестр вкладок GRMRPMenu.AddTab (точка расширения §5.16). Стенды: tools/luatest/
 sim_grmrp_chat.lua (43 теста — уже нашли и починили 3 реальных бага ядра)
 и sim_grmrp_api.lua (28 тестов). Это working skeleton: чат режима полностью
 функционирует без EasyChat и без ULib/ULX; остальное наращивается модулями
@@ -22002,6 +22008,12 @@ phys.doors/fin.core → ... (таблица выше — верх-вниз по 
    фолбэк на раннем клиенте = включён) + страховкой опциональных полей в
    точках входа. `GM:StartChat` тоже уважает тумблер: при
    `grmrp_chat_enable 0` Y возвращается движковому чату.
+
+5. **`goto`/`::labels::` нет у парсера GMod — и в gamemode'ах тоже.**
+   Стенд ядра чата (обычный LuaJIT) пропускал `goto continue` в utf8Clamp —
+   живой клиент падал на всём файле. `sim_gmod_syntax` расширен на
+   `gamemodes/` (найдено и исправлено; в красном наборе остались только
+   owner-исключения админ-панели, указание 7).
 
 Манифест: корневой блок = имя папки (`"grmrp" { ... }`), поля
 `title/base/maps/author/authorurl/license` + `menusystem 1`/`category rp`
