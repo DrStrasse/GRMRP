@@ -137,22 +137,22 @@ local function setChannel(id)
 end
 
 local function build()
-    frame = vgui.Create("DFrame")
-    frame:SetTitle("")
-    frame:ShowCloseButton(false)
-    frame:SetDraggable(false)
-    frame:SetSizable(false)
-    frame:SetSize(math.Clamp(ScrW() * 0.6, 460, 920), 76)
+    -- EditablePanel, не DFrame: у DFrame заголовок+поля съедали ~30 из 76 px,
+    -- строка ввода схлопывалась в 0 и «уходила за нижний край» (скрин 03.09).
+    frame = vgui.Create("EditablePanel")
+    frame:SetSize(math.Clamp(ScrW() * 0.55, 460, 900), 66)
     frame.Paint = function(_, w, h)
-        draw.RoundedBox(4, 0, 0, w, h, Color(8, 14, 23, 235))
+        draw.RoundedBox(5, 0, 0, w, h, Color(8, 14, 23, 242))
+        surface.SetDrawColor(40, 62, 92, 110)
+        surface.DrawOutlinedRect(0, 0, w, h)
     end
-    frame.OnClose = function()
+    frame.OnRemove = function()
         GRMChat.INPUT_OPEN = false
     end
 
     local preview = vgui.Create("DLabel", frame)
     preview:Dock(BOTTOM)
-    preview:SetTall(18)
+    preview:SetTall(16)
     preview:SetFont("GRMRP_Chat14")
     preview:SetTextColor(Color(132, 160, 178))
     preview:SetContentAlignment(4)
@@ -172,16 +172,16 @@ local function build()
         btn:SetWide(#ent.chan.title * 8 + 18)
         btn.chanId = ent.id
         local col = ent.chan.color
-        btn.Paint = function(p, w, h)
-            local isSel = p.chanId == selChan
+        btn.Paint = function(pp, w, h)
+            local isSel = pp.chanId == selChan
             draw.RoundedBox(3, 0, 0, w, h, isSel and
                 Color(col.r, col.g, col.b, 70) or Color(16, 27, 42, 220))
             draw.SimpleText(ent.chan.title, "GRMRP_ChatChip", w / 2, 3,
                 isSel and color_white or Color(col.r, col.g, col.b, 200),
                 TEXT_ALIGN_CENTER)
         end
-        btn.DoClick = function(p)
-            setChannel(p.chanId)
+        btn.DoClick = function(pp)
+            setChannel(pp.chanId)
             if IsValid(entry) then entry:RequestFocus() end
         end
         table.insert(chips, btn)
@@ -192,7 +192,7 @@ local function build()
     more:Dock(LEFT)
     more:DockMargin(3, 3, 0, 1)
     more:SetWide(70)
-    more.Paint = function(p, w, h)
+    more.Paint = function(pp, w, h)
         local ch = chanNow()
         draw.SimpleText(ch and ("в " .. ch.title) or "",
             "GRMRP_ChatChip", w / 2, 3, Color(132, 160, 178), TEXT_ALIGN_CENTER)
@@ -211,7 +211,6 @@ local function build()
         if IsValid(entry) then entry:RequestFocus() end
     end
 
-
     local hbtn = vgui.Create("DButton", row)
     hbtn:SetText("")
     hbtn:Dock(LEFT)
@@ -227,36 +226,37 @@ local function build()
         toggleHistory()
     end
 
+    -- 66 = 22 (чипы) + 28 (ввод) + 16 (превью): FILL ровно 28 px — поле
+    -- ввода видимое и кликабельное целиком.
     entry = vgui.Create("DTextEntry", frame)
     entry:Dock(FILL)
     entry:SetFont("GRMRP_Chat14")
-    if entry.SetHistoryDisabled then entry:SetHistoryDisabled(true) end
-    entry.Paint = function(p)
+    entry.Paint = function(pp)
         surface.SetDrawColor(16, 27, 42, 235)
-        surface.DrawRect(0, 0, p:GetWide(), p:GetTall())
-        p:DrawTextEntryText(Color(225, 238, 247), Color(48, 204, 255), Color(48, 204, 255))
+        surface.DrawRect(0, 0, pp:GetWide(), pp:GetTall())
+        pp:DrawTextEntryText(Color(225, 238, 247), Color(48, 204, 255), Color(48, 204, 255))
         local chan = chanNow()
-        if chan and #p:GetValue() == 0 then
-            draw.SimpleText(chan.title .. ": скажите…", "GRMRP_Chat14", 4, 3,
+        if chan and #pp:GetValue() == 0 then
+            draw.SimpleText(chan.title .. ": скажите…", "GRMRP_Chat14", 4, 5,
                 Color(132, 160, 178, 160))
         end
     end
 
-    local function updatePreview(p)
+    local function updatePreview(pp)
         if not IsValid(preview) then return end
         if GRMChat.PreviewText then
-            preview:SetText(GRMChat.PreviewText(LocalPlayer():Name(), p:GetValue(), selChan))
+            preview:SetText(GRMChat.PreviewText(LocalPlayer():Name(), pp:GetValue(), selChan))
         end
     end
     entry.updatePreview = updatePreview
 
-    entry.OnTextChanged = function(p)
-        p.tabIdx = nil
-        updatePreview(p)
+    entry.OnTextChanged = function(pp)
+        pp.tabIdx = nil
+        updatePreview(pp)
     end
 
-    local function doComplete(p)
-        local v = p:GetValue()
+    local function doComplete(pp)
+        local v = pp:GetValue()
         if v:lower():sub(1, 4) == "/pm " then
             local partial = string.lower(string.sub(v, 5))
             local cand = {}
@@ -273,33 +273,23 @@ local function build()
                     if #a2 == #b2 then return a2 < b2 end
                     return #a2 < #b2
                 end)
-                p.tabIdx = (p.tabIdx or 0) % #cand + 1
-                p:SetText("/pm " .. cand[p.tabIdx])
+                pp.tabIdx = (pp.tabIdx or 0) % #cand + 1
+                pp:SetText("/pm " .. cand[pp.tabIdx])
             end
         elseif v:sub(1, 1) == "/" and #v > 1 then
             local low = v:lower()
             for _, c in ipairs(commands()) do
                 if c:lower():sub(1, #low) == low then
-                    p:SetText(c)
+                    pp:SetText(c)
                     break
                 end
             end
         end
     end
-    entry.doComplete = doComplete
 
-    entry.OnKeyCodeTyped = function(p, code)
-        if code == KEY_TAB then
-            doComplete(p)
-            return true -- съедаем: иначе фокус упрыгивает на кнопки, Enter «теряется»
-        elseif code == KEY_UP or code == KEY_DOWN then
-            return true -- локальная история важнее нативной
-        end
-    end
-
-    entry.OnEnter = function(p)
-        local v = string.Trim(p:GetValue())
-        p:SetText("")
+    entry.OnEnter = function(pp)
+        local v = string.Trim(pp:GetValue())
+        pp:SetText("")
         if IsValid(preview) then preview:SetText("") end
         if #v == 0 then closeInput() return end
         if v:sub(1, 1) ~= "/" and selChan ~= "ic" then
@@ -310,23 +300,42 @@ local function build()
         closeInput()
     end
 
-    entry.OnKeyCodePressed = function(p, code)
-        if code == KEY_UP then
+    -- Enter порождает DTextEntry:OnEnter ВНУТРИ базового OnKeyCodeTyped.
+    -- Прежний полный переопределитель проглотил его — «Enter ничего не
+    -- делает» (скрин 03.09). Цепляем базу: себе — Tab/стрелки/Escape,
+    -- остальное — базовой обработке (Enter, редактирование, вставка).
+    local baseTyped = entry.OnKeyCodeTyped
+    entry.OnKeyCodeTyped = function(pp, code)
+        if code == KEY_ENTER or code == KEY_RETURN or
+            (KEY_KP_ENTER and code == KEY_KP_ENTER) then
+            pp:OnEnter(pp:GetValue()) -- явный Enter: не зависим от базы
+            return true
+        end
+        if code == KEY_TAB then
+            doComplete(pp)
+            return true -- съедаем: иначе фокус упрыгивает на чипы
+        elseif code == KEY_UP then
             if histIdx < #history then
                 histIdx = histIdx + 1
-                p:SetText(history[#history - histIdx + 1])
+                pp:SetText(history[#history - histIdx + 1])
+                updatePreview(pp)
             end
+            return true
         elseif code == KEY_DOWN then
             if histIdx > 1 then
                 histIdx = histIdx - 1
-                p:SetText(history[#history - histIdx + 1])
+                pp:SetText(history[#history - histIdx + 1])
             else
                 histIdx = 0
-                p:SetText("")
+                pp:SetText("")
             end
+            updatePreview(pp)
+            return true
         elseif code == KEY_ESCAPE then
             closeInput()
+            return true
         end
+        if baseTyped then return baseTyped(pp, code) end
     end
 end
 
@@ -342,7 +351,7 @@ function GRMChat.OpenInput()
     end
     if not IsValid(frame) then build() end
     frame:Show()
-    frame:SetPos(16, ScrH() - frame:GetTall() - 16)
+    frame:SetPos(16, ScrH() - frame:GetTall() - 196)
     frame:MakePopup()
     GRMChat.INPUT_OPEN = true
     if IsValid(entry) then
@@ -353,7 +362,7 @@ end
 
 hook.Add("OnScreenSizeChanged", "GRMChat_InputPos", function()
     if IsValid(frame) then
-        frame:SetPos(16, ScrH() - frame:GetTall() - 16)
+        frame:SetPos(16, ScrH() - frame:GetTall() - 196)
     end
 end)
 

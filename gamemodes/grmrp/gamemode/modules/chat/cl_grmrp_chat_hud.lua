@@ -91,7 +91,10 @@ hook.Add("HUDPaint", "GRMRPChat_HUD", function()
     if #lines == 0 then return end
 
     local h = ScrH()
-    local x, yBase = 16, h - 130
+    -- лента поднята: раньше упиралась в панель «СОСТОЯНИЕ» и полосу ввода
+    -- («чат подними по высоте», 03.09); нижняя строка — над верхом полосы
+    -- ввода (ввод стоит на h-262).
+    local x, yBase = 16, h - 268
     local nowRT = RealTime()
     local hold = GRMRPChat.INPUT_OPEN or GRMRPChat.HIST_OPEN
 

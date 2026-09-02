@@ -244,53 +244,52 @@ function Menu.Open()
         return h, wide
     end
 
-    local stage = vgui.Create("DPanel", root)
-    stage:SetPos(stageX - 14, stageY - 14)
-    stage:SetSize(stageW + 28, stageH + 28)
-    stage.Paint = function(_, w, h)
-        draw.RoundedBox(10, 0, 0, w, h, Color(10, 17, 27, 210))
-        surface.SetDrawColor(40, 62, 92, 110)
-        surface.DrawOutlinedRect(0, 0, w, h)
+    -- Персонаж — часть меню, НЕ «отдельное окно»: без рамки/фона стажи
+    -- (замечание 03.09). Две панели подряд: фигура + «отражение».
+    local function applyLook(m)
+        m:SetModel(ply:GetModel() or "models/player.mdl")
+        -- копия живой внешности: без этого DModelPanel показывает «голую»
+        -- модель — «почему не показываются бодигруппы» (03.09)
+        if ply:Skin() ~= nil then m:SetSkin(ply:Skin()) end
+        if ply.GetBodyGroups and m.SetBodygroup then
+            for _, bg in ipairs(ply:GetBodyGroups()) do
+                local ok, val = pcall(function() return ply:GetBodygroup(bg.id) end)
+                if ok and isnumber(val) then m:SetBodygroup(bg.id, val) end
+            end
+        end
     end
 
-    local function newModel(parent, flip)
+    local function newModel(parent, flip, px, py, pw, ph)
         local m = vgui.Create("DModelPanel", parent)
         local hgt, wide = camParams()
-        local mainH = math.floor(stageH * 0.68)
-        local reflH = stageH - mainH - 12
-        if not flip then
-            m:SetSize(stageW, mainH + 18)
-            m:SetPos(14, 12)
-        else
-            m:SetSize(stageW, reflH)
-            m:SetPos(14, mainH + 22)
-        end
-        m:SetModel(ply:GetModel() or "models/player.mdl")
+        m:SetSize(pw, ph)
+        m:SetPos(px, py)
+        applyLook(m)
         m:SetAnimated(not flip)
-        -- Кадрируем ВСЮ фигуру: широкая камера (FOV по умолчанию), дистанция
-        -- с запасом по росту — голова не обрезается (жалоба на «вылезает/
-        -- обрезан» в смоуке 03.09; панель кропает по своим границам).
+        -- Кадрируем ВСЮ фигуру: широкий кадр по полному росту (голова не
+        -- режется — жалоба со скрина), панель кропает по своим границам.
         local dist = hgt * 2.05 + wide * 1.35 + 30
         if not flip then
             m:SetCamPos(Vector(dist, dist * 0.32, hgt * 0.54))
             m:SetLookAt(Vector(0, 0, hgt * 0.48))
         else
-            -- «отражение»: камера над головой вниз — фигура кувырком;
-            -- затеняется градиентом, полоса сцены скрывает стык
+            -- «отражение»: камера сверху вниз; градиент тушит дальний край
             m:SetCamPos(Vector(dist, dist * 0.32, hgt * 1.62))
             m:SetLookAt(Vector(0, 0, hgt * 0.95))
             m.PaintOver = function(_, w2, h2)
                 for i = 0, 5 do
                     local t = i / 5
-                    surface.SetDrawColor(10, 17, 27, math.floor(150 + t * 100))
-                    surface.DrawRect(0, math.floor(h2 * t / 6 * 3), w2, math.ceil(h2 / 2))
+                    surface.SetDrawColor(8, 14, 23, math.floor(90 + t * 160))
+                    surface.DrawRect(0, math.floor(h2 * t / 2), w2, math.ceil(h2 / 6))
                 end
             end
         end
         return m
     end
-    Menu.model = newModel(stage, false)
-    Menu.modelRef = newModel(stage, true)
+    local mainH = math.floor(stageH * 0.72)
+    local reflH = stageH - mainH - 8
+    Menu.model = newModel(root, false, stageX, stageY, stageW, mainH)
+    Menu.modelRef = newModel(root, true, stageX, stageY + mainH + 8, stageW, reflH)
 
     ------------------------------------------------------------ карточка справа
     local card = newCard(root, rightW, 250)
@@ -386,53 +385,174 @@ function Menu.ToggleSettings()
         return
     end
     if not IsValid(Menu.root) then return end
+    local root = Menu.root
     local scrW, scrH = ScrW(), ScrH()
-    local w, h = 460, 300
-    local f = vgui.Create("DPanel", Menu.root)
+    local w = math.Clamp(scrW * 0.42, 480, 680)
+    local h = math.min(scrH - 150, 560)
+    local f = vgui.Create("DPanel", root)
     Menu.settings = f
     f:SetSize(w, h)
-    f:SetPos((scrW - w) / 2, (scrH - h) / 2)
-    f.Paint = function(s, cw, ch)
-        draw.RoundedBox(8, 0, 0, cw, ch, Color(12, 20, 32, 245))
+    f:SetPos(math.floor((scrW - w) / 2), math.floor((scrH - h) / 2))
+    f.Paint = function(_, cw, ch)
+        draw.RoundedBox(8, 0, 0, cw, ch, Color(12, 20, 32, 248))
         surface.SetDrawColor(40, 62, 92, 160)
         surface.DrawOutlinedRect(0, 0, cw, ch)
-        draw.SimpleText("Быстрые настройки", "GRMRP_MenuHead", 16, 10, COL.text)
+        draw.SimpleText("Настройки", "GRMRP_MenuHead", 16, 10, COL.text)
+        draw.SimpleText("клиентские · применяются сразу · сервер их не видит",
+            "GRMRP_MenuDim", 16, 42, COL.dim)
     end
 
-    local rows = {
-        { label = "Общая громкость", cvar = "volume", min = 0, max = 1, dec = 2 },
-        { label = "Музыка", cvar = "snd_musicvolume", min = 0, max = 1, dec = 2 },
-        { label = "Чувствительность мыши", cvar = "sensitivity", min = 0.1, max = 5, dec = 2 },
-        { label = "Поле зрения (FOV)", fov = true, min = 60, max = 110, dec = 0 }
-    }
-    local y = 52
-    for _, r in ipairs(rows) do
-        local sl
-        if r.fov then
-            sl = vgui.Create("DNumSlider", f)
-            local want = GetConVarNumber("fov_desired") or 75
-            sl:SetValue(want)
-            sl.OnValueChanged = function(_, v)
-                RunConsoleCommand("fov_set_favorite", tostring(math.floor(v)))
-            end
-        else
-            sl = vgui.Create("DNumSlider", f)
-            sl:SetConVar(r.cvar)
-        end
-        sl:SetPos(10, y)
-        sl:SetSize(w - 20, 34)
-        sl:SetText(r.label)
-        sl:SetMin(r.min)
-        sl:SetMax(r.max)
-        sl:SetDecimals(r.dec)
-        y = y + 44
+    local scroll = vgui.Create("DScrollPanel", f)
+    scroll:SetPos(12, 62)
+    scroll:SetSize(w - 24, h - 110)
+    local body = vgui.Create("DPanel", scroll)
+    body:SetPaintBackground(false)
+    local bw = w - 48
+    body:SetWide(bw)
+
+    local y = 0
+    local function section(title)
+        local lbl = vgui.Create("DLabel", body)
+        lbl:SetText(string.upper(title))
+        lbl:SetFont("GRMRP_MenuTab")
+        lbl:SetTextColor(COL.accent)
+        lbl:SetPos(4, y)
+        lbl:SizeToContents()
+        y = y + 30
     end
+    local function finishRow(hh)
+        local used = hh
+        body:SetTall(y + 8)
+        return used
+    end
+
+    -- Один владелец записи: ConVar:SetFloat напрямую. Никаких
+    -- RunConsoleCommand/SetConvar-привязок — они гоняли cvar через консоль
+    -- сервера и печатали «Command is blocked!» (лог 03.09).
+    local function slider(label, cvarName, minV, maxV, dec, extra)
+        local row = vgui.Create("DPanel", body)
+        row:SetPos(0, y)
+        row:SetSize(bw, 40)
+        row:SetPaintBackground(false)
+        local sl = vgui.Create("DNumSlider", row)
+        sl:SetPos(0, 0)
+        sl:SetSize(bw, 36)
+        sl:SetText(label)
+        sl:SetMin(minV)
+        sl:SetMax(maxV)
+        sl:SetDecimals(dec)
+        local cv = cvarName and GetConVar(cvarName)
+        if cv then sl:SetValue(math.Clamp(cv:GetFloat(), minV, maxV)) end
+        sl.OnValueChanged = function(_, v2)
+            if cv then cv:SetFloat(v2) end
+            if extra then extra(v2) end
+        end
+        y = y + 42
+        finishRow(40)
+    end
+
+    local function toggle(label, get, set, hint)
+        local row = vgui.Create("DPanel", body)
+        row:SetPos(0, y)
+        row:SetSize(bw, 28)
+        row:SetPaintBackground(false)
+        local cap = vgui.Create("DLabel", row)
+        cap:SetText(label)
+        cap:SetFont("GRMRP_MenuLbl")
+        cap:SetTextColor(COL.text)
+        cap:SetPos(6, 6)
+        cap:SetSize(bw - 120, 18)
+        local btn = vgui.Create("DButton", row)
+        btn:SetText("")
+        btn:SetSize(96, 24)
+        btn:SetPos(bw - 102, 2)
+        btn.state = get() and true or false
+        btn.Paint = function(s, w2, h2)
+            local on = s.state
+            draw.RoundedBox(4, 0, 0, w2, h2, on and
+                Color(COL.green.r, COL.green.g, COL.green.b, 60) or Color(24, 38, 58, 220))
+            draw.SimpleText(on and "Вкл" or "Выкл", "GRMRP_MenuLbl",
+                w2 / 2 - 12, 4, on and COL.green or COL.dim)
+        end
+        btn.DoClick = function(s)
+            s.state = not s.state
+            set(s.state)
+            surface.PlaySound("buttons/talkon.wav")
+        end
+        if hint then
+            local hl = vgui.Create("DLabel", row)
+            hl:SetText(hint)
+            hl:SetFont("GRMRP_MenuDim")
+            hl:SetTextColor(COL.dim)
+            hl:SetPos(8, 20)
+            hl:SizeToContents()
+        end
+        y = y + 30
+        finishRow(28)
+    end
+
+    local function note(text)
+        local lbl = vgui.Create("DLabel", body)
+        lbl:SetText(text)
+        lbl:SetFont("GRMRP_MenuDim")
+        lbl:SetTextColor(COL.dim)
+        lbl:SetPos(6, y)
+        lbl:SetSize(bw - 12, 16)
+        y = y + 20
+    end
+
+    section("Звук")
+    slider("Общая громкость", "volume", 0, 1, 2)
+    slider("Музыка", "snd_musicvolume", 0, 1, 2)
+
+    section("Мышь")
+    slider("Чувствительность", "sensitivity", 0.1, 10, 1)
+    toggle("Сглаживание мыши", function()
+        local cv = GetConVar("m_filter"); return cv and cv:GetBool()
+    end, function(on)
+        local cv = GetConVar("m_filter"); if cv then cv:SetBool(on) end
+    end)
+    toggle("Инверсия оси Y", function()
+        local cv = GetConVar("m_pitch"); return cv and cv:GetFloat() < 0
+    end, function(on)
+        local cv = GetConVar("m_pitch")
+        if cv then cv:SetFloat((on and -1 or 1) * math.abs(cv:GetFloat() > 0 and cv:GetFloat() or 0.022)) end
+    end)
+
+    section("Графика")
+    slider("Поле зрения (fov_desired)", "fov_desired", 60, 110, 0, function(v)
+        RunConsoleCommand("fov_set_favorite", tostring(math.floor(v)))
+    end)
+    slider("Максимум FPS (0 — без limits)", "fps_max", 0, 333, 0)
+    slider("Сглаживание MSAA (после рестарта уровня)", "mat_antialias", 0, 8, 0,
+        function(v)
+            local snap = 0
+            for _, a2 in ipairs({ 0, 2, 4, 8 }) do
+                if math.abs(v - a2) < math.abs(v - snap) then snap = a2 end
+            end
+            local cv = GetConVar("mat_antialias")
+            if cv then cv:SetFloat(snap) end
+        end)
+    slider("Резкость текстур (меньше — лучше)", "mat_picmip", -1, 3, 0)
+
+    section("Интерфейс")
+    slider("Счётчик FPS/пинга (net_graph)", "net_graph", 0, 3, 0)
+    toggle("Показывать цель (TargetID)", function()
+        local cv = GetConVar("hud_showtargetid"); return cv and cv:GetBool()
+    end, function(on)
+        local cv = GetConVar("hud_showtargetid"); if cv then cv:SetBool(on) end
+    end)
+
+    section("Чат")
+    note("Y / привязка grm_chat_open — открыть · Enter — отправить · Tab — цели /pm")
+    note("↑/↓ — своя история · ESC — закрыть · кнопка «история» — окно на 300 строк")
+    note("emoji-пас включён: :) <3 +1 ... ; команды /me /do /it /try /roll")
 
     local close = vgui.Create("DButton", f)
     close:SetText("Закрыть  (ESC)")
     close:SetFont("GRMRP_MenuTab")
     close:SetSize(180, 32)
-    close:SetPos((w - 180) / 2, h - 44)
+    close:SetPos((w - 180) / 2, h - 42)
     close.DoClick = function()
         surface.PlaySound("buttons/button14.wav")
         Menu.ToggleSettings()
