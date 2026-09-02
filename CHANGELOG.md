@@ -26,6 +26,13 @@ isDead; sv_grmrp_chat — cvar'ы REPLICATED|ARCHIVE, deliver одной net-ф�
 кириллица extended=true; cl_grmrp_chat — чипы каналов, история ↑/↓ cap 50,
 Tab-дополнение}.
 
+**Уточнение владельца (тот же день).** «Зависимость от LUA» была оговоркой:
+запрещены именно ULib/ULX. Атрибуция в документах разведена (указание 8 в
+I, шапка VII, README): запрет ULib/ULX — явный; независимость от прочих
+аддонов следует из постоянного «чужое не переиспользуем». Попутно исправлен
+манифест grmrp.txt (ключи должны быть в блоке «gamemode», type/category — не
+поля манифеста).
+
 **Стенды:** tools/luatest/sim_grmrp_chat.lua (43/43) и sim_grmrp_api.lua
 (28/28); стенды поймали и зафиксировали 3 реальных бага ядра (cut
 continuation-байт UTF-8, рваный clamp, find-vs-match в ParseSay).
