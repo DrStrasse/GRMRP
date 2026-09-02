@@ -71,7 +71,7 @@ end
 Menu.AddTab({ id = "resume", order = 10, title = "Вернуться в игру", accent = COL.green,
     action = function() Menu.Close() end })
 Menu.AddTab({ id = "settings", order = 20, title = "Настройки", accent = COL.accent,
-    action = function() Menu.ToggleSettings() end })
+    action = function() Menu.OpenStandardSettings() end })
 Menu.AddTab({ id = "servers", order = 30, title = "Сетевая игра", accent = COL.accent,
     action = function()
         Menu.suppressUntil = CurTime() + 30
@@ -215,12 +215,6 @@ function Menu.Open()
                 elseif s.hover ~= goal then
                     s.hover = goal
                 end
-                if s:IsHovered() and not s.HoverPlayed then
-                    s.HoverPlayed = true
-                    surface.PlaySound("buttons/lightswitch.wav")
-                elseif not s:IsHovered() then
-                    s.HoverPlayed = false
-                end
             end
             table.insert(animList, b)
             y = y + 42
@@ -339,11 +333,6 @@ function Menu.Open()
     ------------------------------------------------------------ закрытие/клавиши
     function root:OnKeyCodeTyped(code)
         if code == KEY_ESCAPE then
-            if IsValid(Menu.settings) then
-                Menu.settings:Remove()
-                Menu.settings = nil
-                return true
-            end
             Menu.Close()
             return true
         end
@@ -352,6 +341,10 @@ function Menu.Open()
     ------------------------------------------------------------Think: только анимации
     root.AnimEnd = CurTime() + 0.05 * #animList + 0.35
     root.Think = function(s)
+        -- Пока открыто МЕНЮ РЕЖИМА, движковый gameui не имеет права висеть
+        -- поверх (гонка ESC 03.09: «стандартное меню открывается поверх»):
+        -- снимаем его в тот же кадр тихо, без пересоздания нашего окна.
+        if gui.IsGameUIVisible() then gui.HideGameUI() end
         local now = CurTime()
         if now < s.AnimEnd then
             local g = easeOut((now - s.animStart) / 0.5)
@@ -368,202 +361,36 @@ function Menu.Open()
 end
 
 function Menu.Close()
-    if IsValid(Menu.settings) then
-        Menu.settings:Remove()
-        Menu.settings = nil
-    end
     if IsValid(Menu.root) then Menu.root:Remove() end
     Menu.root = nil
     Menu.model = nil
     Menu.modelRef = nil
+    -- Грейс: движок вскрывает gameui от того же нажатия ESC; в окне грейса
+    -- его НЕ перехватываем (не «возвращаем» своё окно), а тихо гасим.
+    -- Открытие стандартного диалога настроек само снимает флаг.
+    Menu.justClosedRT = RealTime()
 end
 
-function Menu.ToggleSettings()
-    if IsValid(Menu.settings) then
-        Menu.settings:Remove()
-        Menu.settings = nil
-        return
+-- Настройки = СТАНДАРТНЫЙ диалог движка (вкладки Game/Клавиатура/Мышь/Аудио/
+-- Видео/Голос/Legal — «почему нет вкладок стандартного меню»: были сами
+-- лепим — снято, указание владельца 03.09). runGameUICommand/OpenOptionsDialog —
+-- официальный путь (GMod wiki «RunGameUICommand»); our меню закрывается,
+-- gameui намеренно остаётся видимым (suppressUntil) — стандартный стек
+-- «настройки» живёт внутри gameui, гасить его нельзя.
+function Menu.OpenStandardSettings()
+    Menu.Close()
+    Menu.justClosedRT = nil -- это не гонка ESC: gameui открыт нами — не трогать
+    Menu.suppressUntil = CurTime() + 30
+    if not gui.IsGameUIVisible() then
+        pcall(function() RunConsoleCommand("gameui_activate") end)
     end
-    if not IsValid(Menu.root) then return end
-    local root = Menu.root
-    local scrW, scrH = ScrW(), ScrH()
-    local w = math.Clamp(scrW * 0.42, 480, 680)
-    local h = math.min(scrH - 150, 560)
-    local f = vgui.Create("DPanel", root)
-    Menu.settings = f
-    f:SetSize(w, h)
-    f:SetPos(math.floor((scrW - w) / 2), math.floor((scrH - h) / 2))
-    f.Paint = function(_, cw, ch)
-        draw.RoundedBox(8, 0, 0, cw, ch, Color(12, 20, 32, 248))
-        surface.SetDrawColor(40, 62, 92, 160)
-        surface.DrawOutlinedRect(0, 0, cw, ch)
-        draw.SimpleText("Настройки", "GRMRP_MenuHead", 16, 10, COL.text)
-        draw.SimpleText("клиентские · применяются сразу · сервер их не видит",
-            "GRMRP_MenuDim", 16, 42, COL.dim)
+    local ok = pcall(function() RunGameUICommand("OpenOptionsDialog") end)
+    if ok then return end
+    -- Совсем старый клиент без RunGameUICommand: остаёмся на стандартном
+    -- gameui — там «Настройки» работают испокон века.
+    if not gui.IsGameUIVisible() then
+        pcall(function() RunConsoleCommand("gameui_activate") end)
     end
-
-    local scroll = vgui.Create("DScrollPanel", f)
-    scroll:SetPos(12, 62)
-    scroll:SetSize(w - 24, h - 110)
-    local body = vgui.Create("DPanel", scroll)
-    body:SetPaintBackground(false)
-    local bw = w - 48
-    body:SetWide(bw)
-
-    local y = 0
-    local function section(title)
-        local lbl = vgui.Create("DLabel", body)
-        lbl:SetText(string.upper(title))
-        lbl:SetFont("GRMRP_MenuTab")
-        lbl:SetTextColor(COL.accent)
-        lbl:SetPos(4, y)
-        lbl:SizeToContents()
-        y = y + 30
-    end
-    local function finishRow(hh)
-        local used = hh
-        body:SetTall(y + 8)
-        return used
-    end
-
-    -- Один владелец записи: ConVar:SetFloat напрямую. Никаких
-    -- RunConsoleCommand/SetConvar-привязок — они гоняли cvar через консоль
-    -- сервера и печатали «Command is blocked!» (лог 03.09).
-    local function slider(label, cvarName, minV, maxV, dec, extra)
-        local row = vgui.Create("DPanel", body)
-        row:SetPos(0, y)
-        row:SetSize(bw, 40)
-        row:SetPaintBackground(false)
-        local sl = vgui.Create("DNumSlider", row)
-        sl:SetPos(0, 0)
-        sl:SetSize(bw, 36)
-        sl:SetText(label)
-        sl:SetMin(minV)
-        sl:SetMax(maxV)
-        sl:SetDecimals(dec)
-        local cv = cvarName and GetConVar(cvarName)
-        if cv then sl:SetValue(math.Clamp(cv:GetFloat(), minV, maxV)) end
-        sl.OnValueChanged = function(_, v2)
-            if cv then cv:SetFloat(v2) end
-            if extra then extra(v2) end
-        end
-        y = y + 42
-        finishRow(40)
-    end
-
-    local function toggle(label, get, set, hint)
-        local row = vgui.Create("DPanel", body)
-        row:SetPos(0, y)
-        row:SetSize(bw, 28)
-        row:SetPaintBackground(false)
-        local cap = vgui.Create("DLabel", row)
-        cap:SetText(label)
-        cap:SetFont("GRMRP_MenuLbl")
-        cap:SetTextColor(COL.text)
-        cap:SetPos(6, 6)
-        cap:SetSize(bw - 120, 18)
-        local btn = vgui.Create("DButton", row)
-        btn:SetText("")
-        btn:SetSize(96, 24)
-        btn:SetPos(bw - 102, 2)
-        btn.state = get() and true or false
-        btn.Paint = function(s, w2, h2)
-            local on = s.state
-            draw.RoundedBox(4, 0, 0, w2, h2, on and
-                Color(COL.green.r, COL.green.g, COL.green.b, 60) or Color(24, 38, 58, 220))
-            draw.SimpleText(on and "Вкл" or "Выкл", "GRMRP_MenuLbl",
-                w2 / 2 - 12, 4, on and COL.green or COL.dim)
-        end
-        btn.DoClick = function(s)
-            s.state = not s.state
-            set(s.state)
-            surface.PlaySound("buttons/talkon.wav")
-        end
-        if hint then
-            local hl = vgui.Create("DLabel", row)
-            hl:SetText(hint)
-            hl:SetFont("GRMRP_MenuDim")
-            hl:SetTextColor(COL.dim)
-            hl:SetPos(8, 20)
-            hl:SizeToContents()
-        end
-        y = y + 30
-        finishRow(28)
-    end
-
-    local function note(text)
-        local lbl = vgui.Create("DLabel", body)
-        lbl:SetText(text)
-        lbl:SetFont("GRMRP_MenuDim")
-        lbl:SetTextColor(COL.dim)
-        lbl:SetPos(6, y)
-        lbl:SetSize(bw - 12, 16)
-        y = y + 20
-    end
-
-    section("Звук")
-    slider("Общая громкость", "volume", 0, 1, 2)
-    slider("Музыка", "snd_musicvolume", 0, 1, 2)
-
-    section("Мышь")
-    slider("Чувствительность", "sensitivity", 0.1, 10, 1)
-    toggle("Сглаживание мыши", function()
-        local cv = GetConVar("m_filter"); return cv and cv:GetBool()
-    end, function(on)
-        local cv = GetConVar("m_filter"); if cv then cv:SetBool(on) end
-    end)
-    toggle("Инверсия оси Y", function()
-        local cv = GetConVar("m_pitch"); return cv and cv:GetFloat() < 0
-    end, function(on)
-        local cv = GetConVar("m_pitch")
-        if cv then cv:SetFloat((on and -1 or 1) * math.abs(cv:GetFloat() > 0 and cv:GetFloat() or 0.022)) end
-    end)
-
-    section("Графика")
-    slider("Поле зрения (fov_desired)", "fov_desired", 60, 110, 0, function(v)
-        RunConsoleCommand("fov_set_favorite", tostring(math.floor(v)))
-    end)
-    slider("Максимум FPS (0 — без limits)", "fps_max", 0, 333, 0)
-    slider("Сглаживание MSAA (после рестарта уровня)", "mat_antialias", 0, 8, 0,
-        function(v)
-            local snap = 0
-            for _, a2 in ipairs({ 0, 2, 4, 8 }) do
-                if math.abs(v - a2) < math.abs(v - snap) then snap = a2 end
-            end
-            local cv = GetConVar("mat_antialias")
-            if cv then cv:SetFloat(snap) end
-        end)
-    slider("Резкость текстур (меньше — лучше)", "mat_picmip", -1, 3, 0)
-
-    section("Интерфейс")
-    slider("Счётчик FPS/пинга (net_graph)", "net_graph", 0, 3, 0)
-    toggle("Показывать цель (TargetID)", function()
-        local cv = GetConVar("hud_showtargetid"); return cv and cv:GetBool()
-    end, function(on)
-        local cv = GetConVar("hud_showtargetid"); if cv then cv:SetBool(on) end
-    end)
-
-    section("Чат")
-    note("Y / привязка grm_chat_open — открыть · Enter — отправить · Tab — цели /pm")
-    note("↑/↓ — своя история · ESC — закрыть · кнопка «история» — окно на 300 строк")
-    note("emoji-пас включён: :) <3 +1 ... ; команды /me /do /it /try /roll")
-
-    local close = vgui.Create("DButton", f)
-    close:SetText("Закрыть  (ESC)")
-    close:SetFont("GRMRP_MenuTab")
-    close:SetSize(180, 32)
-    close:SetPos((w - 180) / 2, h - 42)
-    close.DoClick = function()
-        surface.PlaySound("buttons/button14.wav")
-        Menu.ToggleSettings()
-    end
-    function f:OnKeyCodeTyped(code)
-        if code == KEY_ESCAPE then
-            Menu.ToggleSettings()
-            return true
-        end
-    end
-    f:MakePopup()
 end
 
 ------------------------------------------------------------------ перехват ESC
@@ -573,6 +400,10 @@ end
 -- игра»), помечают окно подавленным через suppressUntil.
 hook.Add("Think", "GRMRPMenu_Takeover", function()
     if IsValid(Menu.root) then return end
+    if Menu.justClosedRT and RealTime() - Menu.justClosedRT < 0.4 then
+        if gui.IsGameUIVisible() then gui.HideGameUI() end
+        return
+    end
     if Menu.suppressUntil and CurTime() < Menu.suppressUntil then return end
     if gui.IsGameUIVisible() then
         gui.HideGameUI()
