@@ -1,5 +1,37 @@
 # CHANGELOG — история изменений
 
+## 2026-09-03 (ночь-4) — чат: пригодность (RP-команды, emoji, превью, defer)
+
+Указание владельца: «свой чат должен быть пригодным к использованию» —
+список: /me /do /it /try /roll 100, админ-команды, команды модулей
+(/factions /laws /pcboard), волны, рация /r, радиус, обработка текста,
+emoji, предпоказ, адекватная отправка/прорисовка + нормальный показ
+персонажа в меню паузы (скрины смоука GROENNERLAND2036).
+— sh_grmrp_chat_core.lua (общее ядро): EMOJI-пас (символьные + текстовые
+  :)/<3/:D/+1 … → юникод ДО tag-guard; сырые emoji проходят, clamp не рвёт);
+  RegisterChannel: cmds-алиасы (do/it/try→me-канал) и allowEmpty (/roll);
+  ParseSay: extra.cmd; таблица GRMRPChat.RP (fmt на обе стороны);
+  RollSpec (1..max, clamp 2..10000); PreviewText (тот же fmt — превью не врёт).
+— sv_grmrp_chat.lua: RPAction — серверный math.random для try/roll (echo=true
+  → строку шлёт только сервер, локальный эхо-каст подавлен на клиенте по
+  RP[cmd].echo); контекст /it ← недавний /do (слабая таблица, TTL 90с);
+  ProcessLine: «keep» для любых «/»-строк при GRMChat.DeferToModules (аддон:
+  команды остаются rp_chat/радиосетям/модулям, вывод — в нашу ленту; на
+  режиме флаг снят — строки обрабатываем мы); хук PlayerSay пробросил keep.
+  Неизвестная команда → hook.Run("GRMRPChatCommand", ply, cmd, args) перед
+  системной строкой (админ-команды и /factions /laws /pcboard резолвят
+  подписавшиеся модули — §5.1.2: чат не дублирует чужую регистрацию).
+— cl_grmrp_chat.lua: DLabel-превью под строкой (обновляется в OnTextChanged,
+  чистится в OnEnter), echo-правила из общей RP-таблицы.
+— tools/sync_chat_addon.py: sv-прелюд ставит DeferToModules, хук-обёртка
+  honour'ит keep; порт перегенерирован, --check зелёный.
+— cl_grmrp_menu.lua: персонаж без FOV-жима (SetFOV(38) резал голову — жалоба
+  со скрина): широкий кадр dist=2.05h+…, lookAt по центру роста, отражение
+  сверху вниз + градиент, сцена-подложка RoundedBox.
+— sim 43→63 (emoji-литералы, алиасы, RollSpec, fmt'ы, превью, dice-канал)
+  ×2 ядра; loadfile всех chat-файлов; api 28/28; style/sync/hygiene зелёные;
+  полный suite в baseline.
+
 ## 2026-09-03 (ночь-3) — свой чат довезли до конца: GRMChat-порт в аддон
 
 «чат из easychat вырезать и свой нормальный сделать» — вторая половина

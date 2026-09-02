@@ -44,9 +44,14 @@ local function send(text)
     if #history > 50 then table.remove(history, 1) end
     histIdx = 0
 
-    -- локальный предпросмотр: своя строка печатается сразу; серверное
-    -- состояние не меняется — молчаливый самообман исключён эхом «!»
-    GRMChat.AddSelfLine(selChan, text)
+    -- Локальный эхо-каст: свою строку печатаем сразу (UX), но для
+    -- rand-действий (try/roll) результат знает только сервер — там
+    -- ждём настоящую строку (echo-флаг в RP-таблице ядра, §5.1.3).
+    local first = string.match(text, "^/([%w_]+)")
+    local def = first and GRMChat.RP and GRMChat.RP[string.lower(first)]
+    if not (def and def.echo) then
+        GRMChat.AddSelfLine(selChan, text)
+    end
 
     net.Start(GRMChat.Net.SAY)
         net.WriteString(selChan)
@@ -132,13 +137,21 @@ local function build()
     frame:ShowCloseButton(false)
     frame:SetDraggable(false)
     frame:SetSizable(false)
-    frame:SetSize(math.Clamp(ScrW() * 0.6, 460, 920), 56)
+    frame:SetSize(math.Clamp(ScrW() * 0.6, 460, 920), 76)
     frame.Paint = function(_, w, h)
         draw.RoundedBox(4, 0, 0, w, h, Color(8, 14, 23, 235))
     end
     frame.OnClose = function()
         GRMChat.INPUT_OPEN = false
     end
+
+    local preview = vgui.Create("DLabel", frame)
+    preview:Dock(BOTTOM)
+    preview:SetTall(18)
+    preview:SetFont("GRMRP_Chat14")
+    preview:SetTextColor(Color(132, 160, 178))
+    preview:SetContentAlignment(4)
+    frame.preview = preview
 
     local row = vgui.Create("DPanel", frame)
     row:Dock(TOP)
@@ -220,13 +233,23 @@ local function build()
         end
     end
 
+    local function updatePreview(p)
+        if not IsValid(preview) then return end
+        if GRMChat.PreviewText then
+            preview:SetText(GRMChat.PreviewText(LocalPlayer():Name(), p:GetValue(), selChan))
+        end
+    end
+    entry.updatePreview = updatePreview
+
     entry.OnTextChanged = function(p)
         p.tabIdx = nil
+        updatePreview(p)
     end
 
     entry.OnEnter = function(p)
         local v = string.Trim(p:GetValue())
         p:SetText("")
+        if IsValid(preview) then preview:SetText("") end
         if #v == 0 then closeInput() return end
         if v:sub(1, 1) ~= "/" and selChan ~= "ic" then
             local chan = chanNow()

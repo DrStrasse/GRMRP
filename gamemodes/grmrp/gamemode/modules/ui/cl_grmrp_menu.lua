@@ -244,36 +244,53 @@ function Menu.Open()
         return h, wide
     end
 
-    local function newModel(flip)
-        local m = vgui.Create("DModelPanel", root)
+    local stage = vgui.Create("DPanel", root)
+    stage:SetPos(stageX - 14, stageY - 14)
+    stage:SetSize(stageW + 28, stageH + 28)
+    stage.Paint = function(_, w, h)
+        draw.RoundedBox(10, 0, 0, w, h, Color(10, 17, 27, 210))
+        surface.SetDrawColor(40, 62, 92, 110)
+        surface.DrawOutlinedRect(0, 0, w, h)
+    end
+
+    local function newModel(parent, flip)
+        local m = vgui.Create("DModelPanel", parent)
         local hgt, wide = camParams()
-        local showH = flip and math.floor(stageH * 0.32) or math.floor(stageH * 0.66)
-        m:SetSize(stageW, showH)
-        m:SetPos(stageX, flip and (stageY + showH) or (stageY - 10))
+        local mainH = math.floor(stageH * 0.68)
+        local reflH = stageH - mainH - 12
+        if not flip then
+            m:SetSize(stageW, mainH + 18)
+            m:SetPos(14, 12)
+        else
+            m:SetSize(stageW, reflH)
+            m:SetPos(14, mainH + 22)
+        end
         m:SetModel(ply:GetModel() or "models/player.mdl")
         m:SetAnimated(not flip)
-        if m.SetFOV then m:SetFOV(38) end
-        local dist = hgt * 1.15 + wide * 1.6 + 40
+        -- Кадрируем ВСЮ фигуру: широкая камера (FOV по умолчанию), дистанция
+        -- с запасом по росту — голова не обрезается (жалоба на «вылезает/
+        -- обрезан» в смоуке 03.09; панель кропает по своим границам).
+        local dist = hgt * 2.05 + wide * 1.35 + 30
         if not flip then
-            m:SetCamPos(Vector(dist, 0, hgt * 0.52))
-            m:SetLookAt(Vector(0, 0, hgt * 0.5))
+            m:SetCamPos(Vector(dist, dist * 0.32, hgt * 0.54))
+            m:SetLookAt(Vector(0, 0, hgt * 0.48))
         else
-            -- «отражение»: камера снизу у плоскости ног — персонаж кувырком,
-            -- затемняется оверлеем; за границы карточки не вылезает (панель кропает)
-            m:SetCamPos(Vector(dist * 0.85, 0, -hgt * 0.28))
-            m:SetLookAt(Vector(0, 0, hgt * 0.12))
-        end
-        if flip then
-            m.PaintOver = function()
-                local w2, h2 = m:GetSize()
-                surface.SetDrawColor(8, 14, 23, 165)
-                surface.DrawRect(0, 0, w2, h2)
+            -- «отражение»: камера над головой вниз — фигура кувырком;
+            -- затеняется градиентом, полоса сцены скрывает стык
+            m:SetCamPos(Vector(dist, dist * 0.32, hgt * 1.62))
+            m:SetLookAt(Vector(0, 0, hgt * 0.95))
+            m.PaintOver = function(_, w2, h2)
+                for i = 0, 5 do
+                    local t = i / 5
+                    surface.SetDrawColor(10, 17, 27, math.floor(150 + t * 100))
+                    surface.DrawRect(0, math.floor(h2 * t / 6 * 3), w2, math.ceil(h2 / 2))
+                end
             end
         end
         return m
     end
-    Menu.model = newModel(false)
-    Menu.modelRef = newModel(true)
+    Menu.model = newModel(stage, false)
+    Menu.modelRef = newModel(stage, true)
 
     ------------------------------------------------------------ карточка справа
     local card = newCard(root, rightW, 250)

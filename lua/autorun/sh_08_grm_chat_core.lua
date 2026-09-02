@@ -49,6 +49,42 @@ local function utf8Clamp(s, maxBytes)
     return string.sub(s, 1, lastEnd)
 end
 
+-- Эмодзи: текстовые смайлы заменяются живыми символами, готовые многобайтные
+-- символы sanitize и так сохраняет (продовольствие UTF-8-safe). Дёшево и
+-- чисто: ровно те же данные видит превью клиента и лента сервера.
+local EMOJI = {
+    { ":)", "🙂" }, { "(:", "🙂" }, { "=)", "🙂" },
+    { ":-)", "🙂" }, { ":(", "🙁" }, { ":-(", "🙁" },
+    { ":D", "😃" }, { ":-D", "😃" }, { ";)", "😉" }, { ";-)", "😉" },
+    { ":P", "😛" }, { ":-P", "😛" }, { ":o", "😮" }, { ":O", "😮" },
+    { "<3", "❤" }, { "</3", "💔" }, { "+1", "👍" }, { "-1", "👎" },
+    { ":fire:", "🔥" }, { ":skull:", "💀" }, { "xD", "😆" }
+}
+
+local function replaceAll(text, from, to)
+    local out, i, n = {}, 1, #text
+    local fl = #from
+    while true do
+        local a2, b2 = string.find(text, from, i, true)
+        if not a2 then
+            table.insert(out, string.sub(text, i))
+            break
+        end
+        table.insert(out, string.sub(text, i, a2 - 1))
+        table.insert(out, to)
+        i = b2 + 1
+        if fl == 0 then break end
+    end
+    return table.concat(out)
+end
+
+function GRMChat.EmojiPass(text)
+    for i = 1, #EMOJI do
+        text = replaceAll(text, EMOJI[i][1], EMOJI[i][2])
+    end
+    return text
+end
+
 function GRMChat.Sanitize(text, maxBytes)
     text = tostring(text or "")
     local limit = math.Clamp(tonumber(maxBytes) or GRMChat.HARD_MAX, 1, GRMChat.HARD_MAX)
@@ -59,10 +95,6 @@ function GRMChat.Sanitize(text, maxBytes)
         if STRIP[b] then
             if b == 9 or b == 10 or b == 13 then table.insert(out, " ") end
             -- управляющий — в помойку
-        elseif b == 60 then
-            table.insert(out, "＜")
-        elseif b == 62 then
-            table.insert(out, "＞")
         elseif b == 226 and string.byte(text, i + 1) == 128
             and string.byte(text, i + 2) == 137 then
             table.insert(out, " ")          -- NBSP → обычный пробел
@@ -76,6 +108,8 @@ function GRMChat.Sanitize(text, maxBytes)
     s = s:gsub("[ \t]+", " ")
     s = s:gsub("^ +", "")
     s = s:gsub(" +$", "")
+    s = GRMChat.EmojiPass(s) -- "<3" жив: углы разворачиваем ПОСЛЕ эмодзи-паса
+    s = s:gsub("<", "＜"):gsub(">", "＞")
     return utf8Clamp(s, limit)
 end
 
@@ -93,6 +127,7 @@ function GRMChat.RegisterChannel(id, spec)
         id = id,
         title = string.sub(tostring(spec.title or id), 1, 32),
         cmd = spec.cmd and string.sub(tostring(spec.cmd), 1, GRMChat.SUGAR_MAX) or nil,
+        allowEmpty = spec.allowEmpty == true,
         color = {
             r = math.Clamp(tonumber(col.r) or 255, 0, 255),
             g = math.Clamp(tonumber(col.g) or 255, 0, 255),
@@ -103,6 +138,13 @@ function GRMChat.RegisterChannel(id, spec)
         onlyDead = spec.onlyDead == true,
         cooldown = math.Clamp(tonumber(spec.cooldown) or 0, 0, 300)
     }
+    if istable(spec.cmds) then
+        chan.cmds = {}
+        for i = 1, #spec.cmds do
+            local c = string.lower(tostring(spec.cmds[i] or ""))
+            if #c > 0 and #c <= GRMChat.SUGAR_MAX then chan.cmds[c] = true end
+        end
+    end
     GRMChat.Channels[id] = chan
     return chan
 end
@@ -128,7 +170,12 @@ GRMChat.RegisterChannel("ooc", {
 })
 GRMChat.RegisterChannel("me", {
     title = "Отыгровка", scope = "range", cmd = "me",
+    cmds = { "do", "it", "try" },
     color = { r = 255, g = 185, b = 63 }
+})
+GRMChat.RegisterChannel("dice", {
+    title = "Кости", scope = "range", cmd = "roll", allowEmpty = true,
+    color = { r = 120, g = 240, b = 200 }
 })
 GRMChat.RegisterChannel("advert", {
     title = "Объявление", scope = "world", cmd = "advert", cooldown = 60,
@@ -138,6 +185,64 @@ GRMChat.RegisterChannel("pm", {
     title = "Личное", scope = "pm", cmd = "pm",
     color = { r = 64, g = 222, b = 147 }
 })
+
+-- RP-формат: один источник строк для серверной рассылки и клиентского
+-- превью (предпоказ = то же самое, что увидят остальные; честность §5.1.3).
+GRMChat.RP = {
+    me = { chan = "me", fmt = function(n, b)
+        return "* " .. n .. " " .. b
+    end },
+    ["do"] = { chan = "me", fmt = function(n, b, ctx)
+        if ctx and ctx.self then return "* " .. b .. " (возле вас)" end
+        return "* " .. b .. " (возле " .. n .. ")"
+    end },
+    it = { chan = "me", fmt = function(n, b, ctx)
+        if ctx and ctx.to then return "* " .. b .. " (в ответ " .. ctx.to .. ")" end
+        return "* " .. b
+    end },
+    try = { chan = "me", echo = true, fmt = function(n, b, ctx)
+        local res = ctx and (ctx.ok and "успех" or "не вышло") or "?"
+        return "* " .. n .. " пробует «" .. b .. "» → " ..
+            tostring(ctx and ctx.roll or "?") .. " — " .. res
+    end },
+    roll = { chan = "dice", echo = true, fmt = function(n, b, ctx)
+        return "🎲 " .. n .. " кидает 1.." .. tostring(ctx and ctx.max or 100) ..
+            " → " .. tostring(ctx and ctx.roll or "?")
+    end }
+}
+
+function GRMChat.RollSpec(body)
+    local num = tonumber(string.match(tostring(body or ""), "%d+"))
+    if not num then num = 100 end
+    return math.Clamp(math.floor(num), 2, 10000)
+end
+
+-- Строка предпросмотра для поля ввода (клиент, чистая функция).
+function GRMChat.PreviewText(name, raw, selChan)
+    raw = tostring(raw or "")
+    if #raw == 0 then return "" end
+    local cmdRaw, body = raw:match("^/([%w_]+)%s*(.*)$")
+    if not cmdRaw then
+        local chan = selChan and GRMChat.GetChannel(selChan)
+        if chan and chan.cmd ~= "w" then
+            return "[" .. chan.title .. "] " .. name .. ": " .. raw
+        end
+        return name .. ": " .. raw
+    end
+    local cmd = string.lower(cmdRaw)
+    if cmd == "pm" then
+        return "📩 " .. (body:match("^(%S+)") or "?") .. ": " ..
+            (string.gsub(body, "^%S+%s*", "", 1) or "")
+    end
+    local def = GRMChat.RP[cmd]
+    if def then return def.fmt(name, body, { self = true }) end
+    for _, chan in pairs(GRMChat.Channels) do
+        if chan.cmd == cmd or (chan.cmds and chan.cmds[cmd]) then
+            return "[" .. chan.title .. "] " .. name .. ": " .. body
+        end
+    end
+    return "⚠ /" .. cmd .. " — неизвестная команда"
+end
 
 -- Разбор строки PlayerSay: "/cmd text" → канал+тело; без слэша — defChan.
 -- Возвращает (channelID, body, extra) либо (nil, причина).
@@ -156,11 +261,11 @@ function GRMChat.ParseSay(text, defChan)
     end
 
     for id, chan in pairs(GRMChat.Channels) do
-        if chan.cmd == cmd then
-            if chan.scope ~= "world" and #body == 0 then
+        if chan.cmd == cmd or (chan.cmds and chan.cmds[cmd]) then
+            if chan.scope ~= "world" and #body == 0 and not chan.allowEmpty then
                 return nil, "пустое сообщение в /" .. cmd
             end
-            return id, body, nil
+            return id, body, { cmd = cmd }
         end
     end
 

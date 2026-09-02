@@ -45,7 +45,9 @@ SV_TAIL = """
 -- Realm-клей песочницы: движковый PlayerSay превращается в наш канал.
 hook.Add("PlayerSay", "GRMChat_Capture", function(ply, text, teamChat, isDead)
     if GRMChat.Enabled and GRMChat.Enabled() then
-        GRMChat.OnPlayerSay(ply, text, teamChat, isDead)
+        if GRMChat.OnPlayerSay(ply, text, teamChat, isDead) == "keep" then
+            return text -- обрабатывают модули; лента получит их вывод
+        end
         return ""
     end
 end)
@@ -99,7 +101,9 @@ FILES = [
     # (источник, назначение, prelude?, tail?, только-client)
     ("sh_grmrp_chat_core.lua", "lua/autorun/sh_08_grm_chat_core.lua", CORE_HEAD, "", False),
     ("sv_grmrp_chat.lua", "lua/autorun/sv_08_grm_chat.lua",
-     PRELUDE + "if GRMRP and GRMRP.Version then return end\n\n", SV_TAIL, False),
+     PRELUDE + "if GRMRP and GRMRP.Version then return end\n" +
+     "GRMChat.DeferToModules = true -- любые /команды остаются модулям\n\n",
+     SV_TAIL, False),
     ("cl_grmrp_chat_hud.lua", "lua/autorun/client/cl_08_grm_chat_hud.lua",
      PRELUDE + "if SERVER then return end\nif GRMRP and GRMRP.Version then return end\n\n",
      HUD_TAIL, True),

@@ -7,6 +7,7 @@
     перехвата PlayerSay не возникает никогда.
 ]]
 if GRMRP and GRMRP.Version then return end
+GRMChat.DeferToModules = true -- любые /команды остаются модулям
 
 if SERVER then
     util.AddNetworkString(GRMChat.Net.SAY)
@@ -53,7 +54,7 @@ local function sendSystem(ply, text)
 end
 GRMChat.SendSystem = sendSystem
 
-local function deliver(chan, author, body, extra)
+local function deliver(chan, author, body, extra, lineOverride, includeAuthor)
     local now = CurTime()
     local players = player.GetAll()
 
@@ -71,11 +72,14 @@ local function deliver(chan, author, body, extra)
     end
 
     local name = GRMChat.Sanitize(author:Name(), GRMChat.SUGAR_MAX)
+    if lineOverride then body, name = lineOverride, "" end
     -- Автор не получает ретрансляцию: клиент печатает свою строку локально
     -- (оптимистичный эхо-каст; состояния сервер не менял — см. §5.4.3).
     local net_list = {}
     for i = 1, #targets do
-        if targets[i] ~= author then table.insert(net_list, targets[i]) end
+        if includeAuthor or targets[i] ~= author then
+            table.insert(net_list, targets[i])
+        end
     end
     if #net_list > 0 then
         net.Start(GRMChat.Net.MSG)
@@ -88,9 +92,63 @@ local function deliver(chan, author, body, extra)
     return nil
 end
 
+-- Состояние /do → контекст для /it (слабые ключи: утечек нет, §5.1.5).
+local lastDo = setmetatable({}, { __mode = "k" })
+
+function GRMChat.RPAction(kind, ply, body, chanId)
+    local def = GRMChat.RP[kind]
+    if not def then return nil end
+    local chan = table.Copy(GRMChat.GetChannel(def.chan) or GRMChat.GetChannel(chanId))
+    if not chan then return "нет канала отыгровки" end
+    chan.range = cvIcRange:GetFloat()
+    local authorName = GRMChat.Sanitize(ply:Name(), GRMChat.SUGAR_MAX)
+
+    if kind == "do" then
+        local audience = GRMChat.ResolveAudience(chan, ply, player.GetAll(),
+            function(a, b) return a:GetPos():DistToSqr(b:GetPos()) end,
+            function(p) return not p:Alive() end)
+        if not audience then return "некого вокруг" end
+        for i = 1, #audience do
+            if audience[i] ~= ply then lastDo[audience[i]] = { by = ply, name = authorName, t = CurTime() } end
+        end
+        return deliver(chan, ply, body, nil, def.fmt(authorName, body, nil), false)
+    end
+
+    if kind == "it" then
+        local ctx = lastDo[ply]
+        if not ctx or not IsValid(ctx.by) or CurTime() - ctx.t > 90 then
+            sendSystem(ply, "свежего /do рядом не было — отвечать не на что")
+            return nil
+        end
+        return deliver(chan, ply, body, nil, def.fmt(authorName, body, { to = ctx.name }), false)
+    end
+
+    if kind == "try" then
+        local roll = math.random(1, 100)
+        return deliver(chan, ply, body, nil,
+            def.fmt(authorName, body, { roll = roll, ok = roll <= 50 }), true)
+    end
+
+    if kind == "roll" then
+        local max = GRMChat.RollSpec(body)
+        local roll = math.random(1, max)
+        return deliver(chan, ply, body, nil,
+            def.fmt(authorName, body, { roll = roll, max = max }), true)
+    end
+
+    return nil
+end
+
 -- Единая точка входа: PlayerSay и net-поле ввода идут через неё.
 function GRMChat.ProcessLine(ply, text, defaultChannel)
     if not GRMChat.Enabled() then return end
+
+    -- Аддонская сборка (GRMChat): любые /команды живут у модулей (rp_chat,
+    -- радиосети, /factions, /laws, админ-права...). Мы только показываем их
+    -- вывод в свою ленту — второй владелец текста не появляется.
+    if GRMChat.DeferToModules and string.sub(text, 1, 1) == "/" then
+        return "keep"
+    end
 
     local now = CurTime()
     local st = stateFor(ply)
@@ -105,7 +163,16 @@ function GRMChat.ProcessLine(ply, text, defaultChannel)
         return
     end
     body = GRMChat.Sanitize(body, cvMax:GetInt())
-    if #body == 0 then return end
+    if #body == 0 and not (extra and GRMChat.RP[extra.cmd or ""]) then return end
+
+    -- RP-действия (/me /do /it /try /roll): своя форма строки, тот же
+    -- аудиторный путь (один владелец — deliver).
+    local kind = extra and extra.cmd
+    if kind and GRMChat.RP[kind] then
+        local err = GRMChat.RPAction(kind, ply, body, chanId)
+        if err then sendSystem(ply, err) end
+        return
+    end
 
     local chan = GRMChat.GetChannel(chanId)
     if not chan then sendSystem(ply, "канал не найден") return end
@@ -131,7 +198,7 @@ end
 
 function GRMChat.OnPlayerSay(ply, text, teamChat, isDead)
     if not IsValid(ply) then return end
-    GRMChat.ProcessLine(ply, text, isDead and "dead" or (teamChat and "ooc" or "ic"))
+    return GRMChat.ProcessLine(ply, text, isDead and "dead" or (teamChat and "ooc" or "ic"))
 end
 
 -- Ввод из нашего окна. Тот же ProcessLine — дублирование запрещено (§5.2).
@@ -151,7 +218,9 @@ end)
 -- Realm-клей песочницы: движковый PlayerSay превращается в наш канал.
 hook.Add("PlayerSay", "GRMChat_Capture", function(ply, text, teamChat, isDead)
     if GRMChat.Enabled and GRMChat.Enabled() then
-        GRMChat.OnPlayerSay(ply, text, teamChat, isDead)
+        if GRMChat.OnPlayerSay(ply, text, teamChat, isDead) == "keep" then
+            return text -- обрабатывают модули; лента получит их вывод
+        end
         return ""
     end
 end)
