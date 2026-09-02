@@ -2028,24 +2028,10 @@ if SERVER then
     end)
 
     -- ============================================================
-    -- ULX КОМАНДЫ (если ULX установлен)
+    -- Вход в панели фракций: только свои пути (NET-команды above,
+    -- админ-центр GRM.Admin, контекст лидера). Обёрток для сторонних
+    -- админ-модов нет и не будет — заказ владельца 03.09.
     -- ============================================================
-    if not ULib or not ulx then
-        print("[Factions] ULX не найден, ULX-команды не зарегистрированы")
-    else
-        local cmdFactions = ulx.command("Utility", "ulx factions", function(ply)
-            if not ply:IsSuperAdmin() then ply:PrintMessage(HUD_PRINTTALK, "У вас нет прав.") return end
-            net.Start(NET_OPEN_ADMIN) net.Send(ply)
-        end, "factions")
-        cmdFactions:defaultAccess(ULib.ACCESS_SUPERADMIN)
-
-        local cmdLeader = ulx.command("Utility", "ulx factions_leader", function(ply)
-            local leaderFaction = getFactionOfLeader(ply)
-            if not leaderFaction then ply:PrintMessage(HUD_PRINTTALK, "Вы не являетесь лидером.") return end
-            net.Start(NET_OPEN_LEADER) net.Send(ply)
-        end, "factions_leader")
-        cmdLeader:defaultAccess(ULib.ACCESS_ALL)
-    end
 
     -- ============================================================
     -- Публичный API для модулей GRM (доска набора Код 76, радио Код 75 и др.)

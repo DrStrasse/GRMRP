@@ -1,5 +1,30 @@
 # CHANGELOG — история изменений
 
+## 2026-09-03 (вечер-6) — ULib/ULX/CAMI: ноль следов; своя библиотека прав — единственный механизм
+
+Владелец повторил приказ третий раз и буквально: опциональные делегации
+«если ULib установлен», CAMI-зеркала и обёртки ulx-команд — тоже
+зависимость. Срезано всё касание: импорт групп и назначений из ULX,
+concommand `grm_admin_sync`, публикации прав/групп в CAMI, хуки-ответчики
+`CAMI.PlayerUsergroupChanged`/`CAMI.PlayerHasAccess` (контур прошлой
+«stack overflow»-рекурсии закрыт вместе с контуром), ULX-обёртки `ulx
+grmadmin`/`ulx factions[_leader]`/`ulx grm_vending_*`, ветки `ULib.kick/
+ban/unban/addBan` в actions, sh_grm_ban (HWID-добан), anticheat и TAB-меню,
+обёртка `ulx.mute` в TAB (свой голосовой мут: флаг GRM_VoiceMuted + фильтр
+PlayerCanHearPlayersVoice), чтение чужих таблиц в getPlayerRank, карточка
+«Синхронизация с ULX/ULib» в меню. `GRM.Admin.Can` ≡ `CanLocal` — матрица
+решает сама; санкции — свои (target:Kick, движковые banid/removeid+writeid,
+книга HWID GRM.ServerBan); сохранение автоматов Food осталось целиком за
+своими `grm_vending_save/load/clear` + чат-алиасами. Движковый флаг
+SetUserGroup поддержан (IsAdmin/IsSuperAdmin валидны), но читается только
+своя база. Стенды перенацелены на контракт ОТСУТСТВИЯ строк (admin_core,
+laws_access 1б, registry_ui) + маркер AD.Can в net_guard. Доказательство
+нуля: grep ULib|ULX|CAMI|ulx|ucl по lua/ addons/ gamemodes/ — только
+комментарий-запрет в gamemode shared.lua. Гейты: loadfile всех правленных,
+style, chat 65/65, hygiene 10/10, прогнанный набор sim — красный только
+зарегистрированный baseline (admin_core 2/198 = legacy-тексты); BuildStamp
+меню поднят до «вечер-6 (03.09)» — опознание свежей установки взглядом.
+
 ## 2026-09-03 (вечер-5) — крах меню от Skin(): витрина в карточке, попоп не зависает
 
 Живой лив: `cl_grmrp_menu.lua:253: attempt to call method 'Skin' (a nil

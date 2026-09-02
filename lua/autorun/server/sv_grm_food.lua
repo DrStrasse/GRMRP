@@ -433,43 +433,12 @@ hook.Add("PlayerSay", "GRM_Food_VendingChatCommands", function(ply, text)
     end
 end)
 
-local function registerULXCommands()
-    if not ulx or not ULib then return end
-    if ulx.grm_vending_save then return end
-
-    function ulx.grm_vending_save(calling_ply)
-        GRM.Food.SaveVendingMachines(calling_ply)
-    end
-
-    local saveCmd = ulx.command("GRM Food", "ulx grm_vending_save", ulx.grm_vending_save, "!grmsavevending")
-    saveCmd:defaultAccess(ULib.ACCESS_SUPERADMIN)
-    saveCmd:help("Сохранить все grm_vending_machine на текущей карте.")
-
-    function ulx.grm_vending_load(calling_ply)
-        GRM.Food.LoadVendingMachines(calling_ply, true)
-    end
-
-    local loadCmd = ulx.command("GRM Food", "ulx grm_vending_load", ulx.grm_vending_load, "!grmloadvending")
-    loadCmd:defaultAccess(ULib.ACCESS_SUPERADMIN)
-    loadCmd:help("Перезагрузить сохранённые автоматы GRM Food на текущей карте.")
-
-    function ulx.grm_vending_clear(calling_ply)
-        GRM.Food.ClearVendingMachines(calling_ply, true)
-    end
-
-    local clearCmd = ulx.command("GRM Food", "ulx grm_vending_clear", ulx.grm_vending_clear, "!grmclearvending")
-    clearCmd:defaultAccess(ULib.ACCESS_SUPERADMIN)
-    clearCmd:help("Удалить все автоматы GRM Food и очистить сохранение текущей карты.")
-end
-
 if GRM.Boot and GRM.Boot.Task then
     GRM.Boot.Task("food.vending", "late", function() GRM.Food.LoadVendingMachines(nil, false) end,
         { label = "Еда: торговые автоматы" })
-    GRM.Boot.Task("food.ulx", "late", registerULXCommands, { label = "Еда: команды ULX" })
 else
     hook.Add("InitPostEntity", "GRM_Food_LoadPermanentVending", function()
         timer.Simple(1, function() GRM.Food.LoadVendingMachines(nil, false) end)
-        timer.Simple(2, registerULXCommands)
     end)
 end
 
@@ -478,8 +447,6 @@ hook.Add("PostCleanupMap", "GRM_Food_Cleanup", function()
         GRM.Food.LoadVendingMachines(nil, false)
     end)
 end)
-
-timer.Simple(0, registerULXCommands)
 
 -- ============================================================
 -- ЛОГИКА ГОЛОДА И ЖАЖДЫ

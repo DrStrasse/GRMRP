@@ -9,7 +9,7 @@
       3) SB.GlobalBan: запись в глобальную книгу, индексы hwid/ip,
          история и снимок в пэйлоаде сохранения (version 2);
       4) новый аккаунт с забаненного железа — кик + добан остатка срока
-         (banid/ULib.addBan), запись hwid-hit;
+         (banid + writeid), запись hwid-hit;
       5) с owner-аккаунта совпадение hwid молчит;
       6) CheckJoinIP — вход с забаненного IP кикается до всякого отчёта;
       7) GlobalLift снимает запись и ИНДЕКСЫ (иначе добан висел бы вечно);
@@ -256,7 +256,7 @@ SB.AcceptMachine(alt, REP2)
 ok(alt.kicked == true, "вход с забаненного железа кикается")
 ok(has(alt.kicks, "железу"), "кик объясняет причину", table.concat(alt.kicks, ";"))
 ok(has(CONSOLE, "banid 120 STEAM:222000222") or has(CONSOLE, "STEAM:222000222"),
-    "новый аккаунт добанавливается движком (banid/ULib)")
+    "новый аккаунт добанавливается движком (banid + writeid)")
 ok(has(CONSOLE, "writeid"), "banid закреплён writeid")
 
 print("\n=== 5. СОВПАДЕНИЕ С СВОЕЙ ЗАПИСЬЮ МОЛЧИТ ===")

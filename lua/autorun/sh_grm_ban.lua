@@ -11,7 +11,7 @@
         территории — точку и радиус задаёт суперадмин.
 
       • «Глобальный бан» — жёсткий: игрок выкидывается с сервера штатным
-        баном (ULib/ULX, иначе banid). С 02.09 бан сопровождается СНИМКОМ
+        баном движка (banid + writeid). С 02.09 бан сопровождается СНИМКОМ
         МАШИНЫ (см. секцию «ГЛОБАЛЬНЫЙ БАН ПО ЖЕЛЕЗУ» ниже): отпечаток
         клиента связывается с записью и при повторном входе с того же
         «железа» под другим SteamID аккаунт добанавливается автоматически.
@@ -699,12 +699,7 @@ if SERVER then
         elseif tonumber(rec["until"]) and rec["until"] > os.time() then
             minutes = math.max(1, math.ceil((rec["until"] - os.time()) / 60))
         end
-        if ULib and ULib.addBan then
-            pcall(ULib.addBan, steamid, minutes,
-                ("HWID-добан по записи %s: %s"):format(tostring(rec.name or rec.by or ""), rec.reason or ""), nil, nil)
-        else
-            game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamid))
-        end
+        game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamid))
         game.ConsoleCommand("writeid\n")
     end
 

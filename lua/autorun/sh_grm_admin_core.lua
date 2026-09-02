@@ -1,37 +1,27 @@
 --[[--------------------------------------------------------------------
-    GRM Admin Core v1.0.0 — собственная административная база
+    GRM Admin Core v2.0.0 — собственная административная база (автономная)
 
-    Заказ владельца (18.08): «сервер на ULX/ULib, но нужна полностью своя
-    база со своим админ-меню: сохранения, фракционный контроль, создание
-    привилегий и редактирование полномочий, модерация игроков (ТП/мут/
-    джаил/рагдолл), читерские функции суперадмина — при полной синхронизации
-    с ULX/ULib, чтобы ничего не сломать».
-
-    ЧТО ЭТО.
-    Своя система ГРУПП и ПРАВ, живущая в GRM, но говорящая с внешним миром
-    на общем языке:
-      • CAMI (Common Admin Mod Interface) — стандарт, который понимают ULX,
-        SAM, ServerGuard, DarkRP и большинство аддонов. Мы регистрируем в нём
-        свои группы и привилегии и отвечаем на запросы доступа.
-      • ULib/ULX — если установлен, группы и назначения зеркалируются в него
-        (ULib.ucl), чтобы ulx-команды, меню и чужие модули продолжали работать.
-      • Стандартные проверки движка (`ply:IsAdmin()`, `IsSuperAdmin()`,
-        `GetUserGroup()`) остаются валидными: группа игрока ставится через
-        `SetUserGroup`.
+    Заказ владельца (18.08 — своя база, 03.09 — независимость): система групп,
+    матрица прав, иммунитет, наследование, сохранения, фракционный контроль,
+    редактор привилегий, модерация. Зависимость от сторонних админ-модов и
+    любые общие с ними мосты (регистрации, зеркала, обёртки команд)
+    ЛИКВИДИРОВАНЫ: своя библиотека прав — единственный источник истины для
+    админских и игровых пользовательских доступов сборки GRM.
 
     МОДЕЛЬ.
       Группа: id, название, цвет, наследование (inherit), иммунитет (0..100),
-              набор прав, флаги admin/superadmin для совместимости.
+              набор прав, флаги admin/superadmin.
       Право:  id вида "category.action", название, категория, опасность.
-      Назначение: SteamID64 → группа (+ срок, заметка, кем выдано).
+      Назначение: SteamID64 -> группа (+ срок, заметка, кем выдано).
+      Движковые флаги (SetUserGroup / IsAdmin / IsSuperAdmin) поддерживаются
+      для стандартных проверок движка — но читаем и решаем только свою базу.
 
     ХРАНЕНИЕ. data/grm_admin/groups.json, data/grm_admin/users.json
     ПРОВЕРКА. GRM.Admin.Can(ply, "perm.id") — единая точка для всей сборки.
     ИММУНИТЕТ. Нельзя применять модерацию к игроку с иммунитетом >= своего
               (суперадмин игнорирует это правило).
 
-    Консоль: grm_admin_groups (печать групп), grm_admin_perms (печать прав),
-             grm_admin_sync (пересинхронизация с ULib/CAMI).
+    Консоль: grm_admin_groups (печать групп), grm_admin_perms (печать прав).
 ----------------------------------------------------------------------]]
 if SERVER then AddCSLuaFile() end
 
@@ -102,15 +92,6 @@ function AD.RegisterPerm(id, data)
     AD.Perms[id] = row
     if not existing then AD.PermOrder[#AD.PermOrder + 1] = id end
 
-    -- Зеркалим в CAMI, чтобы чужие админ-моды видели наше право.
-    if CAMI and CAMI.RegisterPrivilege then
-        CAMI.RegisterPrivilege({
-            Name = "grm_" .. id,
-            MinAccess = (row.minAccess == "user" and "user")
-                or (row.minAccess == "superadmin" and "superadmin") or "admin",
-            Description = row.label,
-        })
-    end
     return true
 end
 
@@ -247,8 +228,8 @@ function AD.GroupOf(ply)
             return row.group
         end
     end
-    -- Фолбэк — группа движка/ULX (полная совместимость: если админ выдан
-    -- через ulx, GRM это видит и уважает).
+    -- Фолбэк — группа движка: движковый флаг поддерживаем (SetUserGroup),
+    -- решения принимает своя матрица.
     local engine = string.lower(tostring(ply:GetUserGroup() or "user"))
     if AD.Groups[engine] then return engine end
     if ply:IsSuperAdmin() then return "superadmin" end
@@ -273,19 +254,17 @@ function AD.IsSuper(ply)
     return group ~= nil and group.superadmin == true
 end
 
---[[ Главная проверка. Порядок:
-       1) консоль сервера и суперадмин — всё;
-       2) явное правило в группе (или её родителях): true/false;
-       3) "*" в группе — всё;
-       4) minAccess права: user — всем, admin — админским группам;
-       5) CAMI: спрашиваем внешний админ-мод (ULX и прочие). ]]
---[[ Проверка БЕЗ обращения к внешнему админ-моду.
+--[[ Проверка доступа. Полностью локальная и самодостаточная.
 
-     Именно её зовёт наш ответчик CAMI. Раньше и проверка, и ответ ходили
-     через одну функцию AD.Can: она спрашивала CAMI, CAMI дёргал наш хук,
-     хук снова звал AD.Can — и сервер сыпал «[ULib] stack overflow», а любое
-     действие, где проверялось право (публикация закона, например), просто
-     обрывалось на середине. ]]
+     Порядок: 1) консоль сервера и суперадмин — всё; 2) явное правило в
+     группе (или её родителях): true/false; 3) "*" в группе — всё;
+     4) minAccess права: user — всем, admin — админским группам.
+
+     История (урок 22.08): общий вход дополнительно обращался к внешнему
+     мосту доступа, а наш же ответчик на запрос моста звал общий вход —
+     рекурсия «stack overflow» обрывала любое действие с проверкой права.
+     С 03.09 обращений наружу нет вовсе: мосты ликвидированы, вся логика
+     целиком здесь. ]]
 function AD.CanLocal(ply, perm)
     perm = string.lower(string.Trim(tostring(perm or "")))
     if perm == "" then return false end
@@ -310,9 +289,9 @@ function AD.CanLocal(ply, perm)
         -- получал бы клетку и баны просто потому, что он «админ». Нужна
         -- явная галочка в группе (см. цикл выше).
         --
-        -- Исключение — совместимость: если игрок админ движка/ULX, но в
-        -- реестре GRM его группы вообще нет (первый запуск, чужая группа
-        -- из ULX), не оставляем сервер без управления.
+        -- Исключение — первый запуск: если у игрока движковый флаг админа,
+        -- а в реестре GRM его группы ещё нет, сервер не остаётся без
+        -- управления; после первого назначения решает своя матрица.
         local groupID = AD.GroupOf(ply)
         if def.minAccess == "admin" and not AD.Groups[groupID] and ply:IsAdmin() then
             return true
@@ -322,29 +301,10 @@ function AD.CanLocal(ply, perm)
     return false
 end
 
---[[ Главная проверка. Порядок:
-       1) консоль сервера и суперадмин — всё;
-       2) явное правило в группе (или её родителях): true/false;
-       3) "*" в группе — всё;
-       4) minAccess права: user — всем, admin — админским группам;
-       5) CAMI: спрашиваем внешний админ-мод (ULX и прочие). ]]
-AD._camiDepth = AD._camiDepth or 0
-
+--[[ Единый вход. С 03.09 полностью равен CanLocal: внешние мосты доступа
+     вырезаны как класс, единственный источник истины — своя база. ]]
 function AD.Can(ply, perm)
-    perm = string.lower(string.Trim(tostring(perm or "")))
-    if perm == "" then return false end
-    if AD.CanLocal(ply, perm) then return true end
-
-    -- Внешний админ-мод может знать больше (например, право выдано в ULX).
-    -- Глубину сторожим: если мы уже внутри чужого запроса, второй раз в
-    -- CAMI не идём — так рекурсия невозможна в принципе.
-    if CAMI and CAMI.PlayerHasAccess and AD._camiDepth == 0 then
-        AD._camiDepth = 1
-        local ok, allowed = pcall(CAMI.PlayerHasAccess, ply, "grm_" .. perm, nil)
-        AD._camiDepth = 0
-        if ok and allowed == true then return true end
-    end
-    return false
+    return AD.CanLocal(ply, perm)
 end
 
 -- Можно ли применять действие к цели (иммунитет).
@@ -357,8 +317,8 @@ end
      Теперь платформа зарегистрирована ПРОВАЙДЕРОМ доступа: любой capability
      сначала ищется в её группах.
 
-     Зовём именно CanLocal, а не Can: Can ходит в CAMI, CAMI зовёт наш хук —
-     и получается «[ULib] stack overflow». Этот урок уже был. ]]
+     Тело локальное, без обращений наружу — проверка не может никуда
+     «рекурсить», этот урок (03.09) зашит в структуру. ]]
 if SERVER and GRM.Access and GRM.Access.RegisterProvider then
     GRM.Access.RegisterProvider("grm_admin_platform", 50, function(ply, capability)
         if not (IsValid(ply) and isstring(capability)) then return nil end
@@ -451,60 +411,8 @@ if SERVER then
         return AD.Users
     end
 
-    --[[ Импорт того, что уже настроено в ULX/ULib: группы и назначения.
-         Делается один раз (флаг imported), чтобы не затирать правки. ]]
-    function AD.ImportFromULib(force)
-        if not (ULib and ULib.ucl) then return false, "ULib не установлен" end
-        if AD.Users._ulibImported == true and not force then return false, "уже импортировано" end
-
-        local addedGroups, addedUsers = 0, 0
-
-        for name, data in pairs(ULib.ucl.groups or {}) do
-            local id = string.lower(tostring(name))
-            if id ~= "" and not AD.Groups[id] then
-                local group = AD.NewGroup(id, name)
-                if group then
-                    group.inherit = string.lower(tostring(data.inherit_from or "user"))
-                    group.admin = (id == "admin" or id == "superadmin"
-                        or group.inherit == "admin" or group.inherit == "superadmin")
-                    group.superadmin = (id == "superadmin" or group.inherit == "superadmin")
-                    group.immunity = group.superadmin and 100 or (group.admin and 50 or 10)
-                    AD.Groups[id] = group
-                    addedGroups = addedGroups + 1
-                end
-            end
-        end
-
-        for sid, data in pairs(ULib.ucl.users or {}) do
-            local sid64 = util.SteamIDTo64(tostring(sid) or "") or ""
-            local groupName = istable(data) and string.lower(tostring(data.group or "")) or ""
-            if sid64 ~= "" and groupName ~= "" and AD.Groups[groupName] and not AD.Users[sid64] then
-                AD.Users[sid64] = { group = groupName, ["until"] = 0, note = "импорт из ULX", by = "ULib" }
-                addedUsers = addedUsers + 1
-            end
-        end
-
-        AD.Users._ulibImported = true
-        AD.SaveGroups("import from ULib")
-        AD.SaveUsers("import from ULib")
-        return true, ("группы: %d, назначения: %d"):format(addedGroups, addedUsers)
-    end
-
-    -- Регистрация групп в CAMI, чтобы чужие модули знали о них.
-    function AD.PublishCAMI()
-        if not (CAMI and CAMI.RegisterUsergroup) then return false end
-        for id, group in pairs(AD.Groups) do
-            CAMI.RegisterUsergroup({
-                Name = id,
-                Inherits = (group.inherit ~= "" and group.inherit) or "user",
-                CAMI_Source = "GRM",
-            }, "GRM")
-        end
-        return true
-    end
-
-    --[[ Применение группы к игроку: движок + ULib + CAMI.
-         Так все три мира видят одно и то же, и модули не ломаются. ]]
+    --[[ Применение группы к игроку: своя база + движковый флаг.
+         Единственный механизм назначения — GRM.Admin. ]]
     function AD.ApplyGroup(ply, groupID, actor, opts)
         if not IsValid(ply) then return false, "Игрок не найден" end
         groupID = string.lower(tostring(groupID or "user"))
@@ -525,17 +433,6 @@ if SERVER then
 
         -- 1) движок
         ply:SetUserGroup(groupID)
-
-        -- 2) ULib/ULX
-        if ULib and ULib.ucl and ULib.ucl.addUser then
-            local ok = pcall(ULib.ucl.addUser, ply:SteamID(), nil, nil, groupID)
-            if not ok then pcall(ULib.ucl.addUser, ply:SteamID(), {}, {}, groupID) end
-        end
-
-        -- 3) CAMI (SAM, ServerGuard, DarkRP и прочие подписчики)
-        if CAMI and CAMI.SignalUserGroupChanged then
-            pcall(CAMI.SignalUserGroupChanged, ply, old, groupID, "GRM")
-        end
 
         if GRM.Audit and GRM.Audit.Write then
             GRM.Audit.Write("admin", "group.assign", actor,
@@ -605,7 +502,7 @@ if SERVER then
         if IsValid(ply) then net.Send(ply) else net.Broadcast() end
     end
 
-    --- Проставить NW-группу игроку (вход, загрузка назначений, импорт ULib).
+    --- Проставить NW-группу игроку (вход, загрузка назначений, рассылка).
     function AD.PushGroupNW(ply)
         if not IsValid(ply) then return end
         local group = AD.GroupOf(ply)
@@ -726,7 +623,6 @@ if SERVER then
 
         AD.Groups = clean
         AD.SaveGroups("edit by " .. ply:Nick())
-        AD.PublishCAMI()
         AD.SyncTo(nil)
         AD.Result(ply, true, "Группы и полномочия сохранены")
     end)
@@ -859,8 +755,6 @@ if SERVER then
     local function boot()
         AD.LoadGroups()
         AD.LoadUsers()
-        AD.ImportFromULib(false)
-        AD.PublishCAMI()
         AD.SaveGroups("boot")
     end
 
@@ -870,8 +764,8 @@ if SERVER then
         hook.Add("InitPostEntity", "GRM_Admin_Boot", boot)
     end
 
-    -- Игрок зашёл: ставим его группу из нашей базы (и уважаем ULX, если там
-    -- выше). Так админка одинаково работает в обоих мирах.
+    -- Игрок зашёл: ставим его группу из нашей базы — единственного
+    -- источника истины (data/grm_admin/users.json).
     hook.Add("PlayerInitialSpawn", "GRM_Admin_ApplyGroup", function(ply)
         timer.Simple(1, function()
             if not IsValid(ply) then return end
@@ -893,58 +787,6 @@ if SERVER then
         end)
     end)
 
-    -- Внешняя смена группы (ULX/SAM) → отражаем у себя, чтобы не разъезжалось.
-    hook.Add("CAMI.PlayerUsergroupChanged", "GRM_Admin_External", function(ply, old, new, source)
-        if source == "GRM" or not IsValid(ply) then return end
-        local sid = tostring(ply:SteamID64() or "")
-        if not AD.Groups[string.lower(tostring(new or ""))] then return end
-        AD.Users[sid] = {
-            group = string.lower(tostring(new)), ["until"] = 0,
-            note = "синхронизация из " .. tostring(source or "внешнего мода"), by = tostring(source or ""), at = os.time(),
-        }
-        AD.SaveUsers("external sync " .. sid)
-        AD.SyncTo(nil)
-    end)
-
-    --[[ Ответ на запросы доступа от чужих модулей: если спрашивают наше
-         право (grm_*), решает GRM. Это и есть «синхронизация в обратную
-         сторону»: сторонний аддон, спросивший через CAMI, получит наш ответ. ]]
-    hook.Add("CAMI.PlayerHasAccess", "GRM_Admin_CAMIAnswer", function(actorPly, privilegeName, callback)
-        if not isstring(privilegeName) or privilegeName:sub(1, 4) ~= "grm_" then return end
-        local perm = privilegeName:sub(5)
-        if not AD.Perms[perm] then return end
-        -- Отвечаем СВОЕЙ локальной проверкой: спросить CAMI в ответ на
-        -- запрос CAMI — это и есть та самая рекурсия.
-        local allowed = AD.CanLocal(actorPly, perm)
-        if isfunction(callback) then callback(allowed, "GRM Admin") end
-        return true
-    end)
-
-    -- ULX-обёртка: команда ulx grmadmin открывает наше меню, чтобы
-    -- администраторам не переучиваться на новые команды.
-    local function registerULX()
-        if not (ulx and ulx.command) then return false end
-        if AD._ulxRegistered then return true end
-        local ok = pcall(function()
-            local function openPanel(callingPlayer)
-                if not IsValid(callingPlayer) then return end
-                if not AD.Can(callingPlayer, "menu.open") then
-                    ULib.tsayError(callingPlayer, "Нет доступа к админ-меню GRM", true)
-                    return
-                end
-                AD.SyncTo(callingPlayer)
-                AD.PushPlayers(callingPlayer)
-                callingPlayer:ConCommand("grm_admin_panel")
-            end
-            local cmd = ulx.command("GRM", "ulx grmadmin", openPanel, "!grmadmin")
-            cmd:defaultAccess(ULib.ACCESS_ADMIN)
-            cmd:help("Открыть центр администрирования GRM")
-        end)
-        AD._ulxRegistered = ok
-        return ok
-    end
-    hook.Add("ULibLocalPlayerReady", "GRM_Admin_ULXCmd", registerULX)
-    timer.Simple(8, registerULX)
 
     concommand.Add("grm_admin_groups", function(ply)
         if IsValid(ply) and not AD.Can(ply, "acl.groups") then return end
@@ -970,15 +812,6 @@ if SERVER then
         for _, row in ipairs(AD.PermList()) do
             out(("  %-24s %-12s %s%s"):format(row.id, row.minAccess, row.label, row.danger and "  (опасное)" or ""))
         end
-    end)
-
-    concommand.Add("grm_admin_sync", function(ply)
-        if IsValid(ply) and not AD.IsSuper(ply) then return end
-        local ok, detail = AD.ImportFromULib(true)
-        AD.PublishCAMI()
-        AD.SyncTo(nil)
-        local msg = "[GRM Admin] Синхронизация: " .. tostring(ok and detail or detail)
-        if IsValid(ply) then ply:PrintMessage(HUD_PRINTCONSOLE, msg) else print(msg) end
     end)
 end
 

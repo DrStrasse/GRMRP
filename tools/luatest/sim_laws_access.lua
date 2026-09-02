@@ -106,20 +106,6 @@ GRM.FactionEconomy = {
 GRM.FactionEconomy.CanPublishLaws = function(ply) return GRM.FactionEconomy.HasAccess(ply, "law_publish") end
 
 
---[[ Настоящий CAMI зовёт хук CAMI.PlayerHasAccess. Если наш ответчик снова
-     пойдёт в CAMI — получится та самая рекурсия и «[ULib] stack overflow».
-     Мок повторяет это поведение один в один. ]]
-CAMI = {
-    PlayerHasAccess = function(ply, privilege, callback)
-        local answered, allowed = false, false
-        local res = hook.Run("CAMI.PlayerHasAccess", ply, privilege, function(ok)
-            answered, allowed = true, ok == true
-        end)
-        if res == true and answered then return allowed end
-        return false
-    end,
-}
-
 assert(loadfile("lua/autorun/sh_grm_admin_core.lua"))()
 assert(loadfile("lua/autorun/sh_grm_laws.lua"))()
 local LAWS = GRM.Laws
@@ -150,15 +136,15 @@ ok(istable(AD.Perms["laws.edit"]) and AD.Perms["laws.edit"].minAccess == "supera
     AD.Perms["laws.edit"] and AD.Perms["laws.edit"].minAccess)
 ok(istable(AD.Perms["laws.remove"]), "удаление статей — отдельное право")
 
-print("\n=== 1б. РЕКУРСИЯ CAMI (баг «[ULib] stack overflow») ===")
+print("\n=== 1б. НЕЗАВИСИМОСТЬ ЯДРА (мосты ликвидированы, заказ 03.09) ===")
 local okCall, res = pcall(AD.Can, moder, "laws.edit")
 ok(okCall == true, "проверка права не уходит в бесконечную рекурсию",
     okCall and "" or tostring(res))
 ok(res == false, "и отвечает по существу", tostring(res))
-ok(isfunction(AD.CanLocal), "есть локальная проверка без обращения к CAMI")
-local okHook, hookRes = pcall(hook.Run, "CAMI.PlayerHasAccess", moder, "grm_laws.edit", function() end)
-ok(okHook == true, "ответ на запрос CAMI тоже не рекурсивен", okHook and "" or tostring(hookRes))
-ok(AD._camiDepth == 0, "сторож глубины возвращается в ноль", AD._camiDepth)
+ok(isfunction(AD.CanLocal), "локальная проверка матрицы — единственный механизм")
+local coreSrc = (function() local f = assert(io.open("lua/autorun/sh_grm_admin_core.lua", "rb"))
+    local t = f:read("*a") f:close() return t end)()
+ok(coreSrc:find("CAMI", 1, true) == nil, "обращений к внешнему мосту в ядре нет вовсе")
 
 print("\n=== 2. КТО МОЖЕТ ПРАВИТЬ ===")
 ok(LAWS.CanEdit(super) == true, "суперадмин может")
@@ -248,8 +234,8 @@ ok(has(fixes, "Доступами к законам управляет лиде�
 ok(has(perms, "Доступами организации управляет её лидер или суперадмин."),
     "сервер отвечает на попытку без права, а не молчит")
 ok(has(laws, 'net.Receive("GRM_Laws_Changed"'), "клиент реагирует на сигнал об изменении")
-ok(has(read("lua/autorun/sh_grm_admin_core.lua"), "спросить CAMI в ответ на"),
-    "в ядре объяснено, откуда бралась рекурсия")
+ok(has(read("lua/autorun/sh_grm_admin_core.lua"), "мосты ликвидированы"),
+    "в ядре зафиксирован урок рекурсии: обращений наружу нет")
 
 print(("\nLAWS ACCESS: %d/%d, провалов: %d"):format(total - fails, total, fails))
 if fails > 0 then os.exit(1) end

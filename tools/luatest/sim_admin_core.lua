@@ -1,6 +1,6 @@
 --[[--------------------------------------------------------------------
     sim_admin_core — собственная админ-платформа GRM:
-      группы и права, иммунитет, синхронизация с ULX/ULib и CAMI,
+      группы и права, иммунитет, автономная проверка (без внешних мостов),
       модерация (ТП/мут/джаил/рагдолл и т.д.), возможности суперадмина,
       админ-меню с нужными вкладками.
 
@@ -28,18 +28,14 @@ ok(core:find("function AD.CanTarget", 1, true) ~= nil and core:find("У цели
 ok(core:find("function AD.GroupChain", 1, true) ~= nil, "наследование групп")
 ok(core:find("grm_admin/groups.json", 1, true) ~= nil and core:find("grm_admin/users.json", 1, true) ~= nil,
     "группы и назначения хранятся на диске")
-ok(core:find("function AD.ImportFromULib", 1, true) ~= nil, "импорт групп и назначений из ULX/ULib")
-ok(core:find("ULib.ucl.addUser", 1, true) ~= nil, "назначение зеркалится в ULib (ulx-команды не ломаются)")
-ok(core:find("CAMI.RegisterUsergroup", 1, true) ~= nil and core:find("CAMI.RegisterPrivilege", 1, true) ~= nil,
-    "группы и права публикуются в CAMI")
-ok(core:find("CAMI.SignalUserGroupChanged", 1, true) ~= nil, "смена группы сообщается другим админ-модам")
-ok(core:find('hook.Add("CAMI.PlayerHasAccess", "GRM_Admin_CAMIAnswer"', 1, true) ~= nil,
-    "GRM отвечает на запросы доступа от чужих модулей")
-ok(core:find('hook.Add("CAMI.PlayerUsergroupChanged", "GRM_Admin_External"', 1, true) ~= nil,
-    "смена группы через ULX подхватывается обратно в GRM")
+-- Контракт 03.09 (прямой приказ владельца): зависимость ликвидирована —
+-- ни импортов, ни зеркал, ни обёрток. Ядро проверяется на ОТСУТСТВИЕ следов.
+ok(core:find("ULib", 1, true) == nil, "в ядре нет ни одной отсылки к ULib")
+ok(core:find("ULX", 1, true) == nil and core:find("ulx", 1, true) == nil, "ни следов ULX: обёртки команд и импорт сняты")
+ok(core:find("CAMI", 1, true) == nil, "CAMI-мосты ликвидированы: регистраций и ответчиков нет")
+ok(core:find("function AD.CanLocal", 1, true) ~= nil, "локальная проверка матрицы — единственный механизм")
 ok(core:find("ply:SetUserGroup(groupID)", 1, true) ~= nil,
-    "группа ставится и в движок: IsAdmin/IsSuperAdmin остаются валидными")
-ok(core:find('ulx.command("GRM", "ulx grmadmin"', 1, true) ~= nil, "ULX-команда ulx grmadmin открывает наше меню")
+    "движковый флаг поддерживаем: IsAdmin/IsSuperAdmin остаются валидными")
 
 print("\n=== 2. ПРАВА И ГРУППЫ ПО УМОЛЧАНИЮ ===")
 for _, perm in ipairs({ "mod.goto", "mod.bring", "mod.mute", "mod.gag", "mod.jail", "mod.ragdoll",
@@ -64,8 +60,9 @@ ok(actions:find('hook.Add("PlayerCanHearPlayersVoice", "GRM_Admin_Gag"', 1, true
 ok(actions:find("local function releaseJail", 1, true) ~= nil, "клетка снимается корректно, с возвратом на место")
 ok(actions:find('hook.Add("PlayerDisconnected", "GRM_Admin_Cleanup"', 1, true) ~= nil,
     "клетки и рагдоллы не остаются на карте после выхода")
-ok(actions:find("ULib.ban", 1, true) ~= nil and actions:find("ULib.kick", 1, true) ~= nil,
-    "бан и кик отдаются ULib — одна база банов с ULX")
+ok(actions:find("ULib", 1, true) == nil, "делегаций внешним админ-модам нет: ULib-ветки вырезаны")
+ok(actions:find("banid %d", 1, true) ~= nil and actions:find("writeid", 1, true) ~= nil
+    and actions:find(":Kick(", 1, true) ~= nil, "санкции исполняет сам GRM: banid + writeid + Kick")
 
 print("\n=== 4. ВОЗМОЖНОСТИ СУПЕРАДМИНА ===")
 for _, op in ipairs({ "god", "cloak", "speed", "buildmode", "freezeall", "unfreezeall", "money", "item", "cleanup" }) do

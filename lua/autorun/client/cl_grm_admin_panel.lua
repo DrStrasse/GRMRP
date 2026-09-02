@@ -925,7 +925,6 @@ local function buildModules(pnl)
 
     launchCard(scroll, "Очередь загрузки", "Показать время каждой задачи старта в консоли", "grm_boot_status", C.accent)
     launchCard(scroll, "Проверка звуков", "Каких звуковых файлов не хватает", "grm_sound_check", C.accent)
-    launchCard(scroll, "Синхронизация с ULX/ULib", "Импорт групп и назначений, публикация в CAMI", "grm_admin_sync", C.gold)
 end
 
 local function buildSuper(pnl)

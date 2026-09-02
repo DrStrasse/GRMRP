@@ -69,24 +69,15 @@ if SERVER then
     -- ── Остальные функции (без изменений) ────────────────────────
     local function getPlayerRank(ply)
         if not IsValid(ply) then return "user" end
-        local sid = ply:SteamID()
         --[[ 21.08. Группа GRM важнее всего остального: назначение через
              админ-панель раньше не отражалось в TAB вообще (список смотрел
-             только в ULib и в движковые флаги). ]]
+             в чужие внешние таблицы, до которых нам нет дела с 03.09). ]]
         if GRM.Admin and GRM.Admin.GroupOf then
             local group = GRM.Admin.GroupOf(ply)
             if isstring(group) and group ~= "" then return group end
         end
         local nw = ply.GetNWString and ply:GetNWString("GRM_AdminGroup", "") or ""
         if nw ~= "" then return nw end
-        if ULib and ULib.ucl and ULib.ucl.getUserGroup then
-            local group = ULib.ucl.getUserGroup(sid)
-            if group and group ~= "" then return group end
-        end
-        if ulx and ulx.getUserGroup then
-            local group = ulx.getUserGroup(sid)
-            if group and group ~= "" then return group end
-        end
         if ply:IsSuperAdmin() then return "superadmin" end
         if ply:IsAdmin()      then return "admin"      end
         return "user"
@@ -253,11 +244,7 @@ if SERVER then
             if not IsValid(target) then sendResult(false, "Игрок не в сети"); return end
             if target == admin then sendResult(false, "Нельзя кикнуть себя"); return end
             local reason = a.reason or "Кикнут администратором"
-            if ULib and ulx and ulx.kick then
-                ULib.queueFunctionCall(ulx.kick, admin, target, reason)
-            else
-                target:Kick("[GRM] " .. reason)
-            end
+            target:Kick("[GRM] " .. reason)
             announce("кикнул", target, " · причина: " .. tostring(reason))
             sendResult(true, "Кикнут: " .. target:Nick())
 
@@ -270,34 +257,38 @@ if SERVER then
             end
             local minutes = math.max(0, math.floor(tonumber(a.minutes) or 0))
             local reason  = a.reason or "Забанен администратором"
-            if ULib and ulx and ulx.ban then
-                ULib.queueFunctionCall(ulx.ban, admin, target, minutes, reason)
+            local steamid = target:SteamID()
+            target:Kick("[GRM] Забанен: " .. reason)
+            if minutes == 0 then
+                game.ConsoleCommand("banid 0 " .. steamid .. "\n")
+                game.ConsoleCommand("writeid\n")
             else
-                local steamid = target:SteamID()
-                target:Kick("[GRM] Забанен: " .. reason)
-                if minutes == 0 then
-                    game.ConsoleCommand("banid 0 " .. steamid .. "\n")
-                    game.ConsoleCommand("writeid\n")
-                else
-                    game.ConsoleCommand("banid " .. minutes .. " " .. steamid .. "\n")
-                    game.ConsoleCommand("writeid\n")
-                end
+                game.ConsoleCommand("banid " .. minutes .. " " .. steamid .. "\n")
+                game.ConsoleCommand("writeid\n")
             end
             local durStr = minutes == 0 and "навсегда" or (minutes .. " мин.")
             announce("забанил", target, " (" .. durStr .. ") · причина: " .. tostring(reason))
             sendResult(true, "Забанен (" .. durStr .. "): " .. target:Nick())
 
-        elseif a.type == "ulx_mute" or a.type == "ulx_unmute" then
-            if not (ULib and ulx and ulx.mute) then
-                sendResult(false, "ULX не установлен или функция mute недоступна"); return
-            end
+        elseif a.type == "voice_mute" or a.type == "voice_unmute" then
+            -- Голосовой мут — СВОЙ (03.09): флаг на игроке + фильтр ниже.
             local target = findBySID64(a.sid64)
             if not IsValid(target) then sendResult(false, "Игрок не в сети"); return end
-            local muting = (a.type == "ulx_mute")
-            ULib.queueFunctionCall(ulx.mute, admin, target, muting and 1 or 0, muting and "Заглушен голос" or "")
+            local muting = (a.type == "voice_mute")
+            target.GRM_VoiceMuted = muting or nil
+            if muting then
+                target:ChatPrint("Голос заглушён администратором.")
+            else
+                target:ChatPrint("Голос возвращён.")
+            end
             announce(muting and "заглушил голос" or "вернул голос", target)
             sendResult(true, (muting and "Заглушен голос: " or "Разглушен голос: ") .. target:Nick())
         end
+    end)
+
+    -- Фильтр голоса для собственного мута (GRM_VoiceMuted).
+    hook.Add("PlayerCanHearPlayersVoice", "GRM_TabVoiceMute", function(_, talker)
+        if IsValid(talker) and talker.GRM_VoiceMuted then return false end
     end)
 
     hook.Add("PlayerSay", "GRM_TabGagFilter", function(ply, text)
@@ -857,17 +848,15 @@ if CLIENT then
                 )
                 y = y + 32
 
-                if ULib and ulx and ulx.mute then
-                    mkBtn(sp, "Мут (ULX)", Color(50, 70, 120),
-                        12, y, bHalf, 26,
-                        function() sendAction({ type = "ulx_mute", sid64 = pd.sid64 }) end
-                    )
-                    mkBtn(sp, "Размут (ULX)", Color(30, 90, 60),
-                        12 + bHalf + 4, y, bHalf, 26,
-                        function() sendAction({ type = "ulx_unmute", sid64 = pd.sid64 }) end
-                    )
-                    y = y + 32
-                end
+                mkBtn(sp, "Мут голоса", Color(50, 70, 120),
+                    12, y, bHalf, 26,
+                    function() sendAction({ type = "voice_mute", sid64 = pd.sid64 }) end
+                )
+                mkBtn(sp, "Размут голоса", Color(30, 90, 60),
+                    12 + bHalf + 4, y, bHalf, 26,
+                    function() sendAction({ type = "voice_unmute", sid64 = pd.sid64 }) end
+                )
+                y = y + 32
 
                 local sep4 = vgui.Create("DPanel", sp)
                 sep4:SetPos(12, y); sep4:SetSize(dw - 24, 1)

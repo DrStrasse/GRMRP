@@ -107,12 +107,8 @@ if SERVER then
     local function engineBan(sid64, minutes)
         local steamid = util.SteamIDFrom64 and util.SteamIDFrom64(sid64) or nil
         if not steamid then return end
-        if ULib and ULib.addBan then
-            pcall(ULib.addBan, steamid, minutes, "Античит GRM (авто)", nil, nil)
-        else
-            game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamid))
-            game.ConsoleCommand("writeid\n")
-        end
+        game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamid))
+        game.ConsoleCommand("writeid\n")
     end
     AC.EngineBan = engineBan
 

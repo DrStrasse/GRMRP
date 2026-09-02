@@ -31,9 +31,10 @@ end
 --[[ Признаки валидации. Список широкий намеренно: проверка часто живёт
      во вспомогательной функции (inRange, rateOK, canManage), и требовать
      именно Guard() значило бы завалить стенд ложными провалами. ]]
+--[[ AD.Can( — центральный вход своей библиотеки прав GRM (с 03.09 единственный). ]]
 local AUTH = "IsSuperAdmin\0IsAdmin(\0IsUserGroup\0Access.Can\0Guard(" ..
     "\0inRange(\0rateOK(\0DistToSqr\0Distance(\0hasAdminAccess" ..
-    "\0IsListenServerHost\0GetOwner()\0OwnerKey\0CharacterKey(ply" ..
+    "\0AD.Can(\0IsListenServerHost\0GetOwner()\0OwnerKey\0CharacterKey(ply" ..
     "\0charKey(ply\0CurTime() <\0Cooldown\0cooldown\0_next\0NextUse"
 local AUTH_LIST = {}
 for piece in AUTH:gmatch("[^%z]+") do AUTH_LIST[#AUTH_LIST + 1] = piece end

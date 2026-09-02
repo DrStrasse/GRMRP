@@ -15,13 +15,14 @@
       slay / respawn / heal / armor     — состояние игрока
       strip                             — забрать оружие
       spectate                          — наблюдение
-      kick / ban / warn                 — санкции (ban через ULib, если есть)
+      kick / ban / warn                 — санкции (свои: Kick + banid/writeid)
 
     Возможности суперадмина («читерские»):
       god, cloak, speed, buildmode, freezeall, money, item, cleanup
 
-    ULX/ULib: бан и кик отдаются ULib, если он установлен (одна база банов),
-    иначе используются штатные средства движка.
+    Санкции исполняет сам GRM штатными средствами движка (banid + writeid,
+    kick) плюс своя книга HWID-банов: внешние админ-моды не касаются нашей
+    базы вовсе (заказ владельца 03.09 — зависимость ликвидирована).
 ----------------------------------------------------------------------]]
 if SERVER then AddCSLuaFile() end
 
@@ -393,11 +394,7 @@ A.spectate = { perm = "mod.spectate", target = true, label = "Наблюдени
 A.kick = { perm = "mod.kick", target = true, label = "Кик",
     fn = function(actor, target, args)
         local reason = string.sub(tostring(args and args.reason or "Нарушение правил"), 1, 120)
-        if ULib and ULib.kick then
-            pcall(ULib.kick, target, reason, actor)
-        else
-            target:Kick(reason)
-        end
+        target:Kick(reason)
         return true, rpNameOf(target) .. " кикнут: " .. reason
     end }
 
@@ -416,13 +413,10 @@ A.ban = { perm = "mod.ban", target = true, label = "Бан",
                 target.IPAddress and target:IPAddress() or "")
             hwidNote = okH and tostring(msgH) or ("запись не заведена: " .. tostring(msgH))
         end
-        if ULib and ULib.ban then
-            pcall(ULib.ban, target, minutes, reason, actor)
-        else
-            -- Штатный бан движка: минуты, 0 = навсегда.
-            game.ConsoleCommand(("banid %d %s kick\n"):format(minutes, target:SteamID()))
-            target:Kick(reason)
-        end
+        -- Штатный бан движка: минуты, 0 = навсегда; запись закрепляем.
+        game.ConsoleCommand(("banid %d %s kick\n"):format(minutes, target:SteamID()))
+        game.ConsoleCommand("writeid\n")
+        target:Kick(reason)
         return true, ("%s забанен на %d мин: %s"):format(rpNameOf(target), minutes, reason)
             .. (hwidNote and (" · " .. hwidNote) or "")
     end }
@@ -464,12 +458,8 @@ A.unban = { perm = "mod.ban", target = false, label = "Снять глобаль
         end
         if not sid64:match("^%d+$") then return false, "Не удалось определить SteamID64" end
         local steamid = util.SteamIDFrom64 and util.SteamIDFrom64(sid64) or nil
-        if ULib and ULib.unban then
-            pcall(ULib.unban, steamid or sid64, actor)
-        else
-            game.ConsoleCommand(("removeid %s\n"):format(steamid or sid64))
-            game.ConsoleCommand("writeid\n")
-        end
+        game.ConsoleCommand(("removeid %s\n"):format(steamid or sid64))
+        game.ConsoleCommand("writeid\n")
         if GRM.ServerBan and GRM.ServerBan.Unban then GRM.ServerBan.Unban(actor, sid64) end
         -- Глобальная книга: снимки машины/IP тоже снимаются, иначе новый
         -- аккаунт человека остался бы под молчаливым добаном.
@@ -518,19 +508,17 @@ A.ban_id = { perm = "mod.ban", target = false, label = "Бан по ID игро�
             if not okTarget then return false, why end
             -- Снимок машины — до кика (онлайн-путь, заказ 02.09).
             globalRow(target.GRM_MachineRep, target.IPAddress and target:IPAddress() or "")
-            if ULib and ULib.ban then pcall(ULib.ban, target, minutes, reason, actor)
-            else
-                game.ConsoleCommand(("banid %d %s kick\n"):format(minutes, target:SteamID()))
-                target:Kick(reason)
-            end
+            game.ConsoleCommand(("banid %d %s kick\n"):format(minutes, target:SteamID()))
+            game.ConsoleCommand("writeid\n")
+            target:Kick(reason)
         else
             -- Офлайн: считать железо не с кого — запись по одному SteamID;
             -- отпечаток добавится, если человек всплывёт в сети и админ
             -- перепишет бан с живого снимка (или нажмёт «Снимок машины»).
             globalRow(nil, "")
             local steamID = util.SteamIDFrom64 and util.SteamIDFrom64(account) or account
-            if ULib and ULib.addBan then pcall(ULib.addBan, steamID, minutes, reason, nil, actor)
-            else game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamID)) end
+            game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamID))
+            game.ConsoleCommand("writeid\n")
         end
 
         local who = charRec and charRec.name ~= "" and charRec.name or (charKey or account)
