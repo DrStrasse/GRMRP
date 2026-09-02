@@ -1,5 +1,31 @@
 # CHANGELOG — история изменений
 
+## 2026-09-02 (ночь+1) — WIKI Часть IV: вскрытие второй волны (5 источников)
+
+**Репорт владельца.** «Изучай, вноси в единый MD для обучения/написания кода»:
+darkfated/mantle, louiefox/bCrafting, ZakBlystone/gmod_blueprints (графы,
+линии), SheepyLord/Gmod-Mmd-Motion-Importer, FPtje/Falcos-Prop-protection.
+
+**WIKI.md (20784 строк):**
+- Часть IV дополнена 4.7–4.12: Hermite-линии одним triangle-strip с
+  косинусной выборкой и AABB-каллингом; зум-2D-канва (mtx+scissor+LOD);
+  listdiff-4-операции и bptransfer (chunk+CRC-кэш на клиенте); RT-тени/
+  Kawase-RNDX (вердикт: приёмы, не библиотека); инерционный скролл с
+  hover-гейтом и OnSizeChanged-обёртками; animate_appearance как Think-only
+  анимация; material_url DATA-кэш с pending-схлопыванием; оборонительный
+  нормализатор входных форматов (MMD); follow с мёртвой зоной и hull→line
+  fallback; CPPI-интероп, отказ-с-причиной и наказательная лестница (FPP);
+  bCrafting как каталог дыр (net.ReadEntity без дистанции);
+- Часть III дополнена §5.10–5.13 (оконные рецепты: линии, канва, скролл,
+  анимации) — с готовым кодом Hermite/mtx-канвы;
+- Часть I: §7.12 (net.ReadEntity-валидация), §7.13 (CPPI для GRM-энтити),
+  §8.8 (нормализатор чужих форматов), 4 строки в §12, шапка Части IV
+  обновлена.
+
+Код не менялся; dist без изменений. Песочница до начала задачи была
+сброшена на Initial commit — ветка восстановлена с origin, потерянных
+правок нет.
+
 ## 2026-09-02 (ночь) — Документация: единый том WIKI.md
 
 **Репорт владельца.** «Изучи/препарируй netlibrary, advdupe2, Deformation,
