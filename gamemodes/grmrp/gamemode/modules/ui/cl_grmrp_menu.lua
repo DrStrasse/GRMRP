@@ -1,6 +1,7 @@
 --[[ GRM:RP — меню паузы. Заменяет стандартный gameui (ESC): плавные кнопки
-    въезжают слева, в центре — 3D-персонаж с «отражением», справа — карточка
-    персонажа (RP-имя, HP/AR, наработка, деньги). Реестр вкладок декларативный
+    въезжают слева; справа — карточка персонажа: 3D-витрина ЖИВОГО вида
+    (модель+скин+бодигруппы, вращается мышью) под RP-именем и статами —
+    никакого «отдельного окна» в центре (замечание владельца 03.09). Реестр вкладок декларативный
     (GRMRPMenu.AddTab) — точка расширения окон режима (§5.16).
     Паттерны: §5.13 (анимации только пока идут), §5.17 (шрифты extended,
     кириллица), палитра общая с чатом.
@@ -150,6 +151,15 @@ function Menu.Open()
     root:MakePopup()
     root.animStart = CurTime()
     root.bgAlpha = 0
+    -- ESC навешивается ДО контента: если сборка содержимого ошибётся,
+    -- попоп не должен остаться висеть и есть invnext/invprev (селектор
+    -- оружия «умер» именно так — крах Skin() в модели, лив 03.09).
+    function root:OnKeyCodeTyped(code)
+        if code == KEY_ESCAPE then
+            Menu.Close()
+            return true
+        end
+    end
 
     local colW = math.Clamp(scrW * 0.24, 300, 380)
 
@@ -222,72 +232,20 @@ function Menu.Open()
     end
     root.colH = y - 110
 
-    ------------------------------------------------------------ персонаж + отражение
+    ------------------------------------------------------------ витрина-карточка
+    -- Показ персонажа — ВНУТРИ карточки справа, а не «отдельное окно» в
+    -- центре экрана (замечание владельца 03.09). Бодигруппы и скин
+    -- копируются с живого игрока: раньше DModelPanel рисовал «голую»
+    -- дефолтную модель («почему не показываются текущие бодигруппы»).
     local ply = LocalPlayer()
-    local centerX = 16 + colW + 24
     local rightW = math.Clamp(scrW * 0.26, 300, 380)
-    local stageX = centerX
-    local stageW = math.max(220, (scrW - rightW - 16) - stageX - 16)
-    local stageH = math.min(470, scrH - 140)
-    local stageY = math.floor((scrH - stageH) / 2)
+    local cardH = math.Clamp(scrH - 160, 400, 620)
+    local modelH = math.Clamp(cardH - 62 - 196, 120, 360)
+    local statsBase = 62 + modelH + 12
+    cardH = statsBase + 6 * 28 + 18
 
-    local function camParams()
-        local mn, mx = ply:OBBMins(), ply:OBBMaxs()
-        local h = (mx and mx.z or 64) - (mn and mn.z or 0)
-        local wide = math.max(math.abs(mx and mx.x or 16), math.abs(mn and mn.x or 16))
-        return h, wide
-    end
-
-    -- Персонаж — часть меню, НЕ «отдельное окно»: без рамки/фона стажи
-    -- (замечание 03.09). Две панели подряд: фигура + «отражение».
-    local function applyLook(m)
-        m:SetModel(ply:GetModel() or "models/player.mdl")
-        -- копия живой внешности: без этого DModelPanel показывает «голую»
-        -- модель — «почему не показываются бодигруппы» (03.09)
-        if ply:Skin() ~= nil then m:SetSkin(ply:Skin()) end
-        if ply.GetBodyGroups and m.SetBodygroup then
-            for _, bg in ipairs(ply:GetBodyGroups()) do
-                local ok, val = pcall(function() return ply:GetBodygroup(bg.id) end)
-                if ok and isnumber(val) then m:SetBodygroup(bg.id, val) end
-            end
-        end
-    end
-
-    local function newModel(parent, flip, px, py, pw, ph)
-        local m = vgui.Create("DModelPanel", parent)
-        local hgt, wide = camParams()
-        m:SetSize(pw, ph)
-        m:SetPos(px, py)
-        applyLook(m)
-        m:SetAnimated(not flip)
-        -- Кадрируем ВСЮ фигуру: широкий кадр по полному росту (голова не
-        -- режется — жалоба со скрина), панель кропает по своим границам.
-        local dist = hgt * 2.05 + wide * 1.35 + 30
-        if not flip then
-            m:SetCamPos(Vector(dist, dist * 0.32, hgt * 0.54))
-            m:SetLookAt(Vector(0, 0, hgt * 0.48))
-        else
-            -- «отражение»: камера сверху вниз; градиент тушит дальний край
-            m:SetCamPos(Vector(dist, dist * 0.32, hgt * 1.62))
-            m:SetLookAt(Vector(0, 0, hgt * 0.95))
-            m.PaintOver = function(_, w2, h2)
-                for i = 0, 5 do
-                    local t = i / 5
-                    surface.SetDrawColor(8, 14, 23, math.floor(90 + t * 160))
-                    surface.DrawRect(0, math.floor(h2 * t / 2), w2, math.ceil(h2 / 6))
-                end
-            end
-        end
-        return m
-    end
-    local mainH = math.floor(stageH * 0.72)
-    local reflH = stageH - mainH - 8
-    Menu.model = newModel(root, false, stageX, stageY, stageW, mainH)
-    Menu.modelRef = newModel(root, true, stageX, stageY + mainH + 8, stageW, reflH)
-
-    ------------------------------------------------------------ карточка справа
-    local card = newCard(root, rightW, 250)
-    card:SetPos(scrW - rightW - 16, stageY + 8)
+    local card = newCard(root, rightW, cardH)
+    card:SetPos(scrW - rightW - 16, 76)
 
     local nameLbl = vgui.Create("DLabel", card)
     nameLbl:SetFont("GRMRP_MenuHead")
@@ -302,14 +260,67 @@ function Menu.Open()
     steamLbl:SetPos(14, 42)
     steamLbl:SetWide(rightW - 28)
 
-    local vHP = statRow(card, 76, "Здоровье")
-    local vAR = statRow(card, 104, "Броня")
-    local vMoney = statRow(card, 132, "Деньги")
-    local vJob = statRow(card, 160, "Работа")
-    local vTime = statRow(card, 188, "В игре")
-    local vMap = statRow(card, 216, "Карта")
+    local function camParams()
+        local mn, mx = ply:OBBMins(), ply:OBBMaxs()
+        local hh = (mx and mx.z or 64) - (mn and mn.z or 0)
+        local wide = math.max(math.abs(mx and mx.x or 16), math.abs(mn and mn.x or 16))
+        return hh, wide
+    end
 
-    ------------------------------------------------------------ статистика (тик 0.5с)
+    local function applyLook(m)
+        m:SetModel(ply:GetModel() or "models/player.mdl")
+        -- У Player нет метода Skin() — правильный обход Entity:GetSkin();
+        -- прежний вызов и ронял всё меню (крах-лог 03.09). Всё копирование
+        -- внешности — под pcall: ни один аддон-ресет не обязан существовать.
+        if m.SetSkin and ply.GetSkin then
+            local okS, sk = pcall(function() return ply:GetSkin() end)
+            if okS and isnumber(sk) then pcall(function() m:SetSkin(sk) end) end
+        end
+        if ply.GetBodyGroups and m.SetBodygroup then
+            for _, bg in ipairs(ply:GetBodyGroups()) do
+                local ok, val = pcall(function() return ply:GetBodygroup(bg.id) end)
+                if ok and isnumber(val) then
+                    pcall(function() m:SetBodygroup(bg.id, val) end)
+                end
+            end
+        end
+    end
+
+    local function newModel(parent, px, py, pw, ph)
+        local m = vgui.Create("DModelPanel", parent)
+        local hgt, wide = camParams()
+        m:SetSize(pw, ph)
+        m:SetPos(px, py)
+        applyLook(m)
+        m:SetAnimated(true)
+        -- Широкий кадр по полному росту: фигура целиком, голова в кадре;
+        -- мышь включена — модель можно вращать перетаскиванием.
+        local dist = hgt * 1.25 + wide * 1.2 + 20
+        m:SetCamPos(Vector(dist, dist * 0.22, hgt * 0.55))
+        m:SetLookAt(Vector(0, 0, hgt * 0.5))
+        if m.SetMouseInputEnabled then m:SetMouseInputEnabled(true) end
+        return m
+    end
+
+    -- Витрина — в пузыре: сорвалась — живёт всё остальное меню; «зависший
+    -- полупрозрачный попоп» хуже, чем меню без модели.
+    local okChar = pcall(function()
+        Menu.model = newModel(card, 12, 62, rightW - 24, modelH)
+    end)
+    if not okChar then
+        Menu.model = nil
+        if GRMRP.ErrorNoHalt then
+            GRMRP.ErrorNoHalt("меню: витрина персонажа отключена (ошибка сборки)")
+        end
+    end
+
+    local vHP = statRow(card, statsBase, "Здоровье")
+    local vAR = statRow(card, statsBase + 28, "Броня")
+    local vMoney = statRow(card, statsBase + 56, "Деньги")
+    local vJob = statRow(card, statsBase + 84, "Работа")
+    local vTime = statRow(card, statsBase + 112, "В игре")
+    local vMap = statRow(card, statsBase + 140, "Карта")
+
     card.nextStats = 0
     card.UpdateStats = function()
         if CurTime() < card.nextStats then return end
@@ -328,14 +339,6 @@ function Menu.Open()
             and tostring(GRMRP.Jobs.GetJobName(pl)) or "—")
         vTime:SetText(fmtTime(CurTime() - (GRMRP.JoinTime or CurTime())))
         vMap:SetText(game.GetMap())
-    end
-
-    ------------------------------------------------------------ закрытие/клавиши
-    function root:OnKeyCodeTyped(code)
-        if code == KEY_ESCAPE then
-            Menu.Close()
-            return true
-        end
     end
 
     ------------------------------------------------------------Think: только анимации
