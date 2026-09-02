@@ -76,13 +76,26 @@ function V.EnsureUID(ent)
     return id
 end
 
---- Человеческое имя машины (для журналов и окон).
+--- Человеческое имя машины (для журналов и окон). Каждое имя проходит общий
+--- фильтр подписей VK.CleanName (заказ владельца 02.09.2026: клейма паков
+--- техники в надписях модулей недопустимы) — имя-водяной знак не попадает ни
+--- в карточки, ни в записи автоучёта, ни куда-либо ещё.
+local function cleanName(n)
+    if not isstring(n) or n == "" then return nil end
+    if VK and isfunction(VK.CleanName) then return VK.CleanName(n) end
+    return n
+end
+
 function V.Title(ent)
     if not IsValid(ent) then return "" end
-    local name = tostring(ent.VD_Name or ent.PrintName or "")
-    if name == "" then name = tostring(ent:GetNWString("GRM_VehicleName", "")) end
-    if name == "" then name = tostring(ent.VD_Class or ent:GetClass() or "") end
-    return name
+    local name = cleanName(ent.VD_Name ~= nil and tostring(ent.VD_Name) or nil)
+        or cleanName(ent.PrintName ~= nil and tostring(ent.PrintName) or nil)
+        or cleanName(ent:GetNWString("GRM_VehicleName", ""))
+    if not name or name == "" then
+        name = cleanName(ent.VD_Class ~= nil and tostring(ent.VD_Class) or nil)
+            or cleanName(ent:GetClass() ~= nil and tostring(ent:GetClass()) or nil)
+    end
+    return name or "Транспорт"
 end
 
 if SERVER and GRM.Modules and GRM.Modules.Register then

@@ -776,10 +776,20 @@ if SERVER then
          поэтому честный статус на старте — «в гараже». ]]
     function FL.NormalizeLoadedUnits(units)
         for _, unit in pairs(units or {}) do
-            if istable(unit) and tostring(unit.status or "") == "active" then
-                unit.status = "stored"
-                unit.restoredFromActive = true
-                unit.lastIn = unit.lastIn or os.time()
+            if istable(unit) then
+                --[[ Имена из старых записей могут нести клеймо пака техники
+                     (список маркеров — VK.NameMarks) — заказ владельца от
+                     02.09.2026: таких надписей ни в одном модуле. Реестр
+                     чистится на загрузке; новые записи рождаются уже чистыми
+                     (фильтр на источнике имён — VD.VehicleInfo/VK.CleanName). ]]
+                if isstring(unit.name) and VK and isfunction(VK.CleanName) then
+                    unit.name = VK.CleanName(unit.name) or tostring(unit.class or "")
+                end
+                if tostring(unit.status or "") == "active" then
+                    unit.status = "stored"
+                    unit.restoredFromActive = true
+                    unit.lastIn = unit.lastIn or os.time()
+                end
             end
         end
         return units
@@ -817,6 +827,10 @@ if SERVER then
         local m = readJSON(MARKET_FILE)
         for _, entry in ipairs(istable(m) and m.market or {}) do
             if istable(entry) and tostring(entry.id or "") ~= "" then
+                -- Клеймо пака в имени лота рынка — тоже недопустимая надпись (02.09).
+                if isstring(entry.name) and VK and isfunction(VK.CleanName) then
+                    entry.name = VK.CleanName(entry.name) or tostring(entry.class or "")
+                end
                 FL.Market[tostring(entry.id)] = entry
             end
         end

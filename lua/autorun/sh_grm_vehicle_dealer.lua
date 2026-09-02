@@ -98,11 +98,23 @@ local function write(path,data)local ok,s=pcall(util.TableToJSON,data,true);if n
 local function key(ply)if GRM.Identity and GRM.Identity.CharacterKey then return GRM.Identity.CharacterKey(ply)end;return tostring(ply:SteamID64())..":char1"end
 local function vd(v)return{x=v.x,y=v.y,z=v.z}end;local function ad(a)return{p=a.p,y=a.y,r=a.r}end
 local function vec(t)return Vector(tonumber(t.x)or 0,tonumber(t.y)or 0,tonumber(t.z)or 0)end;local function ang(t)return Angle(tonumber(t.p)or 0,tonumber(t.y)or 0,tonumber(t.r)or 0)end
+-- Имена с клеймом сторонних паков техники (заказ владельца 02.09.2026 — таких
+-- надписей не должно быть ни в одном модуле) отсекает общий фильтр VK.CleanName.
+-- Каталог фильтруется здесь, на источнике; сохранённые записи — в точках выдачи
+-- клиенту (nameV).
+local function nameV(n,fb)
+ local function pass(s)
+  s=tostring(s or"");if s==""then return nil end
+  if VK and isfunction(VK.CleanName)then return VK.CleanName(s)end
+  return s
+ end
+ return pass(n)or pass(fb)or"Транспорт"
+end
 function VD.VehicleInfo(class)
- class=tostring(class or"");local v=(list.Get("Vehicles")or{})[class];if v then return{name=v.Name or class,model=v.Model or"models/buggy.mdl",system="source",data=v}end
- local s=(list.Get("simfphys_vehicles")or{})[class];if s then return{name=s.Name or s.PrintName or class,model=s.Model or"models/buggy.mdl",system="simfphys",data=s}end
- local l=(list.Get("LVS_Vehicles")or{})[class];if l then return{name=l.Name or l.PrintName or class,model=l.Model or"models/buggy.mdl",system="lvs",data=l}end
- return{name=class,model="models/buggy.mdl",system="unknown",data={}}
+ class=tostring(class or"");local v=(list.Get("Vehicles")or{})[class];if v then return{name=nameV(v.Name,class),model=v.Model or"models/buggy.mdl",system="source",data=v}end
+ local s=(list.Get("simfphys_vehicles")or{})[class];if s then return{name=nameV(s.Name or s.PrintName,class),model=s.Model or"models/buggy.mdl",system="simfphys",data=s}end
+ local l=(list.Get("LVS_Vehicles")or{})[class];if l then return{name=nameV(l.Name or l.PrintName,class),model=l.Model or"models/buggy.mdl",system="lvs",data=l}end
+ return{name=nameV(class),model="models/buggy.mdl",system="unknown",data={}}
 end
 function VD.AllVehicleClasses()local out,seen={},{};for _,registry in ipairs({list.Get("Vehicles")or{},list.Get("simfphys_vehicles")or{},list.Get("LVS_Vehicles")or{}})do for class in pairs(registry)do if not seen[class]then seen[class]=true;local i=VD.VehicleInfo(class);out[#out+1]={class=class,name=i.name,model=i.model,system=i.system}end end end;table.sort(out,function(a,b)return a.name<b.name end);return out end
 local function playerFaction(ply)if FactionsAPI and FactionsAPI.GetFactionOf then return FactionsAPI.GetFactionOf(ply)end;for name,f in pairs(Factions or{})do if GRM.Identity and GRM.Identity.FactionMember and GRM.Identity.FactionMember(f,ply)then return name end end end
@@ -144,7 +156,11 @@ if SERVER then
   ent:SetSpawnPos(hasPad and((padMin+padMax)*.5)or legacyPoint);ent:SetHasCustomSpawn(r.hasSpawn==true or hasPad);ent:SetSpawnAngle(ang(r.spawnAng or r.ang))
   ent.VD_Delivery=VD.DeliveryModes[tostring(r.delivery or"")]and tostring(r.delivery)or"dealer"
   ent.VD_ShowRetrieve=r.showRetrieve~=false
-  ent.VD_Vehicles=table.Copy(r.vehicles or{});VD.Dealers[r.id]=ent
+  ent.VD_Vehicles=table.Copy(r.vehicles or{})
+  -- Легаси-записи могли сохраниться с клеймом пака в имени (заказ 02.09) —
+  -- срезаем на загрузке; источник новых имён (VD.VehicleInfo) уже фильтрован.
+  for _,v in ipairs(ent.VD_Vehicles)do if isstring(v.name)then v.name=nameV(v.name,v.class)end end
+  VD.Dealers[r.id]=ent
  end
  function VD.LoadDealers()
   local made,healed,migrated=0,0,0
@@ -335,7 +351,7 @@ if SERVER then
   ent.VD_Class=class;ent.VD_Owner=ply;ent.GRMVehicleKind=kind
   ent:SetNWString("GRM_VehicleClass",tostring(class or""))
   ent:SetNWString("GRM_VehicleKind",tostring(kind or"personal"))
-  ent:SetNWString("GRM_VehicleName",tostring(istable(record)and record.name or class or""))
+  ent:SetNWString("GRM_VehicleName",nameV(istable(record)and record.name or class,class))
   ent:SetNWString("GRM_WorkVehicle",tostring(kind or""):find("job_",1,true)==1 and tostring(kind):sub(5)or"")
   if IsValid(ply)then
    ent:SetNWEntity("GRM_VehicleOwnerEnt",ply)
@@ -381,7 +397,7 @@ if SERVER then
   local allowed,have,limit=VD.CanOwnMore(ply,class)
   if not allowed then return nil,("У вас уже %d шт. этого класса (предел %d)"):format(have,limit)end
   local info=VD.VehicleInfo(class);local id=makeID("vehicle")
-  local rec={id=id,class=class,name=tostring(spec.name or info.name or class),model=tostring(spec.model or info.model or""),price=math.max(0,math.floor(tonumber(spec.price)or 0)),stored=true,service=false,ownershipType="personal",requestedGarage=tostring(garageID or""):sub(1,48),marketID=tostring(spec.marketID or"")}
+  local rec={id=id,class=class,name=nameV(spec.name or info.name,class),model=tostring(spec.model or info.model or""),price=math.max(0,math.floor(tonumber(spec.price)or 0)),stored=true,service=false,ownershipType="personal",requestedGarage=tostring(garageID or""):sub(1,48),marketID=tostring(spec.marketID or"")}
   local g=garage(ply);g[id]=rec
   hook.Run("GRM_VehicleDealerSpawned",nil,ply,class,rec,nil)
   if not saveGarage()then g[id]=nil return nil,"Не удалось сохранить личный гараж"end
@@ -565,7 +581,7 @@ if SERVER then
       rows[#rows+1]={
        id=tostring(unit.id or""),
        class=tostring(unit.class or""),
-       name=tostring(unit.name or unit.class or""),
+       name=nameV(unit.name,unit.class),
        model=tostring(unit.model or""),
        ownershipType=kind,
        ownershipName=VD.VehicleKinds[kind]or"Служебный транспорт",
@@ -589,6 +605,8 @@ if SERVER then
    -- В карточке гаража показываем, к какому гаражу приписана машина
    -- (модуль GRM.Garage; если его нет — поле просто пустое).
    local row=table.Copy(r);local home=GRM.Garage and GRM.Garage.Get and GRM.Garage.Get(r.garageID)
+   -- Имена из старых сохранённых записей гаража тоже гоним через фильтр (02.09).
+   if isstring(row.name)then row.name=nameV(row.name,r.class)end
    row.homeName=home and home.name or"";row.homeID=tostring(r.garageID or"")
    row.buyback=VD.StateBuybackPrice(r);row.buybackRate=VD.StateBuybackRate()
    -- Номерной знак машины и её UID: карточка в окне дилера показывает,
@@ -639,7 +657,7 @@ if SERVER then
       end
      end
      fleetRows[#fleetRows+1]={
-      id=unit.id,class=unit.class,name=unit.name,model=unit.model,
+      id=unit.id,class=unit.class,name=nameV(unit.name,unit.class),model=unit.model,
       onMap=FL.Active and IsValid(FL.Active[unit.id]) or false,
       statusName=FL.UnitStatuses and FL.UnitStatuses[unit.status] or tostring(unit.status or ""),
       garageName=garageRec and garageRec.name or "",
@@ -650,7 +668,7 @@ if SERVER then
     end
    end
   end
-  local catalog={}for _,e in ipairs(dealer.VD_Vehicles or{})do if VD.CanUseEntry(ply,e)then local i=VD.VehicleInfo(e.class);local personal=VD.EntryKind(e)=="personal";local civil=personal and GRM.CivilVehicles and GRM.CivilVehicles.FindForDealer and GRM.CivilVehicles.FindForDealer(e)or nil;local market=not personal and GRM.Fleet and GRM.Fleet.FindMarketForDealer and GRM.Fleet.FindMarketForDealer(e)or nil;local inMarket=personal and civil~=nil or market~=nil;if not personal or civil then catalog[#catalog+1]={class=e.class,name=(civil and civil.name)or e.name or i.name,model=i.model,system=i.system,price=math.max(0,math.floor(tonumber((civil and civil.price)or(market and market.price)or e.price)or 0)),category=(civil and civil.category)or e.category or"Транспорт",service=VD.EntryKind(e)~="personal",faction=e.faction,owned=VD.CountClass(ply,e.class),classLimit=VD.ClassLimit(),factionName=(e.faction and e.faction~=""and((GRM.Factions and GRM.Factions.DisplayName and GRM.Factions.DisplayName(e.faction))or e.faction)or""),ownershipType=VD.EntryKind(e),ownershipName=VD.VehicleKinds[VD.EntryKind(e)],marketID=inMarket and ((civil and civil.id)or market.id)or"",marketReady=inMarket}end end end;local garageChoices=(GRM.Garage and GRM.Garage.ChoicesFor)and GRM.Garage.ChoicesFor(ply,dealer)or{}
+  local catalog={}for _,e in ipairs(dealer.VD_Vehicles or{})do if VD.CanUseEntry(ply,e)then local i=VD.VehicleInfo(e.class);local personal=VD.EntryKind(e)=="personal";local civil=personal and GRM.CivilVehicles and GRM.CivilVehicles.FindForDealer and GRM.CivilVehicles.FindForDealer(e)or nil;local market=not personal and GRM.Fleet and GRM.Fleet.FindMarketForDealer and GRM.Fleet.FindMarketForDealer(e)or nil;local inMarket=personal and civil~=nil or market~=nil;if not personal or civil then catalog[#catalog+1]={class=e.class,name=nameV((civil and civil.name)or e.name,i.name),model=i.model,system=i.system,price=math.max(0,math.floor(tonumber((civil and civil.price)or(market and market.price)or e.price)or 0)),category=(civil and civil.category)or e.category or"Транспорт",service=VD.EntryKind(e)~="personal",faction=e.faction,owned=VD.CountClass(ply,e.class),classLimit=VD.ClassLimit(),factionName=(e.faction and e.faction~=""and((GRM.Factions and GRM.Factions.DisplayName and GRM.Factions.DisplayName(e.faction))or e.faction)or""),ownershipType=VD.EntryKind(e),ownershipName=VD.VehicleKinds[VD.EntryKind(e)],marketID=inMarket and ((civil and civil.id)or market.id)or"",marketReady=inMarket}end end end;local garageChoices=(GRM.Garage and GRM.Garage.ChoicesFor)and GRM.Garage.ChoicesFor(ply,dealer)or{}
   net.Start("GRM_VD_Open")net.WriteEntity(dealer)net.WriteString(dealer:GetDealerName())net.WriteTable(catalog)net.WriteTable(garageRows)net.WriteTable(VD.ActiveRows(ply))net.WriteTable(garageChoices)
    net.WriteString(VD.DeliveryMode(dealer))net.WriteBool(VD.ShowRetrieve(dealer))net.WriteTable(fleetRows)net.Send(ply)end
  local function result(ply,ok,msg)net.Start("GRM_VD_Result")net.WriteBool(ok)net.WriteString(msg)net.Send(ply);if GRM.Notify then GRM.Notify(ply,msg,ok and 100 or 255,ok and 220 or 110,ok and 130 or 90)end end

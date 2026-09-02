@@ -93,24 +93,49 @@ function VK.VehicleTypeLabel(ent)
     return "Стандартный"
 end
 
+--[[ Подписи-водяные знаки в названиях машин. Сторонние паки техники иногда
+     вписывают своё клеймо прямо в имя (например «Comedy Effect») — и оно течёт
+     в заголовки окон, подсказки, багажники и C-меню. Заказ владельца от 02.09.2026:
+     таких надписей не должно быть НИ В ОДНОМ модуле. Точка фильтрации здесь одна —
+     все места, где имя машины показывают человеку (VK.GetVehicleDisplayName,
+     HUD сидений, журнал/окна GRM.Vehicles, каталог дилера), прогоняют имя через
+     VK.CleanName. Локальных фильтров со словами-литералами в модулях быть не
+     должно (см. sim_veh_name_clean). ]]
+VK.NameMarks = { "comedy", "effect" }
+
+--- Имя, пригодное для показа человеку; имя с подписью — nil.
+function VK.CleanName(name)
+    if not isstring(name) or name == "" then return nil end
+    local low = string.lower(name)
+    for _, mark in ipairs(VK.NameMarks) do
+        if string.find(low, mark, 1, true) then return nil end
+    end
+    return name
+end
+
 function VK.GetVehicleDisplayName(ent)
     if not IsValid(ent) then return "Транспорт" end
 
     if isfunction(ent.GetVehicleName) then
         local ok, name = pcall(ent.GetVehicleName, ent)
-        if ok and isstring(name) and name ~= "" then return name end
+        local clean = ok and VK.CleanName(name) or nil
+        if clean then return clean end
     end
 
-    if isstring(ent.PrintName) and ent.PrintName ~= "" then return ent.PrintName end
-    if isstring(ent.VehicleName) and ent.VehicleName ~= "" then return ent.VehicleName end
+    local pn = VK.CleanName(ent.PrintName)
+    if pn then return pn end
+    local vn = VK.CleanName(ent.VehicleName)
+    if vn then return vn end
 
     local class = ent:GetClass()
     local ok, vehicles = pcall(list.Get, "Vehicles")
     if ok and istable(vehicles) and vehicles[class] and vehicles[class].Name then
-        return vehicles[class].Name
+        local ln = VK.CleanName(vehicles[class].Name)
+        if ln then return ln end
     end
 
-    return class or "Транспорт"
+    -- Даже класс не показываем, если в нём то же клеймо — только нейтральное слово.
+    return (class and VK.CleanName(class)) or "Транспорт"
 end
 
 function VK.GetOwnerState(veh)

@@ -13,6 +13,17 @@ local FILE = "grm_vehicle_market/civil.json"
 local function trim(v,n) return string.sub(string.Trim(tostring(v or "")),1,n or 96) end
 local function key(ply) return GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(ply) or (IsValid(ply) and ply:SteamID64()..":char1" or "") end
 local function isAdmin(ply) return IsValid(ply) and ply:IsSuperAdmin() end
+ -- Клеймо пака техники в имени (заказ владельца 02.09.2026) срезаем на выдаче
+ -- списка: общие фильтры VK.CleanName; локальных слов-литералов здесь нет.
+ local function cleanNm(n,fb)
+  if VK and isfunction(VK.CleanName) then
+   local c=VK.CleanName(tostring(n or""))
+   if c then return c end
+   local c2=VK.CleanName(tostring(fb or""))
+   return c2 or"Транспорт"
+  end
+  local s=tostring(n or"") return s~="" and s or tostring(fb or"")
+ end
 function CV.List()
  local out={} for id,e in pairs(CV.Data.entries or {}) do if istable(e)then e.id=id out[#out+1]=e end end
  table.sort(out,function(a,b)return tostring(a.name)<tostring(b.name)end)return out
@@ -59,7 +70,7 @@ if SERVER then
   return true
  end
  local function snapshot(ply)
-  local list={};for _,e in ipairs(CV.List())do local ok,why=allowed(ply,e);list[#list+1]={id=e.id,class=e.class,name=e.name,model=e.model,price=e.price,category=e.category,allowed=ok,reason=why or""}end
+  local list={};for _,e in ipairs(CV.List())do local ok,why=allowed(ply,e);list[#list+1]={id=e.id,class=e.class,name=cleanNm(e.name,e.class),model=e.model,price=e.price,category=e.category,allowed=ok,reason=why or""}end
   local garages=(GRM.Garage and GRM.Garage.ChoicesFor)and GRM.Garage.ChoicesFor(ply,nil)or{}
   return {entries=list,garages=garages,admin=isAdmin(ply)}
  end

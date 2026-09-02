@@ -199,11 +199,15 @@ local function vehTitle(veh)
         if ok then n = r end
     end
     if (not isstring(n) or n == "") and isstring(veh.VehicleName) then n = veh.VehicleName end
-    if isstring(n) and n ~= "" then
-        local low = string.lower(n)
-        if not string.find(low, "comedy", 1, true) and not string.find(low, "effect", 1, true) then
-            return n
-        end
+    -- Имена с клеймом сторонних паков техники отсекает общий фильтр VK.CleanName
+    -- (sh_vehicle_keys; заказ владельца от 02.09.2026 — таких надписей не должно
+    -- быть ни в одном модуле, и локальных списков слов здесь больше нет).
+    -- Имя отфильтровано — показываем нейтральное «Салон».
+    if isfunction(VK and VK.CleanName) then
+        local clean = VK.CleanName(isstring(n) and n or nil)
+        if clean then return clean end
+    elseif isstring(n) and n ~= "" then
+        return n
     end
     return "Салон"
 end
