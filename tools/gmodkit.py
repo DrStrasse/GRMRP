@@ -6,7 +6,7 @@
     python3 tools/gmodkit.py grm spawns maps/rp_city.bsp
     python3 tools/gmodkit.py selftest
 
-Документация — docs/GMODKIT.md.
+Документация — WIKI.md, Часть V (глава «Архивный документ: docs/GMODKIT.md»).
 """
 import os
 import sys
