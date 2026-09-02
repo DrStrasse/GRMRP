@@ -29,5 +29,24 @@ for _, pair in ipairs({
     check(ns .. ": само-эхо на CurTime", s:find("name, text, CurTime(), true", 1, true) ~= nil)
 end
 
+print("\n=== САМОДИАГНОСТИКА /chatdiag (вечер-8) ===")
+do
+    local diag = {
+        { "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua", "GRMRPChat" },
+        { "lua/autorun/client/cl_08_grm_chat_input.lua", "GRMChat" },
+    }
+    for _, pair in ipairs(diag) do
+        local s2 = read(pair[1])
+    check(pair[2] .. ": /chatdiag перехвачендо отправки", s2:find('"/chatdiag"', 1, true) ~= nil
+        and s2:find(pair[2] .. ".Diagnose()", 1, true) ~= nil)
+    end
+    local hud1 = read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua")
+    local hud2 = read("lua/autorun/client/cl_08_grm_chat_hud.lua")
+    check("режим: Diagnose печатает в ленту через AddLine", hud1:find("function GRMRPChat.Diagnose", 1, true) ~= nil
+        and hud1:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
+    check("порт: Diagnose синхронен", hud2:find("function GRMChat.Diagnose", 1, true) ~= nil
+        and hud2:find('GRMChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
+end
+
 print(("\nCHAT CLOCKS: %d/%d, провалов: %d"):format(total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

@@ -37,6 +37,12 @@ local function send(text)
     -- выглядит как «плохо обрабатывает текст» (скрин 03.09).
     text = string.Trim(tostring(text or ""))
     if #text == 0 then return end
+    if string.lower(text) == "/chatdiag" then
+        -- Самодиагностика ленты (вечер-8): строку-диагностику печатает в
+        -- ту же ленту — видно её = чат рендерит; не видно = сборка старая.
+        if GRMRPChat.Diagnose then GRMRPChat.Diagnose() end
+        return
+    end
     if #text > 512 then text = string.sub(text, 1, 512) end
     table.insert(history, text)
     if #history > 50 then table.remove(history, 1) end

@@ -1,13 +1,14 @@
 --[[--------------------------------------------------------------------
-    sim_menu_showcase — витрина персонажа в меню паузы (замечания
-    владельца 03.09 вечер-6: «персонаж мелкий, бодигруппы так и не
-    появились»). Контракт исходника:
-      • камеру НЕ ставим руками — Layout() DModelPanel сам вписывает
-        модель в панель (ручной CamPos на ~120 юнитов = «мелкий»);
-      • внешность применяется ПОСЛЕ SetAnimated (контроллер сбрасывал);
-      • бодигруппы пишутся и в панель, и в model entity;
-      • UpdateStats живой: сменил экипировку — витрина догоняет;
-      • размеры: модель не меньше 240px, карточка до 430px шириной.
+    sim_menu_showcase — витрина персонажа в меню паузы. Контракт сверен
+    с ДВИЖКОВЫМ исходником базового DModelPanel
+    (garrysmod/lua/vgui/dmodelpanel.lua, официальный репозиторий):
+    у панели есть SetModel/GetModel/GetEntity/SetFOV/SetCamPos/SetLookAt/
+    SetAnimated/SetAnimSpeed/SetAmbientLight — и НЕТ SetSkin, SetBodygroup,
+    GetModelEntity, SetMouseInputEnabled и авторазмера Layout. Внешность —
+    только через GetEntity() (как в движковом GenerateExample), кадр —
+    расчётный. Прошлые «под guard вызовы» несуществующих методов молча
+    пропускались: «бодигруппы так и не появились», «персонаж мелкий»
+    (владелец, 03.09 вечер-6/7).
 ----------------------------------------------------------------------]]
 local fails, total = 0, 0
 local function check(name, cond, extra)
@@ -19,27 +20,46 @@ local f = assert(io.open("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua"
 local h = f:read("*a") f:close()
 local function has(n) return h:find(n, 1, true) ~= nil end
 
-check("ручной камеры нет (авто-вписывание Layout)", not has("SetCamPos(Vector(dist"))
-check("camParams вырезан за ненадобностью", not has("local function camParams"))
+print("\n=== 1. НИКАКИХ ФАНТОМНЫХ МЕТОДОВ ПАНЕЛИ ===")
+for _, fake in ipairs({ "m:SetSkin(", "m:SetBodygroup(", ":GetModelEntity(",
+    ":SetMouseInputEnabled(", ":SetModelScale(" }) do
+    check("нет вызова несуществующего: " .. fake, not has(fake))
+end
+
+print("\n=== 2. ВНЕШНОСТЬ ЧЕРЕЗ GetEntity (движковый канон) ===")
+check("skin/groups пишутся на m:GetEntity()", has("local e = m.GetEntity and m:GetEntity()"))
+check("валидность entity — страж", has("if not IsValid(e) then return end"))
+check("скин: e:SetSkin(sk)", has("e:SetSkin(sk)"))
+check("бодигруппы: e:SetBodygroup(idx, val)", has("e:SetBodygroup(idx, val)"))
+check("индекс группы — tonumber(bg.id)", has("tonumber(bg.id)"))
+check("чтение значения с живого игрока", has("ply:GetBodygroup(idx)"))
+check("GetModel для сверки смены модели", has("mm:GetModel()"))
+
+print("\n=== 3. КАДР: РАСЧЁТНАЯ КАМЕРА (авторазмера у панели нет) ===")
+check("FOV портретный задан", has("m:SetFOV(fov)"))
+check("дистанция из высоты модели и fill-коэффициента",
+    has("(hh / 0.86) / (2 * math.tan(math.rad(fov * 0.5)))"))
+check("camPos ставится явно (дефолт 50,50,50 мелок)", has("m:SetCamPos(Vector(-d * 0.71"))
+check("взгляд — в середину роста", has("m:SetLookAt(Vector(0, 0, hh * 0.5))"))
+check("подсветка поднята (тёмный ambient дефолта)", has("m:SetAmbientLight(Color(120, 124, 132))"))
+check("OBB-рост застрахован clamp", has("math.Clamp((mx.z or 72) - (mn.z or 0), 48, 200)"))
+
+print("\n=== 4. ПОРЯДОК И ЖИВОСТЬ ===")
+do
+    local i1 = h:find("local function newModel", 1, true)
+    local i2 = h:find("\n    end", i1, true)
+    local body = h:sub(i1, i2)
+    local ia = body:find("m:SetAnimated(true)", 1, true)
+    local ib = body:find("applyLook(m)", 1, true)
+    check("внешность применяется ПОСЛЕ SetAnimated", ia ~= nil and ib ~= nil and ib > ia)
+end
+check("живой догон в UpdateStats (без пересъёмки)", has("applySkinGroups(mm)"))
+check("смена модели — полная пересъёмка", has("applyLook(mm) else"))
+
+print("\n=== 5. РАЗМЕР И ОТТИСК ===")
 check("окно модели не меньше 240px", has("240, 440"))
 check("карточка раздвинута до 430px", has("320, 430"))
-check("внешность — отдельным проходом applySkinGroups", has("local function applySkinGroups(m)"))
-check("SetModel+внешность — applyLook", has("m:SetModel(ply:GetModel() or")
-    and has("applySkinGroups(m)\n    end"))
-
--- порядок внутри newModel: SetAnimated -> applyLook
-local i1 = h:find("local function newModel", 1, true)
-local i2 = h:find("\n    end", i1, true)
-local body = h:sub(i1, i2)
-local ia = body:find("m:SetAnimated(true)", 1, true)
-local ib = body:find("applyLook(m)", 1, true)
-check("внешность применяется ПОСЛЕ SetAnimated", ia ~= nil and ib ~= nil and ib > ia)
-check("группы пишутся в панель", has("m:SetBodygroup(idx, val)"))
-check("группы пишутся в model entity", has("me:SetBodygroup(idx, val)"))
-check("индекс bg.id численный страж", has("tonumber(bg.id)"))
-check("витрина живая (UpdateStats догоняет экипировку)", has("applySkinGroups(mm)"))
-check("пересъёмка при смене модели", has("applyLook(mm) else"))
-check("оттиск сборки вечер-7", has("вечер-7 (03.09)"))
+check("оттиск сборки вечер-8", has("вечер-8 (03.09)"))
 
 print(("\nMENU SHOWCASE: %d/%d, провалов: %d"):format(total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

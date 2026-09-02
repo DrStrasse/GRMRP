@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-7 (03.09)'
+Menu.BuildStamp = 'вечер-8 (03.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -268,16 +268,19 @@ function Menu.Open()
     steamLbl:SetPos(14, 42)
     steamLbl:SetWide(rightW - 28)
 
-    -- Скин/бодигруппы — отдельным проходом, БЕЗ касания модели: их можно
-    -- (и нужно) применять повторно — SetAnimated пересоздаёт анимационный
-    -- контроллер и сбрасывал бодигруппы («так и не появились», вечер-6).
+    -- ВНЕШНОСТЬ — ЧЕРЕЗ GetEntity(): у базового DModelPanel (движковый
+    -- garrysmod/lua/vgui/dmodelpanel.lua) НЕТ ни SetSkin, ни SetBodygroup,
+    -- ни GetModelEntity — прежние «под guard'ом» вызовы молча
+    -- пропускались, поэтому «бодигруппы так и не появились» (владелец,
+    -- 03.09). Канон движка — писать на саму модель: ровно так делает
+    -- официальный GenerateExample самой панели («ctrl:GetEntity():SetSkin(2)»).
+    -- Скин/группы — отдельным проходом, их можно применять повторно.
     local function applySkinGroups(m)
-        -- У Player нет метода Skin() — правильный обход Entity:GetSkin();
-        -- прежний вызов и ронял всё меню (крах-лог 03.09). Всё копирование
-        -- внешности — под pcall: ни один аддон-ресет не обязан существовать.
-        if m.SetSkin and ply.GetSkin then
+        local e = m.GetEntity and m:GetEntity()
+        if not IsValid(e) then return end
+        if ply.GetSkin then
             local okS, sk = pcall(function() return ply:GetSkin() end)
-            if okS and isnumber(sk) then pcall(function() m:SetSkin(sk) end) end
+            if okS and isnumber(sk) then pcall(function() e:SetSkin(sk) end) end
         end
         if not ply.GetBodyGroups then return end
         for _, bg in ipairs(ply:GetBodyGroups()) do
@@ -285,14 +288,7 @@ function Menu.Open()
             if idx then
                 local ok, val = pcall(function() return ply:GetBodygroup(idx) end)
                 if ok and isnumber(val) then
-                    -- Двойной путь: панель (её таблица групп) и сам model
-                    -- entity — какой из них рисует, зависит от режима
-                    -- анимации; пишем обоим.
-                    if m.SetBodygroup then pcall(function() m:SetBodygroup(idx, val) end) end
-                    local me = m.GetModelEntity and m:GetModelEntity()
-                    if IsValid(me) and me.SetBodygroup then
-                        pcall(function() me:SetBodygroup(idx, val) end)
-                    end
+                    pcall(function() e:SetBodygroup(idx, val) end)
                 end
             end
         end
@@ -306,16 +302,25 @@ function Menu.Open()
         local m = vgui.Create("DModelPanel", parent)
         m:SetSize(pw, ph)
         m:SetPos(px, py)
-        -- Порядок важен: сначала анимационный режим, ПОСЛЕ него — внешность
-        -- (SetAnimated пересобирает контроллер и сбрасывал skin/bodygroups).
-        m:SetAnimated(true)
+        -- Камера своя и РАСЧЁТНАЯ: авторазмера у базовой панели НЕТ
+        -- (дефолт camPos(50,50,50)+fov70 и рисовал «мелкого»).
+        -- Длиннофокусный портрет: FOV 28, дистанция из условия
+        -- «модель по высоте = 86% окна кадра».
+        local hh = 72
+        local mn, mx = ply:OBBMins(), ply:OBBMaxs()
+        if mn and mx then
+            hh = math.Clamp((mx.z or 72) - (mn.z or 0), 48, 200)
+        end
+        local fov = 28
+        local d = math.max(60, (hh / 0.86) / (2 * math.tan(math.rad(fov * 0.5))))
+        m:SetFOV(fov)
+        m:SetCamPos(Vector(-d * 0.71, -d * 0.71, hh * 0.58))
+        m:SetLookAt(Vector(0, 0, hh * 0.5))
+        m:SetAmbientLight(Color(120, 124, 132))
+        m:SetAnimSpeed(0.6)
+        m:SetAnimated(true) -- idle/walk; поворот — базовый LayoutEntity
+        -- сам крутит модель на месте (turntable), мыши у панели нет.
         applyLook(m)
-        -- Камеру НЕ трогаем: Layout() DModelPanel сам вписывает модель по
-        -- полному росту в панель. Прежний ручной CamPos (dist = hgt*1.25 +
-        -- wide*1.2 + 20 ≈ 120 юнитов от 64-юнитового человека) отодвигал
-        -- камеру так, что персонаж занимал ~четверть кадра — «мелкий»
-        -- (владелец 03.09). Мышью — вращение.
-        if m.SetMouseInputEnabled then m:SetMouseInputEnabled(true) end
         return m
     end
 

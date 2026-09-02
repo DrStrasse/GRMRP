@@ -68,6 +68,28 @@ function GRMRPChat.ClearLines()
     GRMRPChat.lines = {}
 end
 
+-- Самодиагностика (эскалация 03.09: «не отрисовывает ни по одному
+-- каналу»). «/chatdiag» в строке ввода: вывод — в консоль И одной строкой
+-- в ленту. Строка нарисована — значит лента жива, а жалоба относится к
+-- другой сборке; строки нет при живом вводе — лог клиента в руки.
+function GRMRPChat.Diagnose()
+    local cv = GetConVar and GetConVar("grmrp_chat_enable")
+    local n = #(GRMRPChat.lines or {})
+    local hold = GRMRPChat.INPUT_OPEN and "ввод открыт" or "ввод закрыт"
+    local bits = {
+        "чат вечер-8 (03.09)",
+        "лента: " .. n .. " строк",
+        "часы: CurTime (RealTime-дефект ленты исправлен)",
+        "enable=" .. (cv and tostring(cv:GetBool()) or "cvar нет → вкл"),
+        hold,
+    }
+    for _, s in ipairs(bits) do print("[GRMRP chat] " .. s) end
+    if GRMRPChat.AddLine then
+        GRMRPChat.AddLine("ooc", "чат-диаг",
+            bits[1] .. " · " .. bits[2] .. " · " .. bits[3])
+    end
+end
+
 net.Receive(GRMRP.Net.MSG, function()
     if not GRMRPChat.lines then return end
     local chanId = net.ReadString()
