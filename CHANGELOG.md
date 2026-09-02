@@ -80,6 +80,50 @@ PostDraw-маркеры (plates, incassation, radionet, fire_truck, quest_tool
 теперь считается и этот прогон), `sim_render_allocs` 45/45, новых
 красных нет.
 
+## 2026-09-02 — волна 8: функции-клоны (dup-func 42 → 28)
+
+**7. Чат-диспетчеры свёрнуты в ядро.** Спецслужба, бюллетени розыска и
+биржа держали по идентичной копии `dispatch(ply,text)` (разбор
+`/cmd arg…`, pcall, reply при падении). Фабрика `GRM.Chat.DispatchFactory`
+переехала в `sh_01_grm_core.lua` (ядро грузится первым — порядки любой
+сборки пригодны), модулям осталось передать тег, реестр и reply.
+`sim_ss_actions` 21/21 зелёный.
+
+**8. Клоны станций-терминалов.** `grm_comp_police` и
+`grm_comp_military_police` несли по копии fillWanted/fillFines/fineStatus
+и локальный `sendAct`, дублировавший общий `GRM_CompTerminal_Send`, —
+тело переехало в `cl_grm_comp_terminal.lua` (там уже живут BuildExchangeTab
+и BuildWarrantTab), станции вызывают его; `fineStatus` стал алиасом,
+локальный `sendAct` убран вовсе (3 новых имени зарегистрированы в
+`sim_global_hygiene`). `grm_med_lab`/`grm_narc_lab` — два побратанных
+файла на 148 строк — сведены в новую базу `grm_lab_base` (тот же паттерн,
+что и `grm_comp_base`): дети описываются данными (`LabType`, `PrintName`),
+механика и 3D-табличка в базе; табличка заодно обнулена по аллокациям
+(константы+скретч, §6.1.8), файл в CLEANED сторожа — **46/46**.
+
+**9. Межмодульные дубликаты-однушки.** `isLeaderOfFaction` из
+`sh_faction_fixes` оказался копией проверки `sh_grm_faction_perms` —
+perms экспортирует `GRM.FactionPerms.IsLeaderOfFaction`, fixes делегирует
+(имя разбирается при вызове: fixes грузится раньше perms). `accTable`
+(admin_hub/фракционный мост) — экспорт `HB.AccTable`, мост берёт алиасом.
+`isVehicleLike` наручников жил двумя копиями в cl_ и sv_ — вынесен в новый
+`sh_grm_handcuffs.lua` как `GRM.Handcuffs.IsVehicleLike`. Банковскому
+компьютеру близнецы `FindNearestVault`/`FindNearestPress` сведены к
+`nearestOf(self, class, radius)`. Инкассация: три копии строки отчёта —
+в `incLine`, две копии фабрики кнопок — в `incBtn`; документы: шесть
+кистей двухфазного рендера — в `docCoverBrush`/`docPaperBrush`, кнопки
+выбора инспекции — в `requestDoc`.
+
+Осознанно не тронуто: вендор (easychat, ffd, пожарные SWEP'ы),
+`ENT:SetupDataTables` бойлерплейт (изоляция энтити — конвенция GMod),
+пары cctv_access/phone_access (админ-net с superadmin-гардами: копии
+предпочтительнее общего файла), вкладки розыска/badge терминалов
+(разъезжаются текстами и правами — кандидаты владельческому смотру вместе
+с label3D стулов).
+
+Ворота: синтаксис 631/631, стиль чисто, hygiene 10/10, стенды **249/34**
+(тот же эталон), `sim_render_allocs` **46/46**, новых красных нет.
+
 ## 2026-09-02 — Чистка «нейрослопа», волна 6: cond-chain добит до нуля
 
 Закрывали четыре последние лестницы из волны 5. Итог: `audit_slop

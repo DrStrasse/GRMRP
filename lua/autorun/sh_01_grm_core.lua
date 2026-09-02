@@ -71,6 +71,27 @@ end
 local CHAR_KEY_SUFFIX = ":char[1-3]$"
 local ACCOUNT_ONLY = "^%d+$"
 
+-- Фабрика чат-диспетчеров модулей (спецслужба / бюллетени / обмен
+-- розыска держали по копии тела; §5.4 п.12). Живёт в ядре, чтобы
+-- любые порядки загрузки autorun были пригодны. Разбор «/cmd arg…»,
+-- реестр HANDLERS, pcall-защита обработчиков и reply при падении.
+GRM.Chat = GRM.Chat or {}
+function GRM.Chat.DispatchFactory(tag, HANDLERS, reply)
+    return function(ply, text)
+        if not isstring(text) then return false end
+        local args = string.Explode(" ", string.Trim(text))
+        local fn = HANDLERS[string.lower(args[1] or "")]
+        if not fn then return false end
+        table.remove(args, 1)
+        local ok, e = pcall(fn, ply, args)
+        if not ok then
+            ErrorNoHalt(tag .. " " .. tostring(e) .. "\n")
+            reply(ply, false, "Внутренняя ошибка команды")
+        end
+        return true
+    end
+end
+
 function GRM.CharKey(value)
     if IsValid(value) and value.IsPlayer and value:IsPlayer() then
         local identity = GRM.Identity

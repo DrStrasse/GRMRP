@@ -1530,6 +1530,39 @@ local GRM_INC_TERM_FRAME  = nil
 local GRM_INC_CAR_FRAME   = nil
 local GRM_INC_VAULT_FRAME = nil
 
+-- Строка отчёта в окнах инкассации (терминал / машина / хранилище — три
+-- когда-то независимые копии этого же тела, §5.4 п.12: общий хелпер).
+-- Кнопка-«плашка» окон инкассации: две прежние копии mkBtn свёрнуты в
+-- один фабрик с параметрами отступов/высоты (§5.4 п.12).
+local function incBtn(parent, text, enabled, color, fn, tall, mgTop, mgBot, offCol)
+    local b = vgui.Create("DButton", parent)
+    b:Dock(BOTTOM)
+    b:DockMargin(4, mgTop, 4, mgBot)
+    b:SetTall(tall)
+    b:SetFont("GRMInc_Normal")
+    b:SetText(text)
+    b:SetEnabled(enabled)
+    b.Paint = function(self, w, h)
+        local c = self:IsEnabled() and (self:IsHovered() and INC_UI.accentDk or (color or INC_UI.accent)) or offCol
+        draw.RoundedBox(4, 0, 0, w, h, c)
+    end
+    b.DoClick = function(self)
+        if self:IsEnabled() then fn() end
+    end
+    return b
+end
+
+local function incLine(parent, text, color, dy)
+    local l = vgui.Create("DLabel", parent)
+    l:Dock(TOP)
+    l:DockMargin(4, dy or 4, 4, 0)
+    l:SetFont("GRMInc_Normal")
+    l:SetTextColor(color or INC_UI.text)
+    l:SetText(tostring(text))
+    l:SizeToContents()
+    return l
+end
+
 local function fmtClient(n)
     n = math.floor(tonumber(n) or 0)
     if GRM.Format then
@@ -1567,23 +1600,12 @@ net.Receive(NET_TERM_MENU, function()
     body:DockMargin(12, 46, 12, 12)
     body:SetPaintBackground(false)
 
-    local function line(text, color, dy)
-        local l = vgui.Create("DLabel", body)
-        l:Dock(TOP)
-        l:DockMargin(4, dy or 3, 4, 0)
-        l:SetFont("GRMInc_Normal")
-        l:SetTextColor(color or INC_UI.text)
-        l:SetText(tostring(text))
-        l:SizeToContents()
-        return l
-    end
-
-    line("В банкомате: " .. fmtClient(cash), INC_UI.accent, 4)
-    line("В машине: " .. fmtClient(inCar) .. " / " .. fmtClient(cap), INC_UI.dim)
+    incLine(body, "В банкомате: " .. fmtClient(cash), INC_UI.accent, 4)
+    incLine(body, "В машине: " .. fmtClient(inCar) .. " / " .. fmtClient(cap), INC_UI.dim)
     if bag > 0 then
-        line("В руках чемодан: " .. fmtClient(bag), Color(120, 200, 255))
+        incLine(body, "В руках чемодан: " .. fmtClient(bag), Color(120, 200, 255))
     end
-    line("Режим инкассации: " .. (isLocked and "АКТИВЕН (терминал заблокирован для гражданских)" or "ВЫКЛЮЧЕН"), isLocked and Color(255, 180, 70) or INC_UI.dim, 6)
+    incLine(body, "Режим инкассации: " .. (isLocked and "АКТИВЕН (терминал заблокирован для гражданских)" or "ВЫКЛЮЧЕН"), isLocked and Color(255, 180, 70) or INC_UI.dim, 6)
 
     local amountEntry = vgui.Create("DTextEntry", body)
     amountEntry:Dock(TOP)
@@ -1700,38 +1722,13 @@ net.Receive(NET_CAR_MENU, function()
     body:DockMargin(12, 46, 12, 12)
     body:SetPaintBackground(false)
 
-    local function line(text, color, dy)
-        local l = vgui.Create("DLabel", body)
-        l:Dock(TOP)
-        l:DockMargin(4, dy or 4, 4, 0)
-        l:SetFont("GRMInc_Normal")
-        l:SetTextColor(color or INC_UI.text)
-        l:SetText(tostring(text))
-        l:SizeToContents()
-        return l
-    end
-
-    line("В багажнике: " .. fmtClient(cash) .. " / " .. fmtClient(I.Config and I.Config.MaxCarryPerCar or 250000), INC_UI.accent, 6)
+    incLine(body, "В багажнике: " .. fmtClient(cash) .. " / " .. fmtClient(I.Config and I.Config.MaxCarryPerCar or 250000), INC_UI.accent, 6)
     if bag > 0 then
-        line("В руках чемодан: " .. fmtClient(bag), Color(120, 200, 255))
+        incLine(body, "В руках чемодан: " .. fmtClient(bag), Color(120, 200, 255))
     end
 
     local function mkBtn(text, enabled, color, fn)
-        local b = vgui.Create("DButton", body)
-        b:Dock(BOTTOM)
-        b:DockMargin(4, 6, 4, 4)
-        b:SetTall(38)
-        b:SetFont("GRMInc_Normal")
-        b:SetText(text)
-        b:SetEnabled(enabled)
-        b.Paint = function(self, w, h)
-            local c = self:IsEnabled() and (self:IsHovered() and INC_UI.accentDk or (color or INC_UI.accent)) or Color(80, 80, 90)
-            draw.RoundedBox(4, 0, 0, w, h, c)
-        end
-        b.DoClick = function(self)
-            if self:IsEnabled() then fn() end
-        end
-        return b
+        return incBtn(body, text, enabled, color, fn, 38, 6, 4, Color(80, 80, 90))
     end
 
     mkBtn("⬆ ЗАГРУЗИТЬ (чемодан из руки → багажник)", bag > 0, INC_UI.success, function()
@@ -1775,41 +1772,16 @@ net.Receive(NET_VAULT_MENU, function()
     body:DockMargin(12, 46, 12, 12)
     body:SetPaintBackground(false)
 
-    local function line(text, color, dy)
-        local l = vgui.Create("DLabel", body)
-        l:Dock(TOP)
-        l:DockMargin(4, dy or 4, 4, 0)
-        l:SetFont("GRMInc_Normal")
-        l:SetTextColor(color or INC_UI.text)
-        l:SetText(tostring(text))
-        l:SizeToContents()
-        return l
-    end
-
-    line("В хранилище сейчас: " .. fmtClient(held), INC_UI.accent, 4)
+    incLine(body, "В хранилище сейчас: " .. fmtClient(held), INC_UI.accent, 4)
     if bag > 0 then
-        line("Чемодан в руках: " .. fmtClient(bag), Color(120, 220, 140), 2)
+        incLine(body, "Чемодан в руках: " .. fmtClient(bag), Color(120, 220, 140), 2)
     end
     if carCash > 0 then
-        line("Собрано в инкассаторской машине: " .. fmtClient(carCash), Color(255, 205, 80), 2)
+        incLine(body, "Собрано в инкассаторской машине: " .. fmtClient(carCash), Color(255, 205, 80), 2)
     end
 
     local function mkBtn(text, enabled, color, fn)
-        local b = vgui.Create("DButton", body)
-        b:Dock(BOTTOM)
-        b:DockMargin(4, 4, 4, 2)
-        b:SetTall(34)
-        b:SetFont("GRMInc_Normal")
-        b:SetText(text)
-        b:SetEnabled(enabled)
-        b.Paint = function(self, w, h)
-            local c = self:IsEnabled() and (self:IsHovered() and INC_UI.accentDk or (color or INC_UI.accent)) or Color(70, 75, 85)
-            draw.RoundedBox(4, 0, 0, w, h, c)
-        end
-        b.DoClick = function(self)
-            if self:IsEnabled() then fn() end
-        end
-        return b
+        return incBtn(body, text, enabled, color, fn, 34, 4, 2, Color(70, 75, 85))
     end
 
     mkBtn("⬆ ЗАГРУЗИТЬ ЧЕМОДАН (из рук → в хранилище)", bag > 0, INC_UI.success, function()

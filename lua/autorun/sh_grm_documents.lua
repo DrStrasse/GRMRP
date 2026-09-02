@@ -2606,21 +2606,26 @@ if CLIENT then
             surface.SetDrawColor(80, 140, 240, 180)
             surface.DrawOutlinedRect(0, 0, w, h)
         end
-        btnCiv.DoClick = function()
-            frame:Close()
-            if isShow then
-                net.Start(NET_SHOW_DOC)
-                    net.WriteString("license")
-                    net.WriteEntity(IsValid(targetEnt) and targetEnt or LocalPlayer():GetEyeTrace().Entity)
-                    net.WriteString("civilian")
-                net.SendToServer()
-            else
-                net.Start(NET_OPEN_DOC)
-                    net.WriteString("license")
-                    net.WriteString("civilian")
-                net.SendToServer()
+        -- «показать/открыть» — одна отправка на все кнопки выбора (было по
+        -- копии на каждую инспекцию, §5.4 п.12)
+        local function requestDoc(id, kind)
+            return function()
+                frame:Close()
+                if isShow then
+                    net.Start(NET_SHOW_DOC)
+                        net.WriteString(id)
+                        net.WriteEntity(IsValid(targetEnt) and targetEnt or LocalPlayer():GetEyeTrace().Entity)
+                        net.WriteString(kind)
+                    net.SendToServer()
+                else
+                    net.Start(NET_OPEN_DOC)
+                        net.WriteString(id)
+                        net.WriteString(kind)
+                    net.SendToServer()
+                end
             end
         end
+        btnCiv.DoClick = requestDoc("license", "civilian")
 
         local btnMil = vgui.Create("DButton", frame)
         btnMil:SetSize(420, 44)
@@ -2634,21 +2639,7 @@ if CLIENT then
             surface.SetDrawColor(100, 200, 110, 180)
             surface.DrawOutlinedRect(0, 0, w, h)
         end
-        btnMil.DoClick = function()
-            frame:Close()
-            if isShow then
-                net.Start(NET_SHOW_DOC)
-                    net.WriteString("milLicense")
-                    net.WriteEntity(IsValid(targetEnt) and targetEnt or LocalPlayer():GetEyeTrace().Entity)
-                    net.WriteString("military")
-                net.SendToServer()
-            else
-                net.Start(NET_OPEN_DOC)
-                    net.WriteString("milLicense")
-                    net.WriteString("military")
-                net.SendToServer()
-            end
-        end
+        btnMil.DoClick = requestDoc("milLicense", "military")
 
         local btnClose = vgui.Create("DButton", frame)
         btnClose:SetSize(28, 22)
@@ -2663,6 +2654,33 @@ if CLIENT then
     -- ── ДВУХФАЗНЫЙ РЕНДЕР ПАСПОРТА ─────────────────────────────
     -- Форвард-декларации: бланки ниже зовут помощников раньше их объявления
     local docPhoto, docOwnerSteamID
+
+    -- Кисти двухфазного рендера документов: раньше каждая оболочка несла
+    -- свою копию (6 клонов, §5.4 п.12). Раскладка общая, содержимое — через
+    -- описатель; isShown/senderName неизменны в рамках билда окна.
+    local function docCoverBrush(o)
+        return function(_, w, h)
+            local c = o.coverCol
+            draw.RoundedBox(10, 0, 0, w, h, c)
+            draw.RoundedBox(6, 12, 12, w - 24, h - 24, Color(math.min(255, c.r + 10), math.min(255, c.g + 10), math.min(255, c.b + 10)))
+            draw.SimpleText(o.stateTitle, "GRMDoc_CoverTitle", w / 2, 60, o.foil, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+            draw.SimpleText(o.motto, o.mottoFont, w / 2, 140, o.foil, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            draw.SimpleText(o.mottoSub, "GRMDoc_Small", w / 2, 175, o.foil, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+            draw.SimpleText(o.docTitle, "GRMDoc_Foil", w / 2, 320, o.foil, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+            draw.SimpleText(o.docSub, "GRMDoc_Small", w / 2, 345, o.foil, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+            draw.SimpleText(o.top, "GRMDoc_Small", w / 2, 20, o.topCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        end
+    end
+
+    local function docPaperBrush(o)
+        return function(_, w, h)
+            draw.RoundedBox(10, 0, 0, w, h, o.coverCol)
+            draw.RoundedBox(8, 6, 6, w - 12, h - 12, o.paperCol)
+            surface.SetDrawColor(o.seamCol)
+            surface.DrawLine(w / 2, 8, w / 2, h - 8)
+            draw.SimpleText(o.top, "GRMDoc_Small", 14, o.ty, o.topCol, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+        end
+    end
 
     local function openPassportUI(data, tpl, isShown, senderName)
         tpl = tpl or {}
@@ -2680,20 +2698,15 @@ if CLIENT then
                 frame:SetSize(380, 520)
                 frame:Center()
 
-                frame.Paint = function(_, w, h)
-                    draw.RoundedBox(10, 0, 0, w, h, coverCol)
-                    draw.RoundedBox(6, 12, 12, w - 24, h - 24, Color(math.min(255, coverCol.r + 10), math.min(255, coverCol.g + 10), math.min(255, coverCol.b + 10)))
-
-                    draw.SimpleText(tpl.stateTitle or "РЕСПУБЛИКА ГРАНД", "GRMDoc_CoverTitle", w / 2, 60, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-                    draw.SimpleText("★ ★ ★", "GRMDoc_CoverTitle", w / 2, 140, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-                    draw.SimpleText("ГОСУДАРСТВЕННЫЙ ГЕРБ", "GRMDoc_Small", w / 2, 175, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-
-                    draw.SimpleText(tpl.docTitle or "ПАСПОРТ ГРАЖДАНИНА", "GRMDoc_Foil", w / 2, 320, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-                    draw.SimpleText("PASSPORT", "GRMDoc_Small", w / 2, 345, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-
-                    local topTitle = isShown and ("Вам показал(а) паспорт: " .. tostring(senderName)) or "Ваш паспорт"
-                    draw.SimpleText(topTitle, "GRMDoc_Small", w / 2, 20, Color(220, 220, 230), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-                end
+                frame.Paint = docCoverBrush({
+                    coverCol = coverCol, foil = foil.col,
+                    stateTitle = tpl.stateTitle or "РЕСПУБЛИКА ГРАНД",
+                    motto = "★ ★ ★", mottoFont = "GRMDoc_CoverTitle",
+                    mottoSub = "ГОСУДАРСТВЕННЫЙ ГЕРБ",
+                    docTitle = tpl.docTitle or "ПАСПОРТ ГРАЖДАНИНА", docSub = "PASSPORT",
+                    top = isShown and ("Вам показал(а) паспорт: " .. tostring(senderName)) or "Ваш паспорт",
+                    topCol = Color(220, 220, 230),
+                })
 
                 local btnExpand = vgui.Create("DButton", frame)
                 btnExpand:SetSize(320, 42)
@@ -2722,16 +2735,12 @@ if CLIENT then
                 frame:SetSize(840, 520)
                 frame:Center()
 
-                frame.Paint = function(_, w, h)
-                    draw.RoundedBox(10, 0, 0, w, h, coverCol)
-                    draw.RoundedBox(8, 6, 6, w - 12, h - 12, Color(245, 240, 230))
-
-                    surface.SetDrawColor(180, 175, 160, 180)
-                    surface.DrawLine(w / 2, 8, w / 2, h - 8)
-
-                    local topTitle = isShown and ("Вам предъявили паспорт: " .. tostring(senderName)) or "Ваш паспорт гражданина"
-                    draw.SimpleText(topTitle, "GRMDoc_Small", 14, 10, Color(100, 95, 85), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-                end
+                frame.Paint = docPaperBrush({
+                    coverCol = coverCol, paperCol = Color(245, 240, 230),
+                    seamCol = Color(180, 175, 160, 180),
+                    top = isShown and ("Вам предъявили паспорт: " .. tostring(senderName)) or "Ваш паспорт гражданина",
+                    topCol = Color(100, 95, 85), ty = 10,
+                })
 
                 local btnFold = vgui.Create("DButton", frame)
                 btnFold:SetSize(140, 24)
@@ -2942,16 +2951,12 @@ if CLIENT then
                 frame:SetSize(780, 320)
                 frame:Center()
 
-                frame.Paint = function(_, w, h)
-                    draw.RoundedBox(10, 0, 0, w, h, coverCol)
-                    draw.RoundedBox(8, 6, 6, w - 12, h - 12, Color(248, 246, 242))
-
-                    surface.SetDrawColor(180, 175, 160, 180)
-                    surface.DrawLine(w / 2, 8, w / 2, h - 8)
-
-                    local topTitle = isShown and ("Вам предъявили удостоверение: " .. tostring(senderName)) or "Служебное удостоверение"
-                    draw.SimpleText(topTitle, "GRMDoc_Small", 14, 8, Color(110, 105, 95), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-                end
+                frame.Paint = docPaperBrush({
+                    coverCol = coverCol, paperCol = Color(248, 246, 242),
+                    seamCol = Color(180, 175, 160, 180),
+                    top = isShown and ("Вам предъявили удостоверение: " .. tostring(senderName)) or "Служебное удостоверение",
+                    topCol = Color(110, 105, 95), ty = 8,
+                })
 
                 local btnFold = vgui.Create("DButton", frame)
                 btnFold:SetSize(130, 22)
@@ -3050,20 +3055,15 @@ if CLIENT then
                 frame:SetSize(380, 520)
                 frame:Center()
 
-                frame.Paint = function(_, w, h)
-                    draw.RoundedBox(10, 0, 0, w, h, coverCol)
-                    draw.RoundedBox(6, 12, 12, w - 24, h - 24, Color(math.min(255, coverCol.r + 10), math.min(255, coverCol.g + 10), math.min(255, coverCol.b + 10)))
-
-                    draw.SimpleText(tpl.stateTitle or "ВООРУЖЁННЫЕ СИЛЫ", "GRMDoc_CoverTitle", w / 2, 60, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-                    draw.SimpleText("★ МИНИСТЕРСТВО ОБОРОНЫ ★", "GRMDoc_Header", w / 2, 140, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-                    draw.SimpleText("ВОЕННЫЙ КОМИССАРИАТ", "GRMDoc_Small", w / 2, 175, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-
-                    draw.SimpleText(tpl.docTitle or "ВОЕННЫЙ БИЛЕТ", "GRMDoc_Foil", w / 2, 320, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-                    draw.SimpleText("MILITARY ID", "GRMDoc_Small", w / 2, 345, foil.col, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-
-                    local topTitle = isShown and ("Вам показали военный билет: " .. tostring(senderName)) or "Ваш военный билет"
-                    draw.SimpleText(topTitle, "GRMDoc_Small", w / 2, 20, Color(210, 225, 210), TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-                end
+                frame.Paint = docCoverBrush({
+                    coverCol = coverCol, foil = foil.col,
+                    stateTitle = tpl.stateTitle or "ВООРУЖЁННЫЕ СИЛЫ",
+                    motto = "★ МИНИСТЕРСТВО ОБОРОНЫ ★", mottoFont = "GRMDoc_Header",
+                    mottoSub = "ВОЕННЫЙ КОМИССАРИАТ",
+                    docTitle = tpl.docTitle or "ВОЕННЫЙ БИЛЕТ", docSub = "MILITARY ID",
+                    top = isShown and ("Вам показали военный билет: " .. tostring(senderName)) or "Ваш военный билет",
+                    topCol = Color(210, 225, 210),
+                })
 
                 local btnExpand = vgui.Create("DButton", frame)
                 btnExpand:SetSize(320, 42)
@@ -3092,16 +3092,12 @@ if CLIENT then
                 frame:SetSize(840, 520)
                 frame:Center()
 
-                frame.Paint = function(_, w, h)
-                    draw.RoundedBox(10, 0, 0, w, h, coverCol)
-                    draw.RoundedBox(8, 6, 6, w - 12, h - 12, Color(242, 244, 238))
-
-                    surface.SetDrawColor(165, 175, 160, 180)
-                    surface.DrawLine(w / 2, 8, w / 2, h - 8)
-
-                    local topTitle = isShown and ("Вам предъявили военный билет: " .. tostring(senderName)) or "Военный билет военнослужащего"
-                    draw.SimpleText(topTitle, "GRMDoc_Small", 14, 10, Color(90, 105, 90), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-                end
+                frame.Paint = docPaperBrush({
+                    coverCol = coverCol, paperCol = Color(242, 244, 238),
+                    seamCol = Color(165, 175, 160, 180),
+                    top = isShown and ("Вам предъявили военный билет: " .. tostring(senderName)) or "Военный билет военнослужащего",
+                    topCol = Color(90, 105, 90), ty = 10,
+                })
 
                 local btnFold = vgui.Create("DButton", frame)
                 btnFold:SetSize(140, 24)

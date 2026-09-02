@@ -640,19 +640,7 @@ local HANDLERS = {
 }
 X.Handlers = HANDLERS
 
-local function dispatch(ply, text)
-    if not isstring(text) then return false end
-    local args = string.Explode(" ", string.Trim(text))
-    local fn = HANDLERS[string.lower(args[1] or "")]
-    if not fn then return false end
-    table.remove(args, 1)
-    local ok, e = pcall(fn, ply, args)
-    if not ok then
-        ErrorNoHalt("[GRM Exchange] " .. tostring(e) .. "\n")
-        reply(ply, false, "Внутренняя ошибка команды")
-    end
-    return true
-end
+local dispatch = GRM.Chat.DispatchFactory("[GRM Exchange]", HANDLERS, reply)
 X.Dispatch = dispatch
 
 hook.Add("PlayerSayTransform", "GRM_Exchange_Transform", function(ply, pack)

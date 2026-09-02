@@ -50,11 +50,13 @@ function ENT:CanManage(ply)
     return false
 end
 
-function ENT:FindNearestVault(radius)
+-- «ближайший объект класса в радиусе» — общий поиск (было по копии на
+-- хранилище и на печатный станок, §5.4 п.12)
+local function nearestOf(self, cls, radius)
     radius = radius or 1200
     local best, bestD = nil, math.huge
     local pos = self:GetPos()
-    for _, ent in ipairs(ents.FindByClass("grm_bank_vault")) do
+    for _, ent in ipairs(ents.FindByClass(cls)) do
         if IsValid(ent) then
             local d = ent:GetPos():DistToSqr(pos)
             if d < bestD and d <= (radius * radius) then
@@ -65,19 +67,12 @@ function ENT:FindNearestVault(radius)
     return best
 end
 
+function ENT:FindNearestVault(radius)
+    return nearestOf(self, "grm_bank_vault", radius)
+end
+
 function ENT:FindNearestPress(radius)
-    radius = radius or 1200
-    local best, bestD = nil, math.huge
-    local pos = self:GetPos()
-    for _, ent in ipairs(ents.FindByClass("grm_money_press")) do
-        if IsValid(ent) then
-            local d = ent:GetPos():DistToSqr(pos)
-            if d < bestD and d <= (radius * radius) then
-                best, bestD = ent, d
-            end
-        end
-    end
-    return best
+    return nearestOf(self, "grm_money_press", radius)
 end
 
 function ENT:GetVaultsSummary()

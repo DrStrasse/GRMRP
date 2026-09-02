@@ -254,6 +254,9 @@ for _, n in ipairs({
     -- терминалы и меню, вызываемые из entity-файлов по имени
     "GRM_CompTerminal_ActiveFrame", "GRM_CompTerminal_ActiveJur",
     "GRM_CompTerminal_BuildExchangeTab", "GRM_CompTerminal_BuildWarrantTab",
+    -- волна 8: тело двух копий из cl_init станций поднято в общий модуль
+    "GRM_CompTerminal_FillFines", "GRM_CompTerminal_FillWanted",
+    "GRM_CompTerminal_FineStatus",
     "GRM_CompTerminal_JurName", "GRM_CompTerminal_JurTag",
     "GRM_CompTerminal_Send", "OpenUnifiedFactionsMenu",
     "GRM_HasVehicleAccess", "VK", "EC_MODULE_PATH",

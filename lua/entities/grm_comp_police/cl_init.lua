@@ -138,19 +138,9 @@ net.Receive("GRM_CompPolice_Open", function()
     listWanted:AddColumn("Статьи и ориентировки"):SetFixedWidth(370)
     listWanted:AddColumn("Ключ")
 
+    -- тело живёт в cl_grm_comp_terminal.lua: обе станции рисовали его копией
     local function fillWanted(recs)
-        listWanted:Clear()
-        for k, r in pairs(recs or {}) do
-            if istable(r) and (r.level or 0) > 0 then
-                local starStr = string.rep("★", math.Clamp(r.level or 1, 1, 5))
-                local reas = {}
-                for _, rc in ipairs(r.reasons or {}) do reas[#reas+1] = (rc.code or "") .. " " .. (rc.title or "") end
-                local status = (r.jurisdiction == "military") and "ВОЕННЫЙ" or "ГРАЖДАНСКИЙ"
-                if r.foreign then status = status .. " •перед." end
-                local line = listWanted:AddLine(starStr, status, r.name or k, table.concat(reas, ", "), k)
-                line._targetKey = k
-            end
-        end
+        GRM_CompTerminal_FillWanted(listWanted, recs)
     end
     fillWanted(wantedRecs)
     frame._fillWanted = fillWanted
@@ -242,36 +232,14 @@ net.Receive("GRM_CompPolice_Open", function()
     listFines:AddColumn("Статус"):SetFixedWidth(120)
     listFines:AddColumn("Основание")
 
-    local function fineStatus(s)
-        if s == "paid" then return "оплачен" end
-        if s == "cancelled" then return "аннулирован" end
-        return "не оплачен"
-    end
 
     local function fillFines(rows)
-        listFines:Clear()
-        for _, r in ipairs(rows or {}) do
-            local line = listFines:AddLine(
-                tostring(r.id or "?"),
-                r.targetName or r.target or "?",
-                tostring(math.floor(tonumber(r.amount) or 0)),
-                fineStatus(r.status),
-                r.reason or "—")
-            line._fineID = r.id
-        end
+        GRM_CompTerminal_FillFines(listFines, rows)
     end
     fillFines(finesList)
 
-    local function sendAct(action, target, text, num, extra)
-        net.Start("GRM_CompTerminal_Act")
-            net.WriteString(action)
-            net.WriteString(jurisdiction)
-            net.WriteString(tostring(target or ""))
-            net.WriteString(tostring(text or ""))
-            net.WriteUInt(math.max(0, math.floor(tonumber(num) or 0)), 32)
-            net.WriteString(tostring(extra or ""))
-        net.SendToServer()
-    end
+    -- протокольная обёртка уже общая (ActiveJur выставлен в начале окна)
+    local sendAct = GRM_CompTerminal_Send
 
     local btnIssueFine = vgui.Create("DButton", finePnl)
     btnIssueFine:SetPos(16, 150) btnIssueFine:SetSize(320, 36)

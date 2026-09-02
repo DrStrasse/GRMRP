@@ -55,21 +55,7 @@ local function drawHintLine(text, x, y, color)
     draw.SimpleTextOutlined(text, "GRM_Cuffs_Text", x, y, color or Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1, Color(0, 0, 0, 230))
 end
 
-local function isVehicleLike(ent)
-    if not IsValid(ent) then return false end
-    if ent:IsVehicle() then return true end
-
-    local class = string.lower(ent:GetClass() or "")
-    if string.find(class, "sim_fphys", 1, true) then return true end
-    if string.find(class, "lvs", 1, true) then return true end
-    if string.find(class, "gmod_sent_vehicle", 1, true) then return true end
-
-    for _, child in ipairs(ent:GetChildren()) do
-        if IsValid(child) and child:IsVehicle() then return true end
-    end
-
-    return false
-end
+local isVehicleLike = GRM.Handcuffs.IsVehicleLike
 
 local function hasDraggedCaptive()
     local lp = LocalPlayer()

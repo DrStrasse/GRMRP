@@ -50,6 +50,45 @@ net.Receive("GRM_CompTerminal_Fines", function()
 end)
 
 --- Человеческое имя структуры по коду юрисдикции.
+--- Наполнение списка розыска (полицейский и жандармский терминалы имели
+-- по копии этого тела; §5.4 п.12).
+function GRM_CompTerminal_FillWanted(list, recs)
+    if not IsValid(list) then return end
+    list:Clear()
+    for k, r in pairs(recs or {}) do
+        if istable(r) and (r.level or 0) > 0 then
+            local starStr = string.rep("★", math.Clamp(r.level or 1, 1, 5))
+            local reas = {}
+            for _, rc in ipairs(r.reasons or {}) do reas[#reas+1] = (rc.code or "") .. " " .. (rc.title or "") end
+            local status = (r.jurisdiction == "military") and "ВОЕННЫЙ" or "ГРАЖДАНСКИЙ"
+            if r.foreign then status = status .. " •перед." end
+            local line = list:AddLine(starStr, status, r.name or k, table.concat(reas, ", "), k)
+            line._targetKey = k
+        end
+    end
+end
+
+--- Статус штрафа для реестра квитанций.
+function GRM_CompTerminal_FineStatus(s)
+    if s == "paid" then return "оплачен" end
+    if s == "cancelled" then return "аннулирован" end
+    return "не оплачен"
+end
+
+function GRM_CompTerminal_FillFines(list, rows)
+    if not IsValid(list) then return end
+    list:Clear()
+    for _, r in ipairs(rows or {}) do
+        local line = list:AddLine(
+            tostring(r.id or "?"),
+            r.targetName or r.target or "?",
+            tostring(math.floor(tonumber(r.amount) or 0)),
+            GRM_CompTerminal_FineStatus(r.status),
+            r.reason or "—")
+        line._fineID = r.id
+    end
+end
+
 function GRM_CompTerminal_JurName(j)
     return j == "military" and "Полевая жандармерия" or "Полиция Порядка"
 end

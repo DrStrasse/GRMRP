@@ -1004,19 +1004,7 @@ if SERVER then
     }
     SS.Handlers = HANDLERS
 
-    local function dispatch(ply, text)
-        if not isstring(text) then return false end
-        local args = string.Explode(" ", string.Trim(text))
-        local fn = HANDLERS[string.lower(args[1] or "")]
-        if not fn then return false end
-        table.remove(args, 1)
-        local ok, e = pcall(fn, ply, args)
-        if not ok then
-            ErrorNoHalt("[GRM SpecService] " .. tostring(e) .. "\n")
-            reply(ply, false, "Внутренняя ошибка команды")
-        end
-        return true
-    end
+    local dispatch = GRM.Chat.DispatchFactory("[GRM SpecService]", HANDLERS, reply)
     SS.Dispatch = dispatch
 
     hook.Add("PlayerSayTransform", "GRM_SS_Transform", function(ply, pack)

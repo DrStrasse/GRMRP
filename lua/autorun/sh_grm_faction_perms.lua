@@ -405,8 +405,9 @@ if SERVER then
         hook.Run("GRM_AccessChanged", "faction_perms")
     end
 
-    -- Локальная проверка лидерства (без зависимости от FactionsAPI).
-    local function isLeaderOfFaction(ply, factionName)
+    -- Проверка лидерства (без зависимости от FactionsAPI). Тот же код
+    -- содержался копией в sh_faction_fixes; оставлен один экспорт (§5.4 п.12).
+    function PERMS.IsLeaderOfFaction(ply, factionName)
         if not IsValid(ply) or not istable(Factions) or not Factions[factionName] then return false end
         local f = Factions[factionName]
         local ck = (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(ply)) or ply:SteamID64()
@@ -419,6 +420,7 @@ if SERVER then
         end
         return false
     end
+    local isLeaderOfFaction = PERMS.IsLeaderOfFaction
 
     net.Receive(NET_GET, function(_, ply)
         if not IsValid(ply) then return end

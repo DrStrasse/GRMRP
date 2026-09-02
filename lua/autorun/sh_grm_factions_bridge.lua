@@ -36,18 +36,8 @@ if SERVER then
         return out
     end
 
-    local function accTable(kind)
-        if kind == "board" then
-            return (GRM.Board and GRM.Board.Cfg and GRM.Board.Cfg.allow) or {}
-        elseif kind == "journ" then
-            return (GRM.Broadcast and GRM.Broadcast.Cfg and GRM.Broadcast.Cfg.journalists) or {}
-        elseif kind == "alert" then
-            return (GRM.Broadcast and GRM.Broadcast.Cfg and GRM.Broadcast.Cfg.alerters) or {}
-        elseif kind == "jobs" then
-            return (GRM.Jobs and GRM.Jobs.Cfg and GRM.Jobs.Cfg.allow) or {}
-        end
-        return {}
-    end
+    -- реестры доступов читаются из admin_hub — одна копия, не две (§5.4 п.12)
+    local accTable = GRM.AdminHub.AccTable
 
     net.Receive(NET_GET, function(_, ply)
         if not IsValid(ply) then return end

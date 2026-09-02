@@ -66,6 +66,8 @@ local CLEANED = {
     "lua/autorun/client/cl_grm_industry_ui.lua",
     "lua/autorun/sh_grm_trunk.lua",
     "lua/autorun/sh_grm_stove_slots.lua",
+    -- база лабораторий (волна 8): табличка в ENT:Draw
+    "lua/entities/grm_lab_base/cl_init.lua",
     -- инструменты-стулы: собственные HUDPaint-оверлеи
     "lua/weapons/gmod_tool/stools/grm_arrest_zone.lua",
     "lua/weapons/gmod_tool/stools/grm_business.lua",

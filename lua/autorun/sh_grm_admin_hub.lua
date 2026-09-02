@@ -101,7 +101,7 @@ if SERVER then
         sendLaunchResult(ply, true, "Запущено: " .. command)
     end)
 
-    local function accTable(kind)
+    function HB.AccTable(kind)
         if kind == "board" then
             return (GRM.Board and GRM.Board.Cfg and GRM.Board.Cfg.allow) or {}
         elseif kind == "journ" then
@@ -113,6 +113,7 @@ if SERVER then
         end
         return {}
     end
+    local accTable = HB.AccTable
 
     local function factionsList()
         local out = {}

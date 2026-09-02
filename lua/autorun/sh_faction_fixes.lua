@@ -1266,18 +1266,11 @@ if SERVER then
     end)
 
     -- Проверка лидерства в конкретной фракции (для доступов, открытых лидерам).
+    -- Тело когда-то было копией экспорта sh_grm_faction_perms; имя разбираем
+    -- при вызове, потому что fixes грузится раньше perms (§5.4 п.12).
     local function isLeaderOfFaction(ply, factionName)
-        if not IsValid(ply) or not istable(Factions) or not Factions[factionName] then return false end
-        local f = Factions[factionName]
-        local ck = (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(ply)) or ply:SteamID64()
-        local ldr = tostring(f.Leader or "")
-        if ldr ~= "" and (ldr == ck or ldr == ply:SteamID() or ldr == ply:SteamID64()) then return true end
-        local member = istable(f.Members) and (GRM.Identity.FactionMember(f, ply) or f.Members[ck] or f.Members[ply:SteamID()] or f.Members[ply:SteamID64()]) or nil
-        if istable(member) then
-            local leaderRole = f.LeaderRoleName or "Лидер"
-            if member.Role == leaderRole or member.Role == "Лидер" then return true end
-        end
-        return false
+        local m = GRM.FactionPerms
+        return (m and m.IsLeaderOfFaction and m.IsLeaderOfFaction(ply, factionName)) == true
     end
 
     net.Receive(NET_EXT_ACTION, function(_, ply)
