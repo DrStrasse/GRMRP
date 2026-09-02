@@ -1,0 +1,10 @@
+{
+    "title"         "GRM:RP"
+    "base"          "sandbox"
+    "maps"          ""
+    "author"        "DrStrasse"
+    "authorurl"     "https://github.com/DrStrasse/GRMRP"
+    "license"       "See repository LICENSE"
+    "type"          "Server"
+    "category"      "RP"
+}

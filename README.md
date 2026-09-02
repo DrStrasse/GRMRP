@@ -14,10 +14,18 @@
 - **Часть II** — автоген-справочники: 312 net-каналов, 54 конфвара, 313 команд,
   реестр прав;
 - **Часть III** — как строить окна/панели (наш опыт + эталоны AdvDupe2/Draconic);
-- **Часть IV** — вскрытие внешних источников: netlibrary (pON), AdvDupe2
-  (net.Stream, кодек, job-queue), Deformation, Homigrad, Draconic Base;
+- **Часть IV** — вскрытие внешних источников (три волны, 4.1–4.21): netlibrary
+  (pON), AdvDupe2 (net.Stream, кодек, job-queue), Deformation, Homigrad,
+  Draconic; gmod_blueprints, Mantle, MMD, bCrafting, FPP; 3D-Particles, VJ-Base,
+  Glide, DarkRP, glualint, FProfiler, GPeek/DCodeViewer/vscplus, EasyChat;
 - **Часть V** — архив всех прежних MD (ANALYSIS/AUDIT/CONCEPT/CHECKPOINT/…),
-  перенесённый дословно.
+  перенесённый дословно;
+- **Часть VI** — полный реестр проекта (автоген): 261 модуль / 85 энтити /
+  25 тулов / 8 оружий / 3 пака;
+- **Часть VII** — GRMRP, собственный игровой режим: принципы, карта систем,
+  фаза I. Скелет режима живёт в `gamemodes/grmrp/` (base sandbox; НЕ зависит
+  от ULib/ULX и сторонних аддонов — указание владельца). В dist-архив аддона
+  не входит: распространяется копией в `garrysmod/gamemodes/` (чеклист 7.4).
 
 История правок — `CHANGELOG.md`. Прежние отдельные MD-файлы удалены 02.09.2026
 по указанию владельца; содержимое сохранено внутри WIKI.md.

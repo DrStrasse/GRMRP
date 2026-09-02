@@ -34,7 +34,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Основной модуль + отдельные аддоны (grm_addon_studio, grm_textscreens…).
-SCAN_DIRS = ("lua", "addons")
+SCAN_DIRS = ("lua", "addons", "gamemodes")
 
 # Сторонние библиотеки: форматируются апстримом, у нас — как есть.
 # Паковые файлы пожарного аддона владелец просил парсером не чинить.

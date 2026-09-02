@@ -1,5 +1,37 @@
 # CHANGELOG — история изменений
 
+## 2026-09-03 — волна-3 финал (EasyChat) + игровой режим GRMRP: каркас и чат (фаза I)
+
+**Уточнение владельца.** «Зависимость от LUA» = ULib/ULX: режим обязан быть
+независим от них и от сторонних аддонов; EasyChat замещается своим core.chat.
+
+**WIKI.md (21 976 строк):**
+- §4.21 EasyChat (разбор до дна: autoloader/хук-пайплайн/richtextx-CEF/
+  engine_chat_hack/chathud/настройки + 5 законов фундамента режима);
+- §5.17 чат-окно/строка ввода, §5.18 контракт гизмо-редактора (Часть III);
+- ЧАСТЬ VI — полный реестр проекта автогеном (261/85/25/8/3, ~208k строк);
+- ЧАСТЬ VII — директивы режима: 7.1 принципы (ZERO-DEPENDENCY от ULib/ULX),
+  7.2 карта систем «база→модуль режима→опоры», 7.3 фаза I, 7.4 чеклист
+  анти-потеря; указание 8 в постоянных; заголовок Части IV → 4.13–4.21.
+
+**gamemodes/grmrp/ (НОВОЕ, рабочий скелет):** grmrp.txt; gamemode/{shared
+(namespace, net-константы), grm_api (stub-реестр DarkRP-модели: layout-
+валидация, буфер 256/имя, флеш при define, grmrp_api_dump), init (загрузчик
+фазами, полный перехват PlayerSay, PVS 896 для hears-хука), cl_init (гашение
+CHudChat, свой StartChat)}; modules/chat/{sh_grmrp_chat_core — чистое ядро:
+byte-safe UTF-8 sanitize, каналы-декларации, ParseSay(/pm с адресатом),
+лестница rate→burst→mute 10·2^n cap 180с, аудитория с инжецируемыми dist/
+isDead; sv_grmrp_chat — cvar'ы REPLICATED|ARCHIVE, deliver одной net-фазой
+с эхо-кастом автора; cl_grmrp_chat_hud — лента 60/18, closed-form fade,
+кириллица extended=true; cl_grmrp_chat — чипы каналов, история ↑/↓ cap 50,
+Tab-дополнение}.
+
+**Стенды:** tools/luatest/sim_grmrp_chat.lua (43/43) и sim_grmrp_api.lua
+(28/28); стенды поймали и зафиксировали 3 реальных бага ядра (cut
+continuation-байт UTF-8, рваный clamp, find-vs-match в ParseSay).
+lua_style.py теперь сканирует и gamemodes/. ULib/ULX в режиме не
+используются ни разу (проверено грепом).
+
 ## 2026-09-02 (ночь+2) — WIKI Часть IV: третья волна (10 источников, задел под свой gamemode)
 
 **Репорт владельца.** «Особенно внимательно координаты/позиции и NPC-логику;

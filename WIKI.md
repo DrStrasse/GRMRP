@@ -13,8 +13,10 @@
 | **I** | Свод правил GRM (гл. 0–12 ниже) — закон | живой |
 | **II** | Справочники интерфейса сервера: каналы/cvar'ы/команды/права (автоген) | живой, перегенерировать скриптом |
 | **III** | Окна и UI: как делать панели (синтез практика+AD2+DRC) | живой |
-| **IV** | Вскрытие внешних источников: волна 1 — netlibrary, AdvDupe2, Deformation, Homigrad, Draconic; волна 2 — gmod_blueprints, Mantle, MMD importer, bCrafting, FPP (4.7–4.12); волна 3 (под gamemode) — 3D Particle System, VJ-Base, Glide, DarkRP+mod, glualint, FProfiler, GPeek/DCodeViewer/vscplus (4.13–4.20) | справочник |
+| **IV** | Вскрытие внешних источников: волна 1 — netlibrary, AdvDupe2, Deformation, Homigrad, Draconic; волна 2 — gmod_blueprints, Mantle, MMD importer, bCrafting, FPP (4.7–4.12); волна 3 (под gamemode) — 3D Particle System, VJ-Base, Glide, DarkRP+mod, glualint, FProfiler, GPeek/DCodeViewer/vscplus, EasyChat (4.13–4.21) | справочник |
 | **V** | Архив: перенесённые дословно ANALYSIS/AUDIT/CONCEPT/CHECKPOINT/… прошлых волн | исторический |
+| **VI** | Полный реестр проекта (автоген 03.09.2026): 261 модуль / 85 энтити / 25 тулов / 8 оружий / 3 пака / 1 стороннее — карта переносимого в режим | снапшот |
+| **VII** | GRMRP — игровой режим: принципы (7.1), карта систем (7.2), фаза I-skeleton (7.3), чеклист анти-потеря (7.4) | директива, живой |
 
 Порядок доверия: Часть I > живой код (он закон) > Часть III > остальные.
 Архив (V) читается как история решений: то, что противоречит Части I или
@@ -41,6 +43,12 @@
    `goto nextacc` — известное исключение из «goto запрещён», владелец
    решит сам), вкладки розыска и бейджа в sh_grm_admin_menu.
 
+8. Игровой режим `gamemodes/grmrp/` не зависит от ULib/ULX и любых
+   сторонних lua-аддонов (указание владельца 03.09.2026): ни require, ни
+   вызовов ULib.*/ULX.*; права — только GRM.Admin (CAMI — лишь исходящий
+   мост, по желанию сервера); EasyChat замещается собственным core.chat
+   (мосты zz_* удалить, когда core.chat признан готовым — см. 7.4).
+
 ## Стенды-гейты (запускать перед каждым коммитом кода)
 
 ```sh
@@ -53,6 +61,8 @@ for f in tools/luatest/sim_*.lua; do timeout 60 ./.luabuild/lj/src/luajit "$f" >
 ./.luabuild/lj/src/luajit tools/luatest/sim_admin_console.lua   # консоль админа
 ./.luabuild/lj/src/luajit tools/luatest/sim_ban_hwid.lua        # бан по железу
 ./.luabuild/lj/src/luajit tools/luatest/sim_server_ban.lua      # деморган (4 FAIL — baseline)
+./.luabuild/lj/src/luajit tools/luatest/sim_grmrp_chat.lua      # чат-ядро режима (43 теста)
+./.luabuild/lj/src/luajit tools/luatest/sim_grmrp_api.lua      # GRMAPI stubs (28 тестов)
 # 3) стиль (весь репозиторий)
 python3 tools/lua_style.py --check
 # 4) аудиты: новые находки сравниваются с прогоном на stash-нутом дереве
@@ -1967,10 +1977,85 @@ end
   GPeek-типа §5.15: в режиме те же окна останутся валидными.
 
 
+
+## 5.17 Чат-окно и строка ввода (синтез: EasyChat + blueprint-модаль + наш qmenu)
+
+Паттерны для ЛЮБОГО окна с вводом текста (чат режима, консоль админа,
+поиски, описания документов):
+
+- **поле = свой DTextEntry-обёртка** (`entryx`-модель): история ввода
+  (↑/↓, cap 50, per-session), «пустое поле закрывает окно», Esc снимает
+  фокус, IME: не перехватывать KEY_ENTER при `keypress`-режиме
+  композиции; авто-дополнение префиксов `/` — плоский список
+  `{cmd → fn}` + `string.StartWith`, подстветка совпадения — `RichText`
+  ДУБЛЕМ-оверлей над полем (не трогать текст поля);
+- **лимиты на обеих сторонах**: реплицированный cvar-потолок (клиент режет
+  UX-но, сервер режет ЗАКОНОМ — FCVAR_REPLICATED-идея EasyChat);
+  вырезать управляющие символы ДО net (таблица lookup 0x00-0x1F+0x7F —
+  §4.21.3), `utf8`-безопасный sub (`GRM.UI.Utf8Sub`);
+- **HUD-лента сообщений** — closed-form fade без состояний
+  (`alpha = clamp(t0 + ttl + fade - RealTime(), 0, 1) * 255`),
+  пауза fade при фокусе/открытом вводе; буфер кольцевой (cap 200,
+  пересборка строк только при изменении ширины — кешировать разметку);
+- **bounds-хук чужих панелей** (`GRMRP_ChatBounds`): чат-лента и наш HUD
+  не должны наезжать — обе стороны уступают через хук, возвращающий rect;
+- **богатые вложения — двухходовые с бюджетом**: сообщение несёт
+  `embedKey`, клиент доспрашивает (`REQUEST_EMBED`), сервер — лимит
+  запросов/игрок/мин с обнулением по disconnect (§4.21.2) — так же
+  делаем фото/карты/профили в чате и в телефоне;
+- **DHTML — только с `SetAllowLua(false)`** и точечным `AddFunction`;
+  проверка CEF (`BRANCH == "x86-64" or system.IsWindows()`, проба в
+  PreRender однократно с кэшем) и ОБЯЗАТЕЛЬНЫЙ нативный fallback; внешний
+  @import-шрифт в HTML запрещён (офлайн-сервер = битый рендер);
+- **настройки вида** — DPropertySheet + обёртка `AddSheet` (единый стиль),
+  live-превью шрифта/цвета на канвасе (font_editor-паттерн), JSON
+  save/load пресета, кнопки Apply/Reset; слайдеры числовых значений —
+  DNumSlider c `SetValue`-обратной связкой только по OnValueChanged
+  (не в Think!), для cvar-пресетов — зелёный/красный индикатор
+  «рекомендованного» (DRC IsGud, §5.2).
+
+## 5.18 Гизмо, трансформы и анимации — сводный контракт (все волны)
+
+Точка сборки всех разборов 3D-манипуляций (для студии/редакторов режима и
+булдующейся библиотеки):
+
+- **иерархия трансформов** — единственный правильный порядок:
+  `world = parentMatrix ∘ (rotate(system)?) ∘ translate(local) ∘
+  rotate(local) ∘ rotate(rollAxis)`; «позиция в повёрнутом пространстве» vs
+  «в неповёрнутом» выбирается ПОЗИЦИЕЙ rotate относительно translate
+  (particles 4.13.1); прицепка «двигается, не поворачивается» —
+  `SetAngles(0,0,0)` родителя (там же);
+- **цепочка крепления**: attachment → `LookupBone`+`FollowBone` →
+  fail-safe; MOVETYPE_NONE у ребёнка при attachment-parenting (VJ 4.14.4);
+  `GetAttachment` возвращает {Pos, Ang} — мир-координаты, не путать с
+  LocalToWorld(attachment-локал);
+- **анимация свойства** — `value = start Lerp[f(delta·mod)] end`,
+  delta нормализован clamp'ом по жизненному окну, f — из таблицы
+  easing-имён (functions не сериализуемы — §7); hover/select —
+  эксп-сглаживание `1-exp(-rate·dt)` + снап <0.01 (§5.13);
+- **гизмо-перетаскивание** — хост-обводка (§9.2.6 гайд'а) + маппинг осей
+  НЕ по алфавиту (§4.4.17) + `pairs()` по осям запрещён (§4.4.15) +
+  трассы с собственным фильтром (Glide selfTraceFilter, 4.15.2: гизмо/
+  транспорт никогда не трассит свои части);
+- **снимки/предпросмотр 3D** — DModelPaint с `SetBodygroup` ДО
+  `InvalidateModel()` (DRC §5.7); модель-частицы масштабируются
+  `EnableMatrix("RenderMultiply")` (particles 4.13.2);
+- **LOD-мышление**: зум/дистанция → уровень детализации из дискретной
+  таблицы (blueprints ZoomLevels), для NPC — тяжёлые процессы режутся
+  тик-стейгером с джиттером (VJ 4.14.2), для анимаций —
+  `sv_pvsskipanimation` ломает кости/аттачменты вне PVS: любой код,
+  читающий позы чужих сущей вне видимости, обязан это переживать
+  (VJ 4.14.2 комментарий-война);
+- **анимации на произвольных моделях** (наш социальный слой/будущие NPC):
+  зонд вместо предположения: временно включить референс-секвенцию →
+  померить кость → вывести оси → закэшировать per-model (MMD 4.9.2);
+  flex-маппинги — per-model override-таблицы, резолв пробоном через
+  временную энтити (там же); fallback-жесты (DRC CallGesture §4.5) — всегда с autokill.
+
 ---
 
 
-# ЧАСТЬ IV · Вскрытие внешних источников (02.09 вечер; 4.7–4.12 вторая волна; 4.13–4.20 третья)
+# ЧАСТЬ IV · Вскрытие внешних источников (02.09–03.09; 4.7–4.12 вторая волна; 4.13–4.21 третья)
 
 Восемнадцать репозиториев (три волны) прочитаны построчно в песочнице;
 цифры бенчмарков первой волны — реальные прогоны LuaJIT, не пересказ вики.
@@ -3098,6 +3183,91 @@ preventDefault → copy selection в SetClipboardText).
    GetParentWorldTransformMatrix (4.13.4) — ни один «эталон» не принимается без
    прогона хотя бы smoke-пути в sim'е; наш стандарт §10.1.2 (откатная
    проверка) распространяется и на заимствуемое.
+
+
+
+
+## 4.21 EasyChat (Earu) — мода чата; финальный источник третьей волны
+
+18k строк апстрим (у нас вендорен форк в `lua/easychat/`, 6.7k —
+с `zz_grm_easychat_cmds.lua`/`zz_easychat_grm_fix.lua` мостами). Разобрано
+прицельно — то, что нужно для СОБСТВЕННОГО чата режима (задача владельца:
+независимость от EasyChat).
+
+**4.21.1 Модуль-автозагрузчик (autoloader.lua).** Файл-модуль = чанк,
+возвращающий имя; загрузка `xpcall(module, handler)` — упавший модуль не
+топит чат, пишет «Couldn't load X» + счётчики loaded/ignored/failed и время
+инициализации; чёрный список — файл `module_ignore_list.txt` в DATA
+(пользователь отключает модули БЕЗ правки кода); структура `modules/`
+(sh) + `modules/server/` + `modules/client/`, сервер раздаёт клиентские
+файлы. `EasyChat.GetModules()` наружу. Плюс `Destroy()/Reload()` — полный
+хот-релоад с ре-инициализацией.
+**Вердикт: это же лицо нашего GRM.Modules — добавить (1) xpcall-статистику
+загрузки с таймингом (у нас есть пофаза, нет итоговой строки), (2) ignore-лист
+в DATA (у нас конфиг-реестр — эквивалентен), (3) Destroy/Reload для
+отладочных модулей — взять в dev-инструментарий режима.**
+
+**4.21.2 Пайплайн сообщения (networking.lua + core).**
+`PlayerSay`(сервер, включая перехват движкового `say` StringCmd через
+slog/sourcenet `FilterIncomingMessage` — их engine_chat_hack; в режиме это
+наш GM:PlayerSay, трюк НЕ нужен и это плюс независимости) → лимит длины
+(cvar `max_chars` FCVAR_REPLICATED!) → разбор канала по префиксам →
+`hook.Run("PlayerSay")`-совместимый контракт → рассылка С ФИЛЬТРОМ
+ПОЛУЧАТЕЛЯ (`PlayerCanSeePlayersChat` на слушателя, дистанция/мертвость/
+тим) → клиент принимает → `hook.Call("OnPlayerChat", ...)` с правом модуля
+вернуть true=suppress. Отдельный канал `NET_ADD_TEXT` (системные строки в HUD
+без эмитента), `NET_SYNC_BLOCKED` (заблокированные игроки),
+`NET_REQUEST_EMBED/MSG_EMBED` — двухходовая подгрузка обогащений (ссылочные
+превью) с БЮДЖЕТОМ на игрока и `player_disconnect → сброс бюджета`.
+**Вердикт: схема «запрос-обогатить с бюджетом» — наш паттерн для фото/карт в
+сообщениях (режимный /photo в чате); per-listener filtering на сервере — уже
+наш стандарт (AC broadcast) — подтверждён; FCVAR_REPLICATED лимит, чтобы и
+клиент знал потолок ДО отправки (UX) — взять.**
+
+**4.21.3 Защита строки (core 55-106).** `trim_lookup` — ОТСЮДА таблица
+управляющих символов (0x00-0x1f, 0x7f, NBSP...) чистится ДО чего-либо
+(`ExtendedStringTrim`) — защита от control-char инъекций в markup/DHTML;
+`IsStringEmpty` с отдельным режимом проверки ника; URL-паттерны +
+`IsDirectImageURL` (png/jpg/... по расширению) + `ProxyImageURL` (через
+прокси для картинок, убитых CORS — в режиме не повторяем: свой контент).
+Ник-декорации: патчер `Player:Nick/Name/GetRichName...` с кеширующим wrapper'ом
+и статус-проверкой «кто перехватил ник» (`check_nick_override_wrapper_status`)
+— в режиме не нужно (ник один источник), но урок: конфликтующие переопределения
+мета-таблиц чинятся ВЛАДЕНИЕМ, а не порядком include — наш закон §3.2.
+
+**4.21.4 Рендер и ввод.** `richtextx` — DHTML-рендер текста (CSS spans,
+text-shadow, selection-цвет; `SetAllowLua(false)` ОБЯЗАТЕЛЬНО на панелях,
+жующих чужой ввод — мост только `AddFunction` точечно; image-viewer — тоже
+DHTML с onload-resize `viewer.Resize(naturalWidth,...)`, scale = min(1, экран·0.8/w)
+— формула «изображение по центру без обрезки»; внешний шрифт @import с
+Google — антипаттерн офлайна, у нас только локально). `chathud.lua`:
+fade ПО ЗАКРЫТОЙ ФОРМУЛЕ `alpha = clamp(lifeTime + fadeEnd - RealTime(),0)*255/fadeEnd`
+— без лерпов и состояний; TTL/fadelen — реплицированные cvar'ы; при фокусе
+HUD останавливает fade (`FocusTime`); bounds-хук `ECHUDBoundsUpdate`
+(сторонние аддоны сдвигают окно чата!) — вежливость к чужому layout — в
+режиме our hook `GRMRP_ChatBounds` та же идея. `textentryx` — своё поле
+ввода: история (стрелки), эмодзи-пикер, автодополнение команд
+(`cmds_auto_completion.lua`), макросы (`macro_processor.lua` + tab в
+настройках), IME-safe ввод. Настройки: DPropertySheet с ПЕРЕОПРЕДЕЛЁННЫМ
+`AddSheet` (единый стиль вкладок — обёртка на лету, §5.2 DRC IsGud рядом),
+`chathud_font_editor_panel` — редактор шрифта: слайдеры/чекбоксы + LIVE
+канвас-превью + Apply/Reset/JSON save-load.
+**Вердикт для GRMRP.Chat (режим, стартует в этом же коммите): берём модель
+— каналы-таблицы, closed-form fade, история ввода, /cmd-автодополнение,
+bounds-хук, реплицированные лимиты; НЕ берём — DHTML рендер (CEF-зависимость:
+у них есть отдельный cef_detection с PreRender-пробой и fallback на
+richtext_legacy — у нас сразу нативный markup без CEF), engine-хаки (нет
+надобности), google-шрифты, image-proxy.**
+
+**Общий итог волн 1–3.** Восемнадцать+ репозиториев вскрыты; выводы
+конвергировались к пяти законам, которые и есть фундамент будущего режима:
+(1) загрузка = декларативные фазы с буферизацией вызовов (DarkRP stubs /
+EChat autoloader / наш Boot); (2) состояние в одном владельце, сети —
+дельты и pull-чанки (AD2/netstream/FPP/bp); (3) вход любой природы —
+нормализатор с отказом (MMD/EasyChat control-chars/§8.8); (4) UI: сервер не
+доверяет клиенту, клиент не доверяет себе (file_browser/GPeek pump/
+closed-form fade/Think-only-while-animating); (5) наказание — лестница,
+отказ — с причиной (FPP/DRC).
 
 ---
 
@@ -21226,3 +21396,581 @@ autorun-часть основного GRM.
 ---
 
 *Конец тома. Правило обновлений: новая запись в CHANGELOG + (если это правило) строка в Часть I §12/§4–§9.*
+
+
+---
+
+
+# ЧАСТЬ VI · Полный реестр проекта (автоген 03.09.2026)
+
+Сгенерировано python-walk'ом дерева репозитория (подсчёт строк + первая
+строка комментария-заголовка каждого lua-файла). Это карта «что переносим в
+игровой режим» — ссылки в таблице 7.2 указывают на строки этого
+реестра. Метод перегенерации: обход `lua/**/*.lua` + `addons/*/**.lua` с
+той же схемой секций; артефакт-лист фиксировать числом файлов — расхождение
+с прошлой таблицей сигналит о непротестированных новичках.
+
+Полный перечень сгенерирован автоинвентаризацией по дереву репозитория.
+
+### модуль (261)
+
+| файл | строк | сторона | заголовок-назначение |
+|---|---|---|---|
+| `lua/autorun/easychat_init.lua` | 33 | shared |  |
+| `lua/autorun/sh_00_grm_boot.lua` | 448 | shared |  |
+| `lua/autorun/sh_00_grm_ui.lua` | 209 | shared | GRM UI lifecycle guard.  All GRM windows use a stable key so repeated |
+| `lua/autorun/sh_01_grm_core.lua` | 276 | shared |  |
+| `lua/autorun/sh_02_grm_persistence.lua` | 200 | shared | [[ GRM Persistence Core v1.0.0: safe JSON and backend adapters. ]] |
+| `lua/autorun/sh_03_grm_access.lua` | 552 | shared | [[ GRM Access Core v1.0.0: capability registry and unified grants. ]] |
+| `lua/autorun/sh_03b_grm_modules.lua` | 198 | shared |  |
+| `lua/autorun/sh_04_grm_net.lua` | 192 | shared | [[ GRM Net Guard v1.0.0: common validation for client intentions. ]] |
+| `lua/autorun/sh_05_grm_audit.lua` | 77 | shared | [[ GRM Audit Core v1.0.0: one append-only JSONL journal. ]] |
+| `lua/autorun/sh_05_grm_save.lua` | 276 | shared |  |
+| `lua/autorun/sh_06_grm_performance.lua` | 620 | shared |  |
+| `lua/autorun/sh_07_grm_scheduler.lua` | 436 | shared |  |
+| `lua/autorun/sh_07_grm_sound.lua` | 262 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_faction_fixes.lua` | 3687 | shared |  |
+| `lua/autorun/sh_factions.lua` | 4411 | shared |  |
+| `lua/autorun/sh_grm_911.lua` | 580 | shared |  |
+| `lua/autorun/sh_grm_achievements.lua` | 574 | shared |  |
+| `lua/autorun/sh_grm_admin_core.lua` | 1029 | shared |  |
+| `lua/autorun/sh_grm_admin_hub.lua` | 1237 | shared |  |
+| `lua/autorun/sh_grm_admin_menu.lua` | 1276 | shared |  |
+| `lua/autorun/sh_grm_alarm_access.lua` | 358 | shared |  |
+| `lua/autorun/sh_grm_alarm_config.lua` | 93 | shared |  |
+| `lua/autorun/sh_grm_alarm_integration.lua` | 211 | shared |  |
+| `lua/autorun/sh_grm_alcohol.lua` | 88 | shared | [[ Алкоголь, варка пива/кваса, алкотестер. ]] |
+| `lua/autorun/sh_grm_analytics.lua` | 587 | shared |  |
+| `lua/autorun/sh_grm_anticheat.lua` | 432 | shared |  |
+| `lua/autorun/sh_grm_arrest.lua` | 1578 | shared |  |
+| `lua/autorun/sh_grm_atm.lua` | 1890 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_augmentation_access.lua` | 41 | shared | Доступ к оборудованию аугментации: фракция / отдел / роль / действие. |
+| `lua/autorun/sh_grm_augmentation_chips.lua` | 905 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_augmentation_integrations.lua` | 42 | shared | GRM Augmentation Integrations: безопасный мост чипов к подсистемам сборки. |
+| `lua/autorun/sh_grm_augmentations.lua` | 528 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_ban.lua` | 1598 | shared |  |
+| `lua/autorun/sh_grm_binder.lua` | 1456 | shared |  |
+| `lua/autorun/sh_grm_board.lua` | 603 | shared |  |
+| `lua/autorun/sh_grm_bodygroup_rules.lua` | 1254 | shared |  |
+| `lua/autorun/sh_grm_broadcast.lua` | 893 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_cctv_access.lua` | 787 | shared |  |
+| `lua/autorun/sh_grm_cctv_config.lua` | 113 | shared |  |
+| `lua/autorun/sh_grm_character.lua` | 2781 | shared |  |
+| `lua/autorun/sh_grm_chat_config.lua` | 80 | shared |  |
+| `lua/autorun/sh_grm_chip_control.lua` | 555 | shared |  |
+| `lua/autorun/sh_grm_civil_vehicle_market.lua` | 317 | shared | [[ GRM Civil Vehicle Market v1.1.0 |
+| `lua/autorun/sh_grm_comp_access.lua` | 444 | shared |  |
+| `lua/autorun/sh_grm_cruise.lua` | 217 | shared | [[ Круиз — потолок. Автопилот — сам крутит газ (W + тяга + simfphys-клавиши). ]] |
+| `lua/autorun/sh_grm_ctx.lua` | 867 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_currency.lua` | 939 | shared |  |
+| `lua/autorun/sh_grm_customization.lua` | 843 | shared |  |
+| `lua/autorun/sh_grm_diplomas.lua` | 701 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_documents.lua` | 4225 | shared |  |
+| `lua/autorun/sh_grm_doors.lua` | 2667 | shared |  |
+| `lua/autorun/sh_grm_doors_access.lua` | 992 | shared |  |
+| `lua/autorun/sh_grm_economy.lua` | 3218 | shared |  |
+| `lua/autorun/sh_grm_education.lua` | 1224 | shared |  |
+| `lua/autorun/sh_grm_encumbrance_config.lua` | 74 | shared |  |
+| `lua/autorun/sh_grm_entry.lua` | 464 | shared |  |
+| `lua/autorun/sh_grm_estate.lua` | 2060 | shared |  |
+| `lua/autorun/sh_grm_estate_deal.lua` | 738 | shared |  |
+| `lua/autorun/sh_grm_f4menu.lua` | 1010 | shared |  |
+| `lua/autorun/sh_grm_faction_duty.lua` | 667 | shared |  |
+| `lua/autorun/sh_grm_faction_economy.lua` | 69 | shared |  |
+| `lua/autorun/sh_grm_faction_menu_access.lua` | 279 | shared |  |
+| `lua/autorun/sh_grm_faction_perms.lua` | 534 | shared |  |
+| `lua/autorun/sh_grm_faction_personnel.lua` | 336 | shared | [[ GRM Faction Personnel v1: кадровые дела, история и испытательный срок. ]] |
+| `lua/autorun/sh_grm_faction_positions.lua` | 629 | shared |  |
+| `lua/autorun/sh_grm_faction_roster.lua` | 138 | shared |  |
+| `lua/autorun/sh_grm_factions_bridge.lua` | 233 | shared |  |
+| `lua/autorun/sh_grm_factions_core_v4.lua` | 88 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_feco_admin.lua` | 213 | shared |  |
+| `lua/autorun/sh_grm_ffdlink.lua` | 527 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_fire.lua` | 810 | shared |  |
+| `lua/autorun/sh_grm_fire_access.lua` | 467 | shared |  |
+| `lua/autorun/sh_grm_fire_dispatch.lua` | 668 | shared |  |
+| `lua/autorun/sh_grm_fire_pump_ui.lua` | 452 | shared |  |
+| `lua/autorun/sh_grm_fire_spots.lua` | 291 | shared |  |
+| `lua/autorun/sh_grm_fire_status.lua` | 632 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_fire_truck.lua` | 1010 | shared |  |
+| `lua/autorun/sh_grm_fleet.lua` | 2267 | shared |  |
+| `lua/autorun/sh_grm_food_config.lua` | 317 | shared |  |
+| `lua/autorun/sh_grm_food_kitchen.lua` | 278 | shared |  |
+| `lua/autorun/sh_grm_fuel.lua` | 1522 | shared | [[ Топливо GRM v1.3: шланг берут в руки (E на колонке), вставляют в бак |
+| `lua/autorun/sh_grm_garage.lua` | 1230 | shared |  |
+| `lua/autorun/sh_grm_handcuffs.lua` | 26 | shared |  |
+| `lua/autorun/sh_grm_handcuffs_config.lua` | 126 | shared |  |
+| `lua/autorun/sh_grm_home_bed.lua` | 246 | shared |  |
+| `lua/autorun/sh_grm_housing.lua` | 524 | shared |  |
+| `lua/autorun/sh_grm_housing_panel.lua` | 661 | shared |  |
+| `lua/autorun/sh_grm_housing_search.lua` | 551 | shared |  |
+| `lua/autorun/sh_grm_housing_storage.lua` | 677 | shared |  |
+| `lua/autorun/sh_grm_identity.lua` | 120 | shared |  |
+| `lua/autorun/sh_grm_incassation.lua` | 2093 | shared |  |
+| `lua/autorun/sh_grm_industry_container.lua` | 374 | shared |  |
+| `lua/autorun/sh_grm_industry_core.lua` | 560 | shared |  |
+| `lua/autorun/sh_grm_industry_entities.lua` | 107 | shared |  |
+| `lua/autorun/sh_grm_interact.lua` | 894 | shared |  |
+| `lua/autorun/sh_grm_inventory.lua` | 1532 | shared |  |
+| `lua/autorun/sh_grm_jobs.lua` | 1978 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_jobs_config.lua` | 375 | shared |  |
+| `lua/autorun/sh_grm_jobs_courier.lua` | 163 | shared |  |
+| `lua/autorun/sh_grm_jobs_limits.lua` | 140 | shared |  |
+| `lua/autorun/sh_grm_jobs_v4.lua` | 310 | shared | [[ GRM Jobs v4: physical garbage cycle and live player taxi dispatch. ]] |
+| `lua/autorun/sh_grm_jobs_v5.lua` | 265 | shared | [[ GRM Jobs v5.2: живая топология мусора, сверка маршрута и выгрузка на полигоне. |
+| `lua/autorun/sh_grm_laws.lua` | 869 | shared |  |
+| `lua/autorun/sh_grm_loading.lua` | 351 | shared |  |
+| `lua/autorun/sh_grm_medical.lua` | 995 | shared |  |
+| `lua/autorun/sh_grm_medical_full.lua` | 219 | shared |  |
+| `lua/autorun/sh_grm_minimap.lua` | 630 | shared | GRM GPS points / districts v0.2 |
+| `lua/autorun/sh_grm_mining.lua` | 512 | shared |  |
+| `lua/autorun/sh_grm_mobile.lua` | 2171 | shared |  |
+| `lua/autorun/sh_grm_movement.lua` | 439 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_nameplate.lua` | 833 | shared |  |
+| `lua/autorun/sh_grm_narcotics.lua` | 286 | shared |  |
+| `lua/autorun/sh_grm_navmap.lua` | 17 | shared | [[ Атлас/мини сняты: точки плыли. Файл-заглушка, чтобы lua не падал. ]] |
+| `lua/autorun/sh_grm_news.lua` | 525 | shared |  |
+| `lua/autorun/sh_grm_ore_admin.lua` | 121 | shared |  |
+| `lua/autorun/sh_grm_ore_defs.lua` | 25 | shared | grm_ore_defs.lua |
+| `lua/autorun/sh_grm_ore_processing.lua` | 129 | shared |  |
+| `lua/autorun/sh_grm_pcboard.lua` | 1079 | shared |  |
+| `lua/autorun/sh_grm_perm_entities.lua` | 1459 | shared |  |
+| `lua/autorun/sh_grm_phone_access.lua` | 569 | shared |  |
+| `lua/autorun/sh_grm_phone_config.lua` | 72 | shared |  |
+| `lua/autorun/sh_grm_phone_shop.lua` | 1280 | shared |  |
+| `lua/autorun/sh_grm_phone_vendor.lua` | 154 | shared |  |
+| `lua/autorun/sh_grm_photo.lua` | 408 | shared |  |
+| `lua/autorun/sh_grm_physical_documents.lua` | 289 | shared |  |
+| `lua/autorun/sh_grm_plates.lua` | 3862 | shared |  |
+| `lua/autorun/sh_grm_prop_guard.lua` | 610 | shared |  |
+| `lua/autorun/sh_grm_prop_protect.lua` | 649 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_property.lua` | 383 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_public_kiosk.lua` | 421 | shared |  |
+| `lua/autorun/sh_grm_qmenu.lua` | 2107 | shared |  |
+| `lua/autorun/sh_grm_quest_dialogue.lua` | 553 | shared |  |
+| `lua/autorun/sh_grm_quests.lua` | 1397 | shared | [[ GRM Quest Ecosystem v1.0.0 — authoritative quests, NPCs, objectives and persistence ]] |
+| `lua/autorun/sh_grm_radionet.lua` | 1734 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_realtime.lua` | 126 | shared | [[ GRM Real Time v2.0.0 — точные настенные часы, без погоды и освещения. |
+| `lua/autorun/sh_grm_registry.lua` | 488 | shared |  |
+| `lua/autorun/sh_grm_roomtap_config.lua` | 116 | shared |  |
+| `lua/autorun/sh_grm_rootguard.lua` | 391 | shared |  |
+| `lua/autorun/sh_grm_rp_chat.lua` | 349 | shared |  |
+| `lua/autorun/sh_grm_rpdesc.lua` | 456 | shared |  |
+| `lua/autorun/sh_grm_service_orders.lua` | 42 | shared | [[ GRM Service Orders v1.0 — paid/requested ATM services in organization computers. ]] |
+| `lua/autorun/sh_grm_services.lua` | 1064 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_shop_integration.lua` | 283 | shared |  |
+| `lua/autorun/sh_grm_sliding_door.lua` | 300 | shared |  |
+| `lua/autorun/sh_grm_social_anims.lua` | 1549 | shared | [[ Соц.анимации: костные позы, радиальное меню, бинд F4, C-меню. ]] |
+| `lua/autorun/sh_grm_social_studio.lua` | 1404 | shared | [[ Студия соц.анимаций: гизмо костей, T-pose/sequence, сейв, доступ игрокам. |
+| `lua/autorun/sh_grm_spawnpick.lua` | 656 | shared |  |
+| `lua/autorun/sh_grm_special_service.lua` | 1406 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_stove_slots.lua` | 497 | shared |  |
+| `lua/autorun/sh_grm_tab_menu.lua` | 1265 | shared |  |
+| `lua/autorun/sh_grm_tickets.lua` | 252 | shared | GRM Tickets: собственная система обращений игрок -> администрация |
+| `lua/autorun/sh_grm_trunk.lua` | 727 | shared |  |
+| `lua/autorun/sh_grm_vehicle_access.lua` | 1328 | shared |  |
+| `lua/autorun/sh_grm_vehicle_dealer.lua` | 877 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_vehicle_health.lua` | 341 | shared | [[ Прочность ТС. Max/текущее = simfphys (MaxHealth/CurHealth), иначе 100. ]] |
+| `lua/autorun/sh_grm_vehicle_precache.lua` | 230 | shared |  |
+| `lua/autorun/sh_grm_vehicles.lua` | 246 | shared |  |
+| `lua/autorun/sh_grm_vending_biz.lua` | 294 | shared |  |
+| `lua/autorun/sh_grm_vendor.lua` | 536 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_wanted_access.lua` | 551 | shared |  |
+| `lua/autorun/sh_grm_wanted_board.lua` | 591 | shared |  |
+| `lua/autorun/sh_grm_wanted_bulletins.lua` | 481 | shared |  |
+| `lua/autorun/sh_grm_wanted_config.lua` | 93 | shared |  |
+| `lua/autorun/sh_grm_wanted_exchange.lua` | 670 | shared |  |
+| `lua/autorun/sh_grm_wanted_fines.lua` | 462 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_grm_weapon_rack.lua` | 623 | shared |  |
+| `lua/autorun/sh_spawn_points.lua` | 1830 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/sh_vehicle_keys.lua` | 182 | shared |  |
+| `lua/autorun/vehicle_dealer.lua` | 13 | shared | GRM Vehicle Dealer v3 compatibility bridge |
+| `lua/autorun/zz_easychat_grm_fix.lua` | 55 | shared |  |
+| `lua/autorun/zz_grm_bleedout.lua` | 404 | shared |  |
+| `lua/autorun/zz_grm_blood_drops.lua` | 55 | shared | [[ Капли крови на землю от GRM_Bleed. Сервер решает, клиент рисует decal. ]] |
+| `lua/autorun/zz_grm_brew.lua` | 36 | shared | [[ Варка: рецепты пива/кваса требуют котёл рядом с плитой. ]] |
+| `lua/autorun/zz_grm_doors_plus.lua` | 168 | shared | [[ Двери+: гость на время, стук, выбивание с прогрессом. ]] |
+| `lua/autorun/zz_grm_easychat_cmds.lua` | 225 | shared |  |
+| `lua/autorun/zz_grm_food_hunger_balance_patch.lua` | 40 | shared |  |
+| `lua/autorun/zz_grm_food_inventory_patch.lua` | 656 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `lua/autorun/zz_grm_handcuffs_access_patch.lua` | 143 | shared |  |
+| `lua/autorun/zz_grm_industry_items.lua` | 112 | shared |  |
+| `lua/autorun/zz_grm_navmap_off.lua` | 17 | shared | Если на сервере завалялся старый sh_grm_navmap.lua, этот файл |
+| `lua/autorun/zz_grm_passport_gender.lua` | 43 | shared | [[ Паспорт берёт пол с персонажа (GRM_Gender / слот). ]] |
+| `lua/autorun/zz_grm_prone.lua` | 142 | shared | [[ Мост GRM ↔ Prone Mod (SYSTEM PRONE). Сам мод не копируем: |
+| `lua/autorun/zz_grm_vehicle_antistuck.lua` | 640 | shared |  |
+| `client/cl_grm_admin_panel.lua` | 1551 | клиент |  |
+| `client/cl_grm_alarm.lua` | 330 | клиент |  |
+| `client/cl_grm_alarm_notify.lua` | 91 | клиент |  |
+| `client/cl_grm_augmentation_access_admin.lua` | 16 | клиент |  |
+| `client/cl_grm_augmentation_chips.lua` | 700 | клиент |  |
+| `client/cl_grm_augmentation_interface.lua` | 146 | клиент | GRM Augmentation Interface: отдельный экран управления имплантами. |
+| `client/cl_grm_augmentation_station.lua` | 345 | клиент |  |
+| `client/cl_grm_augmentations.lua` | 210 | клиент |  |
+| `client/cl_grm_augmentations_admin.lua` | 449 | клиент |  |
+| `client/cl_grm_augmentations_hud.lua` | 471 | клиент | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `client/cl_grm_cctv.lua` | 1012 | клиент |  |
+| `client/cl_grm_comp_terminal.lua` | 400 | клиент |  |
+| `client/cl_grm_curfew_menu.lua` | 340 | клиент |  |
+| `client/cl_grm_customization.lua` | 837 | клиент | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `client/cl_grm_doors_menu.lua` | 659 | клиент |  |
+| `client/cl_grm_encumbrance.lua` | 102 | клиент |  |
+| `client/cl_grm_faction_loadout_admin.lua` | 964 | клиент |  |
+| `client/cl_grm_faction_perms_ui.lua` | 443 | клиент |  |
+| `client/cl_grm_factions_unified_ui.lua` | 2331 | клиент |  |
+| `client/cl_grm_food_hud.lua` | 104 | клиент |  |
+| `client/cl_grm_food_kitchen.lua` | 584 | клиент |  |
+| `client/cl_grm_garage_ui.lua` | 328 | клиент |  |
+| `client/cl_grm_gizmo.lua` | 340 | клиент |  |
+| `client/cl_grm_handcuffs.lua` | 427 | клиент |  |
+| `client/cl_grm_heist.lua` | 96 | клиент |  |
+| `client/cl_grm_hud.lua` | 782 | клиент | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `client/cl_grm_hud_clean.lua` | 76 | клиент |  |
+| `client/cl_grm_industry_logistics.lua` | 336 | клиент |  |
+| `client/cl_grm_industry_machine.lua` | 713 | клиент |  |
+| `client/cl_grm_industry_ui.lua` | 410 | клиент |  |
+| `client/cl_grm_inventory_ui.lua` | 1065 | клиент |  |
+| `client/cl_grm_narcotics_craft.lua` | 97 | клиент |  |
+| `client/cl_grm_pcboard_ui.lua` | 745 | клиент |  |
+| `client/cl_grm_persistence_hub.lua` | 103 | клиент |  |
+| `client/cl_grm_phone.lua` | 403 | клиент |  |
+| `client/cl_grm_quests.lua` | 906 | клиент | GRM Quest Ecosystem v1.0.0 — modern player/admin UI, tracker and cutscenes |
+| `client/cl_grm_radial.lua` | 244 | клиент |  |
+| `client/cl_grm_roomtap.lua` | 909 | клиент |  |
+| `client/cl_grm_search_result.lua` | 135 | клиент |  |
+| `client/cl_grm_sign.lua` | 132 | клиент |  |
+| `client/cl_grm_sound_browser.lua` | 313 | клиент |  |
+| `client/cl_grm_thirdperson.lua` | 211 | клиент |  |
+| `client/cl_grm_ui_theme.lua` | 14 | клиент | Единая GRM/XUI тема: киберпанк-палитра и базовые строительные блоки. |
+| `client/cl_grm_unified_admin.lua` | 15 | клиент | Единый центр управления GRM: админка, сохранения, доступы и аугментации. |
+| `client/cl_grm_vehicle_cells.lua` | 286 | клиент |  |
+| `client/cl_grm_vehicle_hud.lua` | 354 | клиент | Свой приборник: скорость, топливо, прочность, места. |
+| `client/cl_grm_vending_gui.lua` | 280 | клиент |  |
+| `client/cl_grm_vendor_ui.lua` | 59 | клиент | GRM Vendor UI v2.0 — unified GRM storefront |
+| `client/cl_grm_wanted.lua` | 44 | клиент | GRM Wanted client v2.0 |
+| `client/cl_grm_weapon_rack.lua` | 368 | клиент |  |
+| `client/cl_vehicle_hud.lua` | 233 | клиент |  |
+| `client/zz_grm_chathud_lift.lua` | 16 | клиент | [[ Чат-лента EasyChat не должна заезжать на панель состояния GRM. ]] |
+| `client/zz_grm_quest_studio.lua` | 2230 | клиент |  |
+| `server/sv_grm_admin_actions.lua` | 916 | сервер |  |
+| `server/sv_grm_admin_console.lua` | 148 | сервер |  |
+| `server/sv_grm_alarm.lua` | 786 | сервер |  |
+| `server/sv_grm_cctv.lua` | 690 | сервер |  |
+| `server/sv_grm_comp_terminal.lua` | 630 | сервер |  |
+| `server/sv_grm_computer_social.lua` | 16 | сервер | GRM Computer Social backend: persistent social feed and chat rooms. |
+| `server/sv_grm_encumbrance.lua` | 352 | сервер |  |
+| `server/sv_grm_food.lua` | 880 | сервер |  |
+| `server/sv_grm_handcuffs.lua` | 1384 | сервер |  |
+| `server/sv_grm_industry.lua` | 1255 | сервер |  |
+| `server/sv_grm_industry_logistics.lua` | 733 | сервер |  |
+| `server/sv_grm_mining_saver.lua` | 315 | сервер |  |
+| `server/sv_grm_mining_saver_delete_patch.lua` | 118 | сервер |  |
+| `server/sv_grm_narcotics_craft.lua` | 130 | сервер |  |
+| `server/sv_grm_ore_spawner.lua` | 301 | сервер |  |
+| `server/sv_grm_perms_test.lua` | 38 | сервер |  |
+| `server/sv_grm_persistence_hub.lua` | 98 | сервер | GRM unified map persistence hub |
+| `server/sv_grm_phone.lua` | 1028 | сервер |  |
+| `server/sv_grm_roomtap.lua` | 1323 | сервер | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `server/sv_grm_services_commands.lua` | 438 | сервер |  |
+| `server/sv_grm_vehicle_dealer_anim_fix.lua` | 59 | сервер | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
+| `server/sv_grm_wanted.lua` | 190 | сервер | GRM Wanted v2.0 — flexible charges and unified case database |
+| `server/sv_grm_wanted_commands.lua` | 400 | сервер |  |
+| `server/sv_grm_wardrobe_spawn.lua` | 73 | сервер |  |
+| `server/sv_vehicle_keys.lua` | 842 | сервер |  |
+
+### энтити (85)
+
+| имя | строк | назначение |
+|---|---|---|
+| `grm_alarm_hub` | 77 |  |
+| `grm_alarm_sensor` | 75 |  |
+| `grm_alarm_speaker` | 83 |  |
+| `grm_alarm_terminal` | 66 |  |
+| `grm_antenna` | 83 |  |
+| `grm_arrest_camera` | 35 |  |
+| `grm_augmentation_chip` | 128 |  |
+| `grm_augmentation_pod` | 368 |  |
+| `grm_augmentation_station` | 96 |  |
+| `grm_bank_computer` | 763 |  |
+| `grm_bank_terminal` | 110 |  |
+| `grm_bank_vault` | 362 |  |
+| `grm_board` | 65 |  |
+| `grm_brew_kettle` | 28 |  |
+| `grm_broadcast_mic` | 101 |  |
+| `grm_cctv_camera` | 106 |  |
+| `grm_cctv_monitor` | 87 |  |
+| `grm_cctv_server` | 88 |  |
+| `grm_chip_terminal` | 58 |  |
+| `grm_citadel_core` | 30 |  |
+| `grm_citadel_core_terminal` | 30 |  |
+| `grm_civil_vehicle_computer` | 33 |  |
+| `grm_comp_base` | 132 |  |
+| `grm_comp_cityhall` | 365 |  |
+| `grm_comp_court` | 553 |  |
+| `grm_comp_education` | 87 |  |
+| `grm_comp_fire` | 354 |  |
+| `grm_comp_medical` | 514 |  |
+| `grm_comp_military` | 331 |  |
+| `grm_comp_military_police` | 503 |  |
+| `grm_comp_police` | 622 |  |
+| `grm_comp_public` | 46 |  |
+| `grm_comp_security` | 803 |  |
+| `grm_comp_traffic` | 412 |  |
+| `grm_depot` | 60 |  |
+| `grm_doc_computer` | 1722 |  |
+| `grm_duty_npc` | 133 |  |
+| `grm_food_fridge` | 289 |  |
+| `grm_food_planter` | 296 |  |
+| `grm_food_stove` | 422 |  |
+| `grm_fuel_pump` | 157 |  |
+| `grm_garage_terminal` | 93 |  |
+| `grm_garbage_bin` | 7 |  |
+| `grm_garbage_box` | 9 |  |
+| `grm_home_bed` | 178 |  |
+| `grm_home_locker` | 142 |  |
+| `grm_item_drop` | 116 |  |
+| `grm_jobcenter` | 72 |  |
+| `grm_keypad` | 681 |  |
+| `grm_lab_base` | 102 |  |
+| `grm_loudspeaker` | 59 |  |
+| `grm_med_lab` | 25 |  |
+| `grm_mobile_line` | 44 |  |
+| `grm_money_drop` | 99 |  |
+| `grm_money_launderer` | 1458 |  |
+| `grm_money_press` | 353 |  |
+| `grm_money_press_terminal` | 251 |  |
+| `grm_money_printer` | 510 |  |
+| `grm_narc_lab` | 25 |  |
+| `grm_net_console` | 86 |  |
+| `grm_ore_buyer` | 269 |  |
+| `grm_ore_chunk` | 0 |  |
+| `grm_ore_node` | 0 |  |
+| `grm_parcel` | 133 |  |
+| `grm_payphone` | 53 |  |
+| `grm_pbx_station` | 48 |  |
+| `grm_phone` | 53 |  |
+| `grm_phone_terminal` | 42 |  |
+| `grm_phone_wiretap` | 43 |  |
+| `grm_plate` | 292 |  |
+| `grm_quest_checkpoint` | 253 |  |
+| `grm_quest_npc` | 24 |  |
+| `grm_radio` | 80 |  |
+| `grm_radio_station` | 75 |  |
+| `grm_roomtap_chip` | 59 |  |
+| `grm_roomtap_server` | 53 |  |
+| `grm_roomtap_terminal` | 49 |  |
+| `grm_scanner` | 487 |  |
+| `grm_server_rack` | 82 |  |
+| `grm_vault_cash` | 134 |  |
+| `grm_vendor` | 260 |  |
+| `grm_wanted_poster` | 58 |  |
+| `grm_wardrobe` | 655 |  |
+| `grm_weapon_rack` | 106 |  |
+| `sent_vehicle_dealer` | 1085 |  |
+
+### тул-режим (25)
+
+| имя | строк | назначение |
+|---|---|---|
+| `fading_door` | 2 | [[ Alias wrapper for fading_door -> ffd_fading_door ]] |
+| `ffd_fading_door` | 354 |  |
+| `ffd_keypad` | 183 |  |
+| `ffd_link` | 193 |  |
+| `ffd_scanner` | 318 |  |
+| `grm_arrest_zone` | 232 |  |
+| `grm_augmentation` | 30 |  |
+| `grm_bank_tool` | 232 |  |
+| `grm_business` | 309 |  |
+| `grm_citadel_core` | 12 |  |
+| `grm_door_admin` | 8 | GRM Door Admin Tool v1.1 (Doors v3.0.0) |
+| `grm_duty_npc` | 96 |  |
+| `grm_industry` | 179 |  |
+| `grm_jobs` | 24 |  |
+| `grm_lab_tool` | 110 |  |
+| `grm_measure` | 361 |  |
+| `grm_minimap` | 36 |  |
+| `grm_perm_tool` | 286 |  |
+| `grm_property` | 69 |  |
+| `grm_quest_tool` | 89 |  |
+| `grm_service_tool` | 377 |  |
+| `grm_sliding_door` | 130 |  |
+| `grm_transport` | 736 |  |
+| `grm_vendor_tool` | 83 | GRM Vendor Tool v2.0 — spawn, configure stock and autosave |
+| `keypad` | 2 | [[ Alias wrapper for keypad -> ffd_keypad ]] |
+
+### оружие (8)
+
+| имя | строк | назначение |
+|---|---|---|
+| `ds_battering_ram` | 175 |  |
+| `ds_lockpick` | 417 |  |
+| `grm_cuffed` | 57 |  |
+| `grm_handcuffs` | 160 |  |
+| `grm_keyring` | 76 |  |
+| `weapon_grm_incass_bag` | 119 |  |
+| `weapon_grm_megaphone` | 94 |  |
+| `weapon_grm_search` | 368 |  |
+
+### пак (3)
+
+| пак | lua-файлов | состав |
+|---|---|---|
+| `grm_addon_studio` | 3 | энтити: — |
+| `grm_fire` | 28 | энтити: grm_fire_cabinet, grm_fire_hose, grm_fire_hose_node, grm_fire_hydrant, grm_fire_ladder, grm_fire_pump, grm_fire_spot |
+| `grm_textscreens` | 6 | энтити: sammyservers_textscreen |
+
+### стороннее (1)
+
+| путь | строк | статус |
+|---|---|---|
+| `lua/easychat (vendored)` | 16340 | чат-надстройка; план: заменить на GRMRP.Chat режима |
+
+
+
+---
+
+
+# ЧАСТЬ VII · GRMRP — игровой режим: проект и карта систем
+
+Документ-обязательство: что строится, из чего, на какие вскрытые эталоны
+опирается. Режим = НЕ надстройка аддонами, а `gamemodes/grmrp/` (песочница
+как база, как DarkRP 4.16.1), вбирающий ВСЮ наработанную GRM-базу
+(реестр — Часть VI). Правило №1 режима: дублирование запрещено — каждая
+система ровно один владелец (наш §5.2), перенос модулей — пересадкой, а не
+копией. ZERO-DEPENDENCY (указание владельца 03.09.2026): режим не зависит
+от ULib/ULX и любых сторонних аддонов — ни require, ни вызовов ULib.*/ULX.*
+API; EasyChat замещается собственным core.chat. Права — только GRM.Admin.
+
+## 7.1 Архитектура (принципы из волн 1–3)
+
+1. **Загрузчик**: `gamemode/init.lua` — фазы `GRMRPStartedLoading` →
+   автопоиск `modules/<система>/{sh,sv,cl}_*.lua` (SortedPairs; контракт
+   имён) → буферизация деклараций (флаг «идёт загрузка») → `GRMRP.finish()`
+   атомарно → `GRMRPFinishedLoading`. (DarkRP 4.16.1 + наш GRM.Boot — слитно)
+2. **GRMAPI-stubs**: все межмодульные вызовы — через реестр
+   `stub{name, description, parameters[], returns[], realm, metatable}` с
+   layout-валидацией и отложенным исполнением (порядок загрузки не важен;
+   лечит §3.2-класс багов). Автодоки: консольная `grmrp_api_dump` +
+   ингейд-окно. (DarkRP 4.16.2)
+3. **Ошибки загрузки**: обёртка run-файла с человекочитаемым репортом
+   (упавшая система не топит режим: ErrorNoHalt + «система X отключена» +
+   HUD-предупреждение админу). (simplerr/EChat autoloader 4.16.3/4.21.1)
+4. **Конфиг-слои**: механизмы в режиме, настройки сервера — `data/grmrp/
+   config/*.lua` (darkrpmodification-модель, DON'T TOUCH-политика в папках
+   ядра) + валидация типами при загрузке (tablecheck, §8).
+5. **Сеть**: реестр каналов как констант-таблицы модулей; guard'ы fail-closed
+   (наш GRM.Net.Guard переезжает ядром); delta-реестры вместо снапшотов
+   (listdiff 4-ops, bplistdiff/FPP u8-дельта); тяжёлое — pull-чанки AD2 +
+   CRC-кэш bptransfer; embed-запросы с бюджетом (EChat 4.21.2).
+6. **Данные**: GRM.Save/Coalesce/persistence переезжают как есть (наш
+   нормализатор уже соответствует MMD-стандарту 4.9.1 — зафиксировать
+   заголовками); CharacterKey `steamid:charN` — весь RP-стат.
+7. **Права**: собственный реестр разрешений (GRM.Admin / наш admin_core);
+   **ULib/ULX запрещены** (указание владельца 03.09.2026) — режим их не
+   грузит и их API не вызывает; CAMI допускается только как **исходящий**
+   мост (мы экспортируем свои разрешения сторонним панелям, но не потребляем
+   ничьих); привилегии кэшируются на auth (FPP 4.11.4); danger-флаги как у нас.
+8. **Наказания**: лестница вместо гильотины (FPP 4.11.3): предупреждение →
+   soft-lock (ghost/freeze) → mute/кик → бан; stair-decay; отказ ВСЕГДА с
+   причиной (§9.3). Античит AC переезжает целиком (silenthooks→в our
+   PlayerSay/ShowSplashScreen уже учтены), + throughWall-проверка через
+   inflictor→owner (антилаундер 4.11.3).
+9. **UI**: библиотека окон GRM.UI Track/Close/IsOpen + палитра/шрифты;
+   окна режима переписываются на addTab-реестр админ-панели; DHTML только
+   с SetAllowLua(false)+CEF-detector+fallback (§5.17); файловые обходы —
+   async pump GPeek (§5.15); слайдеры/шрифт-редактор — font_editor-паттерн
+   EasyChat (§5.17).
+10. **Чат/ввод/анимации/гизмо**: §5.17–5.18 становятся библиотекой режима
+    (GRMRP.Chat, GRMRP.UI2D, GRMRP.Gizmo).
+
+## 7.2 Карта систем (запрос владельца → существующее → модуль режима)
+
+Формат: «модули режима» = что строится; «база GRM» = пересаживаемое из
+реестра Части VI (там же строки); «※» = строится заново без базы.
+
+### Ядро персонажа и жизненные системы
+| система | база GRM | модуль режима | ключевые опоры |
+|---|---|---|---|
+| регистрация/персонажи | sh_grm_character, sh_grm_identity, sh_grm_entry, sh_spawn_points, sh_grm_spawnpick | core.character, core.spawn | CharacterKey; зонд-кэши MMD4.9.2 для боди-превью |
+| меню персонажа + бодигруппы/дизайн | sh_grm_customization, sh_grm_bodygroup_rules | ui.character | DModelPaint-порядок (DRC), preview-канвас (EChat font-editor §5.17) |
+| голод/жажда/усталость | sv_grm_food, sh_grm_food_config, sh_grm_food_kitchen, zz-патчи баланса | life.needs | decay-таблица как AC-decay (0.25 Think-сэмпл, пороги); closed-form HUD-ленты |
+| выносливость (прокачка) | ※ (есть fragment в movement/encumbrance) | life.stamina | рост лимита от активности; античит-гейт (speedhack-веса AC) |
+| болезни/медосмотры/медчасть | sh_grm_medical, sh_grm_medical_full, grm_lab_tool, zz_grm_bleedout/blood_drops | life.medical | state-machine состояний; NetworkVar+Editable для приборов (Deformation 4.3) |
+| трупы/морг | ※ (blood/bleedout есть; corpse-слой новый; Glide seat-рецепт для каталки) | life.corpse | труп = сущность с таймером разложения (VJ corpse_fade-паттерн), морг = хранилище-реестр (GRM.Save), опознание через documents |
+
+### Общество
+| система | база GRM | модуль режима | опоры |
+|---|---|---|---|
+| фракции | sh_factions (4.4k!), sh_faction_fixes, factions_core_v4, factions_bridge, faction_* (perms/personnel/positions/roster/duty/menu_access) | soc.factions | реестр должностей = listdiff-дельта ридер (4.7.4); duty-roster как incassation-смены |
+| работы/jobs | sh_grm_jobs_v5 + v4/config/limits/courier, grm_jobs tool | soc.jobs | DSL-описание (CreateJob-модель DarkRP: декларация→реестр→finish) |
+| законы/штрафы/аресты | sh_grm_laws, sh_grm_tickets, sh_grm_arrest, wanted_* (6 файлов), handcuffs(+config), grm_arrest_zone, arrest_camera | soc.law | penalty-лестница FPP 4.11.3; wanted-бейджи — через CleanName-канон (Comedy-маркеры только в sh_vehicle_keys) |
+| документы/дипломы | sh_grm_documents (4.2k), physical_documents, diplomas, nameplate, plates | soc.docs | бумажный документ = сущность-бланк с QRC-подписью сервера (не верифицировать клиентом — §5.1.3) |
+| новости/бродкаст | sh_grm_news, sh_grm_broadcast, grm_broadcast_mic, pcboard, board, public_kiosk | soc.media | серверная очередь публикаций (coalesce 5с — AC broadcast precedent) |
+| отыгровки/соц.анимации | sh_grm_social_anims, sh_grm_binder, sh_grm_prone/zz_prone, sh_grm_qmenu, rpdesc, rp_chat | soc.roleplay | gesture fallback DRC; HoldTypeAnim-маппинг; RP-команды — через чат-пайплайн 4.21.2 |
+| обучение/образование | sh_grm_education | soc.education | курсы = job-gate с таймером, данные — persistence |
+
+### Экономика
+| система | база GRM | модуль режима | опоры |
+|---|---|---|---|
+| экономика/налоги | sh_grm_economy, sh_grm_currency, faction_economy, eco_admin | fin.core | Ledger-транзакции (наш §7.7: составные — только транзакцией); налоги — periodic-задача из scheduler с бюджетом |
+| банки/АТМ/инкассация | sh_grm_atm, sh_grm_incassation, bank_* (3 ent), incassation | fin.bank | инкассация = логистика-подтип (dock-цепи) |
+| торги/рынок/дилеры | vendor, vending_biz, shop_integration, civil_vehicle_market, vehicle_dealer | fin.trade | рынок = order-book (listdiff-ридер, 4.7.4), не снапшоты |
+| аукционы | ※ | fin.auction | анти-снайпер: продление окна при ставке <30с (детерминированный таймер сервера; NWInt remaining + t-печать §5.4.3) |
+| бизнес/квартиры/аренда | sh_grm_business (tool+файлы), estate, estate_deal, property, housing(+panel/search/storage), home_bed | fin.property | сделка = двухключевая транзакция с эскроу (Ledger); инвентарь квартиры = сундук-реестр |
+| промышленность/логистика | industry_core/container/entities, ore_* (3), mining, stove_slots, brew/zz_grm_brew, alcohol, narcotics, incassation, fleet | fin.industry | станки = JobManager-очередь AD2 0.03s precedent; сырьевые графы — узлы из §5.10 |
+| кэш-транспорт/склады | industry_container, trunk, warehouse-части fleet | fin.storage | diff-стрим содержимого (pON-урок: индексная схема опасна — uid'ы) |
+
+### Транспорт и физмир
+| система | база GRM | модуль режима | опоры |
+|---|---|---|---|
+| транспорт | sh_grm_vehicles, vehicle_access, vehicle_health, vehicle_precache, fleet, plates, fuel (ТЗК-флоу!), cruise, garage, grm_transport tool, vehicle_dealer, sim_veh_* | veh.core | Glide-слой: именованные действия+BOOL_TO_FLOAT/hold (4.15.1), seat-рецепт (4.15.2), TЗК-правило владельца (плата по литражу, без авто-E) |
+| депо/гаражи служебные | garage, fleet-депо-части, duty_npc | veh.garage | спавн из пула + привязка к duty (faction_duty) |
+| двери/ключи | sh_grm_doors(+access), ffd_* (link/scanner/keypad), fading/sliding_door, keypad, doors_plus | phys.doors | union-find DarkRP disjointset для кластеров ключей (4.16.4); CPPI-уважение (4.11.1) |
+| проп-защита/анти-абуз | sh_grm_prop_guard, prop_protect, perm_entities, rootguard | phys.guard | модель FPP целиком: settings-блоки, наказательная лестница, block-list с нормализацией путей (4.11.2), ghost/unghost, анти-спам stair-decay; CPPI-фасад наружу |
+| спавн-поинты/навигация | spawn_points, spawnpick, minimap, navmap(+zz_off), gmodkit spawns | phys.spawn | gmodkit bsp spawns уже есть (tools/) — интеграция в админ-окно |
+| CCTV/камеры/прослушка | sv_grm_cctv, cctv_*(3), roomtap_config, radionet, bug-сущности, alarm_* (4) | phys.spy | CCTV-текстурный стрим уже с троттлингом; roomtap = mesh-режим «только звук»; бюджет embed-подписок (4.21.2) |
+| дежурства/вызовы | faction_duty, 911, fire_* (7), special_service, service_orders, services, quest*, achievements, analytics | soc.dispatch | 911 = очередь заявок с приоритетами (JobManager AD2); fire — наш же пак grm_fire |
+
+### Инструменталий/сервер
+| система | база GRM | модуль режима | опоры |
+|---|---|---|---|
+| админка | admin_core/hub/menu/actions, cl_admin_panel (11k UI-слой), admin_console (v1.0.0), ban (1.3), anticheat, perm-слои, audit | adm.core | addTab-реестр; self-target правила DRC (CheaterWarning 4.5); аудит-net грепом (tools/audit_net_owner.py — план) |
+| сохранение | GRM.Save/persistence, save_core, scheduler | adm.save | JobManager-бэкап (AD2 4.2): отложенный, приоритетный, с джобом-ротацией |
+| HUD | cl_*_hud (food/augmentations/rp_chat-мосты), sh_grm_hud-части, loading, realtime | ui.hud | компоненты = Paint-строки без дочерних панелей (§5.3); bounds-хук для чата (§5.17) |
+| инструменты (тул-режимы) | stools 25 шт + grm_addon_studio/textscreens паки | ui.tools | редакторы — GRMRP.UI2D-канва (§5.11) + гизмо-контракт §5.18 |
+| телефония/устройства | sh_grm_mobile, phone_access/config/shop/vendor, radionet | mob.core | телефон = Derma-приложение в qmenu-слое; звонки — серверная коммутация (не WebRTC, движковый Voice + can-hear хук: EChat voice_hud precedent) |
+| оптимизация/антилаг | GRM.Perf целиком (Coalesce/Queue/Spread/Throttle/Material/EyeTrace/NW) | core.perf | остаётся ядром; новые системы = только через него; sim_perf-гейты + FProfiler-метрики 4.18 |
+| античит | sh_grm_anticheat (v1.0.0) | core.anticheat | + inflictor-laundering (4.11.3), + hwid-цепь бана (наш ban 1.3) |
+| чат режима | sh_grm_rp_chat, chat_config, qmenu-мосты, EasyChat (удаляемая зависимость!) | core.chat | ПЕРВЫЙ модуль режима (реализован в этом же коммите): каналы ooc/ic/pm/me/advert, filter на сервере, closed-form fade, история, без CEF/DHTML |
+
+## 7.3 Фаза I — что уже заложено (этот коммит)
+
+`gamemodes/grmrp/`: grmrp.txt (песочник); gamemode/{shared.lua — namespace
+GRMRP, константы net-имён; init.lua — загрузчик фазами + полный перехват
+GM:PlayerSay + PVS PlayerCanHearPlayersVoice; cl_init.lua — гашение
+CHudChat и GM:StartChat→наш ввод; grm_api.lua — stub-реестр с
+layout-валидацией, буфером 256/имя, флешем при define и GRMRP_API_Dump};
+modules/chat/{sh_grmrp_chat_core.lua — чистое ядро: sanitize (byte-safe для
+UTF-8), реестр каналов-деклараций, ParseSay, лестница rate→burst→mute
+10·2^penalty cap 180, аудитория и pm-резолвер с инжецируемыми зонами
+видимости; sv_grmrp_chat.lua — cvar'ы (REPLICATED|ARCHIVE), deliver одной
+net-фазой с эхо-кастом автора, единая точка входа PlayerSay+net;
+cl_grmrp_chat_hud.lua — лента 60/18 shown, closed-form fade, кириллические
+шрифты extended=true; cl_grmrp_chat.lua — полоса ввода: чипы каналов,
+история ↑/↓ cap 50, Tab-дополнение}. Стенды: tools/luatest/
+sim_grmrp_chat.lua (43 теста — уже нашли и починили 3 реальных бага ядра)
+и sim_grmrp_api.lua (28 тестов). Это working skeleton: чат режима полностью
+функционирует без EasyChat и без ULib/ULX; остальное наращивается модулями
+по карте 7.2. Порядок следующих фаз: core.character → adm.core →
+phys.doors/fin.core → ... (таблица выше — верх-вниз по зависимостям).
+
+## 7.4 Чеклист «не забыть» (анти-потеря)
+
+При переносе каждого модуля из реестра VI: (1) сверить заголовки файлов —
+там зафиксированные баги (277 стендов!), переносить стенд ВМЕСТЕ с логикой;
+(2) гейты прогонять на каждом шаге; (3) вендорные мосты (easychat_init,
+zz_grm_easychat_cmds, zz_easychat_grm_fix) УДАЛИТЬ только когда
+core.chat признан владельцем готовым; (4) Comedy/CleanName-канон, ТЗК-флоу,
+запрет байтовой идентичности — из постоянных указаний владельца; (5) dist-
+политика: режим пакуется ОТДЕЛЬНЫМ архивом (grmrp_gamemode.zip), аддон-
+dist не трогает его.
