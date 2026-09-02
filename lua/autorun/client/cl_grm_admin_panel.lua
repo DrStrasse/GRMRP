@@ -1230,6 +1230,206 @@ end
 -----------------------------------------------------------------------
 -- OKNO
 -----------------------------------------------------------------------
+-----------------------------------------------------------------------
+-- РАЗДЕЛ: АНТИЧИТ (заказ 02.09) — лента подозрений + профили GRM.AC
+-----------------------------------------------------------------------
+local acNet = function(key)
+    local n = GRM.AntiCheat and GRM.AntiCheat.Net and GRM.AntiCheat.Net[key]
+    return n or ({ FEED = "GRM_AC_Feed", QUERY = "GRM_AC_Query", CMD = "GRM_AC_Cmd" })[key]
+end
+AD.ACPack = AD.ACPack or { rows = {}, feed = {} }
+
+local function acSendCmd(line)
+    net.Start(acNet("CMD"))
+        net.WriteString(tostring(line))
+    net.SendToServer()
+end
+local function acQuery()
+    net.Start(acNet("QUERY"))
+    net.SendToServer()
+end
+
+-- Имена каналов — литералами: общий модуль античита грузится ПОЗЖЕ этого
+-- файла (lua/autorun/client/* раньше lua/autorun/sh_*), в рантайме таблицы
+-- уже нет — только строковые константы переживают порядок загрузки.
+net.Receive("GRM_AC_Feed", function()
+    local pack = net.ReadTable()
+    if not istable(pack) then return end
+    if pack.rows then
+        AD.ACPack = pack
+        hook.Run("GRM_AC_Pack")
+    elseif isstring(pack.reply) then
+        hook.Run("GRM_AC_Reply", pack.reply)
+    end
+end)
+
+local function buildAntiCheat(pnl)
+    local isAdm = can("anticheat.admin")
+    local head = vgui.Create("DPanel", pnl)
+    head:Dock(TOP) head:SetTall(56) head:SetPaintBackground(false)
+    head.Paint = function(_, w, h)
+        local pack = AD.ACPack or {}
+        draw.SimpleText(("Античит · подозреваемых %d · политика %s · режим %s")
+            :format(#(pack.rows or {}),
+                (pack.enabled ~= false) and "включён" or "выключен",
+                ({ "только журнал", "лента", "кик", "деморган", "дем+железо" })[tonumber(pack.action) or 1] or "?"),
+            "GRMAdm_Sub", 2, 8, C.text)
+        draw.SimpleText("Пороги: 25 — в ленту · 80 — наказание. Silent-aim, perfect-lock, стены, телепорты, solids, rapidfire. Память клиента не сканируется — это движок не может, а не мы не хотим.",
+            "GRMAdm_Small", 2, 30, C.dim)
+    end
+    local bar = vgui.Create("DPanel", head)
+    bar:Dock(RIGHT) bar:SetWide(320) bar:SetPaintBackground(false)
+    local b1 = vgui.Create("DButton", bar) b1:Dock(LEFT) b1:SetWide(96)
+    b1:SetText("Обновить") b1:SetFont("GRMAdm_Btn") b1.DoClick = acQuery
+    local b2 = vgui.Create("DButton", bar) b2:Dock(LEFT) b2:SetWide(110) b2:DockMargin(6, 0, 0, 0)
+    b2:SetText(isAdm and "Очистить всех" or "нет права")
+    b2:SetFont("GRMAdm_Btn") b2:SetEnabled(isAdm)
+    b2.DoClick = function() acSendCmd("clear all") acQuery() end
+    local rowsBox = vgui.Create("DScrollPanel", pnl)
+    rowsBox:Dock(TOP) rowsBox:SetTall(math.floor(pnl:GetTall() * 0.55))
+
+    local feedBox = vgui.Create("DScrollPanel", pnl)
+    feedBox:Dock(BOTTOM) feedBox:SetTall(150)
+    feedBox.Paint = function(_, w, h)
+        draw.RoundedBox(6, 0, 0, w, h, C.card)
+        draw.SimpleText("ЛЕНТА СОБЫТИЙ", "GRMAdm_Small", 10, 8, C.gold)
+    end
+
+    local function sevColor(sev)
+        if sev == "suspect" then return C.orange end
+        if sev == "action" then return C.red end
+        return C.dim
+    end
+
+    local function render()
+        if not IsValid(pnl) then return end
+        rowsBox:Clear() feedBox:Clear()
+        local pack = AD.ACPack or {}
+        local rows = pack.rows or {}
+        if #rows == 0 then
+            local e = vgui.Create("DLabel", rowsBox)
+            e:Dock(TOP) e:SetTall(30) e:SetFont("GRMAdm_Body") e:SetTextColor(C.dim)
+            e:SetText("Чисто. Профили с ненулевым счётом появятся здесь.")
+        end
+        for _, row in ipairs(rows) do
+            local line = vgui.Create("DPanel", rowsBox)
+            line:Dock(TOP) line:SetTall(52) line:DockMargin(0, 0, 0, 5)
+            line.Paint = function(_, w, h)
+                draw.RoundedBox(6, 0, 0, w, h, C.card)
+                draw.SimpleText(tostring(row.nick), "GRMAdm_Sub", 12, 7, C.text)
+                draw.SimpleText(("score %d · %s · %s"):format(tonumber(row.score) or 0,
+                    tostring(row.kind or ""), tostring(row.note or "")),
+                    "GRMAdm_Small", 12, 30, sevColor((tonumber(row.score) or 0) >= 80 and "action" or "suspect"))
+                local barW = math.Clamp((tonumber(row.score) or 0) / 240 * 140, 2, 140)
+                draw.RoundedBox(3, w - 170, 18, 140, 8, C.sidebar)
+                draw.RoundedBox(3, w - 170, 18, barW, 8,
+                    (tonumber(row.score) or 0) >= 80 and C.red or C.orange)
+            end
+            if isAdm then
+                local clear = vgui.Create("DButton", line)
+                clear:Dock(RIGHT) clear:SetWide(86) clear:DockMargin(4, 12, 10, 12)
+                clear:SetText("забыть") clear:SetFont("GRMAdm_Btn")
+                clear.DoClick = function() acSendCmd("clear " .. tostring(row.sid)) acQuery() end
+            end
+            local snap = vgui.Create("DButton", line)
+            snap:Dock(RIGHT) snap:SetWide(96) snap:DockMargin(4, 12, 4, 12)
+            snap:SetText("железо") snap:SetFont("GRMAdm_Btn")
+            snap.DoClick = function()
+                if not can("mod.ban") then return end
+                for _, p in ipairs(player.GetAll()) do
+                    if tostring(p:SteamID64() or "") == tostring(row.sid) then
+                        act("machine", row.sid)
+                        return
+                    end
+                end
+                chat.AddText(C.orange, "[AC] игрок не в сети — снимок есть только в записях бана")
+            end
+        end
+        for _, ev in ipairs(pack.feed or {}) do
+            local e = vgui.Create("DLabel", feedBox)
+            e:Dock(TOP) e:SetTall(18) e:DockMargin(10, 0, 10, 0)
+            e:SetFont("GRMAdm_Small") e:SetTextColor(sevColor(ev.sev))
+            e:SetText(("%s · %s"):format(ev.t and os.date("%H:%M:%S", tonumber(ev.t) or 0) or "?",
+                tostring(ev.text or "")))
+        end
+    end
+    render()
+    acQuery()
+    local function onPack() render() end
+    hook.Add("GRM_AC_Pack", "GRM_AdminPanel_AC", onPack)
+    hook.Add("GRM_AC_Reply", "GRM_AdminPanel_AC", function(text)
+        if IsValid(pnl) then chat.AddText(C.gold, "[AC] ", C.text, tostring(text)) end
+    end)
+end
+
+-----------------------------------------------------------------------
+-- РАЗДЕЛ: КОНСОЛЬ СЕРВЕРА (заказ 02.09; право server.console)
+-----------------------------------------------------------------------
+AD.ConsoleLines = AD.ConsoleLines or nil
+net.Receive("GRM_Admin_ConsoleOut", function()
+    local pack = net.ReadTable()
+    if not istable(pack) then return end
+    local stamp = os.date("%H:%M:%S", tonumber(pack.t) or 0)
+    local block = ("%s [%s] %s\n%s"):format(stamp, tostring(pack.admin or "?"),
+        tostring(pack.line or ""), tostring(pack.text or ""))
+    AD.ConsoleLines = AD.ConsoleLines or {}
+    AD.ConsoleLines[#AD.ConsoleLines + 1] = block
+    hook.Run("GRM_AdminConsoleLine", block)
+end)
+
+local function buildConsole(pnl)
+    local warn = vgui.Create("DPanel", pnl)
+    warn:Dock(TOP) warn:SetTall(34) warn:SetPaintBackground(false)
+    warn.Paint = function(_, w, h)
+        draw.SimpleText("Каждая строка уходит в движковый консоль-лог сервера и в аудит. Тишины не будет — коллеги с этим правом видят эхо.",
+            "GRMAdm_Small", 2, h / 2, C.orange, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+    end
+
+    local out = vgui.Create("DTextEntry", pnl)
+    out:Dock(FILL) out:DockMargin(0, 6, 0, 6)
+    out:SetMultiline(true) out:SetReadOnly(true) out:SetFont("GRMAdm_Body")
+    out:SetTextColor(C.text) out:SetBackgroundColor(C.sidebar)
+    for _, l in ipairs(AD.ConsoleLines or {}) do out:SetText(out:GetValue() .. l .. "\n") end
+
+    local rowIn = vgui.Create("DPanel", pnl)
+    rowIn:Dock(BOTTOM) rowIn:SetTall(34) rowIn:SetPaintBackground(false)
+    local input = vgui.Create("DTextEntry", rowIn)
+    input:Dock(FILL) input:DockMargin(0, 3, 96, 3)
+    input:SetFont("GRMAdm_Body") input:SetPlaceholderText("status · get <cvar> · set <cvar> <val> · bans · ac list · любая консольная строка")
+    input:SetTextColor(C.text) input:SetBackgroundColor(C.card)
+    local send = vgui.Create("DButton", rowIn)
+    send:Dock(RIGHT) send:SetWide(88) send:SetText("выполнить") send:SetFont("GRMAdm_Btn")
+    local function fire()
+        local line = string.Trim(tostring(input:GetValue() or ""))
+        if line == "" then return end
+        input:SetText("")
+        net.Start("GRM_Admin_Console")
+            net.WriteString(line)
+        net.SendToServer()
+    end
+    send.DoClick = fire
+    input.OnEnter = fire
+
+    local chips = vgui.Create("DPanel", pnl)
+    chips:Dock(BOTTOM) chips:SetTall(26) chips:SetPaintBackground(false)
+    for _, label in ipairs({ "status", "bans", "ac list", "ac status", "get grm_ac_action", "history" }) do
+        local c = vgui.Create("DButton", chips)
+        c:Dock(LEFT) c:DockMargin(0, 2, 5, 2) c:SetWide(math.max(56, 7 + #label * 6))
+        c:SetText(label) c:SetFont("GRMAdm_Small")
+        c.DoClick = function()
+            net.Start("GRM_Admin_Console")
+                net.WriteString(label)
+            net.SendToServer()
+        end
+    end
+    local function onLine(block)
+        if not IsValid(out) then return end
+        out:SetText(out:GetValue() .. block .. "\n")
+        if IsValid(out.VBar) then out.VBar:SetScroll(out.VBar:GetCanvas():GetTall()) end
+    end
+    hook.Add("GRM_AdminConsoleLine", "GRM_AdminPanel_Console", onLine)
+end
+
 function AD.OpenPanel()
     if not can("menu.open") then
         notification.AddLegacy("Нет доступа к админ-меню", NOTIFY_ERROR, 4)
@@ -1320,6 +1520,8 @@ function AD.OpenPanel()
     addTab("modules", "Модули сборки", "menu.modules", buildModules)
     addTab("analytics", "Анализ нагрузки", "menu.modules", buildAnalytics)
     addTab("super", "Суперадмин", "cheat.god", buildSuper)
+    addTab("anticheat", "Античит", "anticheat.see", buildAntiCheat)
+    addTab("console", "Консоль", "server.console", buildConsole)
 
     AD.Request()
 end

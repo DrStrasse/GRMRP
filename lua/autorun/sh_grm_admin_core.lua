@@ -56,10 +56,13 @@ local NET_PLAYERS= "GRM_Admin_Players"   -- сервер → клиент: ср�
 local NET_REQ    = "GRM_Admin_Request"   -- клиент → сервер: запрос данных
 local NET_RESULT = "GRM_Admin_Result"    -- сервер → клиент: результат действия
 local NET_ANNOUNCE = "GRM_Admin_Announce" -- сервер → всем: объявление в чат
+local NET_CONSOLE = "GRM_Admin_Console"    -- клиент → сервер: строка консоли (server.console)
+local NET_CONSOLE_OUT = "GRM_Admin_ConsoleOut" -- сервер → клиенты: отклик/журнал
 
 AD.Net = {
     SYNC = NET_SYNC, SAVE = NET_SAVE, ASSIGN = NET_ASSIGN, ACT = NET_ACT,
     PLAYERS = NET_PLAYERS, REQ = NET_REQ, RESULT = NET_RESULT, ANNOUNCE = NET_ANNOUNCE,
+    CONSOLE = NET_CONSOLE, CONSOLE_OUT = NET_CONSOLE_OUT,
 }
 
 --- Как показать группу в списках: название и цвет берём из самой группы,
@@ -154,6 +157,9 @@ local BASE_PERMS = {
     { "server.economy",       "Экономика и казна",                     "Сервер",      "superadmin" },
     { "server.cleanup",       "Очистка мусора и пропов",               "Сервер",      "admin" },
     { "server.settings",      "Настройки сервера (зона бана и прочее)", "Сервер",      "superadmin" },
+    { "anticheat.see",        "Античит: лента и профили",             "Сервер",      "admin" },
+    { "anticheat.admin",      "Античит: очистка и отметки",           "Сервер",      "admin" },
+    { "server.console",       "Серверная консоль из админки",         "Сервер",      "superadmin", true },
 
     -- Права над правами
     { "acl.groups",           "Создание и правка групп",               "Привилегии",  "superadmin" },
@@ -384,6 +390,8 @@ if SERVER then
     util.AddNetworkString(NET_REQ)
     util.AddNetworkString(NET_RESULT)
     util.AddNetworkString(NET_ANNOUNCE)
+    util.AddNetworkString(NET_CONSOLE)
+    util.AddNetworkString(NET_CONSOLE_OUT)
 
     local function ensureDir()
         if not file.IsDir("grm_admin", "DATA") then file.CreateDir("grm_admin") end

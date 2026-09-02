@@ -50,10 +50,15 @@ function Vector(x, y, z) return { x = x or 0, y = y or 0, z = z or 0, _vector = 
 function Color(r, g, b, a) return { r = r, g = g, b = b, a = a } end
 
 local hooks = {}
+SWAP_SEEN = {}
 hook = {
     Add = function(n, id, fn) hooks[n] = hooks[n] or {} hooks[n][id] = fn end,
     Remove = function(n, id) if hooks[n] then hooks[n][id] = nil end end,
-    Run = function() end,
+    Run = function(name, ...)
+        local t = hooks[name]
+        if not t then return end
+        for _, fn in pairs(t) do fn(...) end
+    end,
 }
 local timers = {}
 timer = { Create = function(id, _, _, fn) timers[id] = fn end, Simple = function(_, fn) fn() end,
@@ -265,11 +270,15 @@ SB.CheckJoinIP(third)
 ok(third.kicked == true, "IP-индекс срабатывает сразу на входе")
 ok(has(third.kicks, "IP"), "причина кика — IP", table.concat(third.kicks, ";"))
 
-print("\n=== 7. СНЯТИЕ УБОРАЧИВАЕТ ИНДЕКСЫ ===")
+print("\n=== 7. СНЯТИЕ УБОРАЧИВАЕТ ИНДЕКСЫ (ЦЕПНОЙ АЛЬТ — ОТДЕЛЬНАЯ ЗАПИСЬ) ===")
 SB.GlobalLift("111000111")
 ok(SB.GlobalRec("111000111") == nil, "запись удалена")
-ok(SB.HwidIndex[SB.HwidOf(REP1)] == nil and SB.IpIndex["93.185.1.1"] == nil,
-    "индексы hwid/IP сняты вместе с записью")
+ok(SB.HwidIndex[SB.HwidOf(REP1)] == "222000222", "индекс hwid перешёл к цепной записи")
+ok(SB.GlobalRec("222000222") ~= nil, "авто-добан альта — самостоятельная запись (v1.3)")
+ok(SB.IpIndex["93.185.1.1"] == "222000222", "после снятия жертвы IP держит цепная запись")
+SB.GlobalLift("222000222")
+ok(SB.IpIndex["93.185.1.1"] == nil and SB.HwidIndex[SB.HwidOf(REP2)] == nil,
+    "снятие цепной записи снимает её индексы")
 local fourth = mkPlayer("Четвёртый", "444000444")
 SB.AcceptMachine(fourth, REP2)
 ok(fourth.kicked ~= true, "после снятия добра нет")
@@ -300,6 +309,79 @@ SB.Global["1212121212"]["until"] = CLOCK - 10 -- вручную уводим в 
 ok(SB.Global["1212121212"] ~= nil, "запись заведена")
 ok(SB.GlobalRec("1212121212") == nil, "истёкшая глобальная запись вычищена при просмотре")
 ok(SB.Global["1212121212"] == nil, "просроченная удалена из книги")
+
+print("\n=== 9b. УЖЕСТОЧЕНИЕ v1.3 ===")
+-- Цепные записи 8-й секции (666 и 777 — обе на REP3-машине) мешают
+-- детерминизму индексной проверки roundtrip: снять их до секции 10.
+SB.GlobalLift("666000666")
+SB.GlobalLift("777000777")
+-- Ушедшие (разбаненные/снятые) объекты не должны оставаться «онлайн»
+-- с прежним снимком: ретро-скан следующей глобал-записи добанит их снова
+-- (для живой машины это корректное поведение модуля).
+for _, p in ipairs(ALL) do
+    if p.sid == "666000666" or p.sid == "777000777" or p.sid == "999000992" then
+        p.GRM_MachineRep = nil
+    end
+end
+-- бэкфилл: бан офлайн (без снимка), человек заходит — отпечаток дописывается
+SB.GlobalBan("999000991", "Офлайновый", 0, "офлайн-бан", nil, nil, "")
+local offline = mkPlayer("Офлайновый", "999000991")
+SB.AcceptMachine(offline, REP2)
+local orec = SB.GlobalRec("999000991")
+ok(orec and orec.hwid == SB.HwidOf(REP2), "бэкфилл: снимок дописан в существующую запись")
+ok(SB.HwidIndex[SB.HwidOf(REP2)] == "999000991", "бэкфилл построил hwid-индекс")
+ok(SB.IpIndex[SB.IpPlain(offline._ip)] == "999000991", "бэкфилл построил IP-индекс")
+ok(offline.kicked ~= true, "бэкфилл не кикает владельца записи")
+-- ретро-скан: альт уже в сети, админ банит жертву с её снимком
+local alt2 = mkPlayer("Альт в сети", "999000992")
+alt2.GRM_MachineRep = REP3
+SB.GlobalBan("999000993", "ТутЖертва", 0, "ретрокейс", nil, REP3, "")
+ok(alt2.kicked == true, "ретро-скан: альт добанят, не дожидаясь переподключения")
+ok(SB.GlobalRec("999000992") ~= nil, "ретро: на альта заведена своя запись")
+local rec2 = SB.GlobalRec("999000992")
+ok(rec2 and tostring(rec2.reason):find("ретро по железу") ~= nil, "ретро: причина помечена")
+SB.GlobalLift("999000992"); SB.GlobalLift("999000993"); SB.GlobalLift("999000991")
+-- смена снимка в сессии → GRM_AC_HwidSwap
+local swapP = mkPlayer("Свопер", "999000994")
+local REPX1 = { os = "win", res = "1280x720", hdr = "0", gpu = "gx", lang = "ru", sens = "1", addons = 0, addonHash = "1" }
+local REPX2 = { os = "win", res = "1280x720", hdr = "0", gpu = "gx", lang = "ru", sens = "1", addons = 7, addonHash = "1" }
+SB.AcceptMachine(swapP, REPX1)
+local swapHits = 0
+hooks["GRM_AC_HwidSwap"] = hooks["GRM_AC_HwidSwap"] or {}
+hooks["GRM_AC_HwidSwap"]["test"] = function() swapHits = swapHits + 1 end
+SB.MachineWait["999000994"] = true -- как после ре-валидации
+SB.AcceptMachine(swapP, REPX2)
+ok(swapHits == 1, "несовпадение хешей в сессии зовёт GRM_AC_HwidSwap", swapHits)
+-- таймер ре-валидации: ставит mark-запросы и пингует клиентов
+local tick = timers and timers["GRM_ServerBan_MachineRecheck"]
+ok(tick ~= nil, "таймер ре-валидации создан")
+if tick then
+    local beforeR = #SENT
+    tick()
+    local sawReq = false
+    for i = beforeR + 1, #SENT do
+        if SENT[i].s == "GRM_ServerBan_MachineReq" then sawReq = true end
+    end
+    local marked = false
+    for _, v in pairs(SB.MachineWait) do
+        if v == true then marked = true end
+    end
+    ok(sawReq and marked, "ре-валидация: запрос ушёл, приёмник разблокирован")
+    for k in pairs(SB.MachineWait) do SB.MachineWait[k] = nil end
+end
+
+-- auth-хук: запись бьёт до спавна
+local freshAlt = mkPlayer("Фрэш", "999000995")
+SB.GlobalBan("999000995", "Фрэш", 0, "preban", nil, nil, "")
+local authHook = hooks["PlayerAuthed"] and hooks["PlayerAuthed"]["GRM_ServerBan_GlobalAuth"]
+ok(authHook ~= nil, "PlayerAuthed-хук зарегистрирован")
+if authHook then
+    authHook(freshAlt, "STEAM_0:1:995", "999000995")
+    ok(freshAlt.kicked == true, "глобал-запись кикает на auth, до спавна")
+    ok(#freshAlt.kicks > 0 and freshAlt.kicks[1]:find("Глобальный бан активен") ~= nil, "кик описан")
+end
+SB.GlobalLift("999000995")
+SB.GlobalLift("999000994")
 
 print("\n=== 10. ROUNDTRIP ЧЕРЕЗ ДИСК ===")
 SB.GlobalBan("888000888", "Восьмой", 0, "навсегда", nil, REP3, "5.6.7.8:27015")

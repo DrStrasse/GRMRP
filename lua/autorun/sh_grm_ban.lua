@@ -28,7 +28,7 @@ if SERVER then AddCSLuaFile() end
 GRM = GRM or {}
 GRM.ServerBan = GRM.ServerBan or {}
 local SB = GRM.ServerBan
-SB.Version = "1.2.0"
+SB.Version = "1.3.0"
 
 --[[ Звук отбывающего наказание (заказ владельца 21.08): забаненный должен
      «звучать» — от скелета идут зомби-стоны, его слышно и не спутать с
@@ -275,9 +275,17 @@ if SERVER then
              хранения не требуют. В файлах v1 раздела просто нет. ]]
         SB.Global = {}
         SB.HwidIndex, SB.IpIndex = {}, {}
+        -- Порядок пересборки фиксирован (lex по SteamID64): при двух живых
+        -- записях на одно железо индекс берёт первая — без гонок пар.
         if istable(data) and istable(data.global) then
-            for sid64, rec in pairs(data.global) do
-                if isstring(sid64) and istable(rec) then
+            local ordered = {}
+            for k in pairs(data.global) do
+                if isstring(k) then ordered[#ordered + 1] = k end
+            end
+            table.sort(ordered)
+            for _, sid64 in ipairs(ordered) do
+                local rec = data.global[sid64]
+                if istable(rec) then
                     local until_ = math.floor(tonumber(rec["until"]) or 0)
                     local row = {
                         ["until"] = until_,
@@ -289,8 +297,10 @@ if SERVER then
                         machine = istable(rec.machine) and rec.machine or nil,
                     }
                     SB.Global[sid64] = row
-                    if row.hwid then SB.HwidIndex[row.hwid] = sid64 end
-                    if row.ip then SB.IpIndex[row.ip] = sid64 end
+                    -- «первый владелец» в lex-порядку (см. выше); глобальный
+                    -- claimIndex здесь не upvalue — локальная та же логика.
+                    if row.hwid and not SB.HwidIndex[row.hwid] then SB.HwidIndex[row.hwid] = sid64 end
+                    if row.ip and not SB.IpIndex[row.ip] then SB.IpIndex[row.ip] = sid64 end
                 end
             end
         end
@@ -648,10 +658,17 @@ if SERVER then
     SB.MachineLog = SB.MachineLog or {}   -- sid64 -> последний снимок (для админки)
     SB.MachineWait = SB.MachineWait or {} -- sid64 цели -> админ, ждущий снимок
 
+    local claimIndex
+    claimIndex = function(index, key, sid64)
+        local cur = index[key]
+        if cur == nil or cur == sid64 or not SB.Global[cur] then
+            index[key] = sid64
+        end
+    end
     local function reindexRecord(sid64, rec)
         if not istable(rec) then return end
-        if isstring(rec.hwid) and rec.hwid ~= "" then SB.HwidIndex[rec.hwid] = sid64 end
-        if isstring(rec.ip) and rec.ip ~= "" then SB.IpIndex[rec.ip] = sid64 end
+        if isstring(rec.hwid) and rec.hwid ~= "" then claimIndex(SB.HwidIndex, rec.hwid, sid64) end
+        if isstring(rec.ip) and rec.ip ~= "" then claimIndex(SB.IpIndex, rec.ip, sid64) end
     end
 
     local function deindexRecord(sid64)
@@ -671,6 +688,24 @@ if SERVER then
             return nil
         end
         return rec, sid64
+    end
+
+    --- Человек доигрывает минуты исходного бана — или получает его остаток.
+    local function reEngineBan(ply, rec)
+        local steamid = util.SteamIDFrom64 and util.SteamIDFrom64(tostring(ply:SteamID64() or "")) or nil
+        if not steamid then return end
+        local minutes = 60
+        if rec.permanent then minutes = 0
+        elseif tonumber(rec["until"]) and rec["until"] > os.time() then
+            minutes = math.max(1, math.ceil((rec["until"] - os.time()) / 60))
+        end
+        if ULib and ULib.addBan then
+            pcall(ULib.addBan, steamid, minutes,
+                ("HWID-добан по записи %s: %s"):format(tostring(rec.name or rec.by or ""), rec.reason or ""), nil, nil)
+        else
+            game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamid))
+        end
+        game.ConsoleCommand("writeid\n")
     end
 
     --- Заббить отпечаток/IP по аккаунту. rep — снимок машины (или nil, если
@@ -700,7 +735,40 @@ if SERVER then
         reindexRecord(sid64, rec)
         pushHistory("globalban", sid64, rec, actor)
         saveBans("глобал бан " .. sid64)
+        -- Ретро-скан по сети: админ бьёт по одному аккаунту, а альт с того
+        -- же компьютера уже играет — добиваем СРАЗУ, без переподключения.
+        -- Цепная запись альта получает тот же отпечаток; повторный вход
+        -- любого последующего альта ловится на PlayerAuthed по IP/hwid
+        -- индексам ещё до спавна.
+        if hwid then
+            local chained = {}
+            for _, p in ipairs(player.GetAll()) do
+                if IsValid(p) then
+                    local psid = accountKey(p)
+                    if psid ~= "" and psid ~= sid64 and not chained[psid] and not SB.GlobalRec(psid)
+                        and SB.HwidOf(p.GRM_MachineRep or {}) == hwid then
+                        chained[psid] = true
+                        announce(("Ретро по железу: %s (%s) — та же машина, что у забаненного %s — добан")
+                            :format(p:Nick(), psid, tostring(rec.name or sid64)))
+                        reEngineBan(p, rec)
+                        SB.GlobalBan(psid, tostring(p:Nick()), math.floor(minutes),
+                            tostring(reason) .. " (ретро по железу)", actor, p.GRM_MachineRep,
+                            p.IPAddress and p:IPAddress() or "")
+                        pushHistory("hwid-retro", psid, rec, actor)
+                        p:Kick("Бан по железу: этот компьютер забанен на сервере.")
+                    end
+                end
+            end
+        end
         return true, "Глобальная запись оформлена" .. (hwid and " · с отпечатком машины" or "")
+    end
+
+    --- Пересбор индексов: снимал одну запись, а указатель «первого
+    --  владельца» должен перейти к цепной (альт с того же железа).
+    local function rebuildIndex()
+        for k in pairs(SB.HwidIndex) do SB.HwidIndex[k] = nil end
+        for k in pairs(SB.IpIndex) do SB.IpIndex[k] = nil end
+        for sid64, rec in pairs(SB.Global) do reindexRecord(sid64, rec) end
     end
 
     --- Снятие глобальной записи (движковый banid снимает вызывающий код).
@@ -709,28 +777,12 @@ if SERVER then
         if not SB.Global[sid64] then return false, "Глобальной записи нет" end
         SB.Global[sid64] = nil
         deindexRecord(sid64)
+        rebuildIndex()
         pushHistory("globalunban", sid64, nil, nil)
         saveBans("глобал разбан " .. sid64)
         return true, "Глобальная запись снята"
     end
 
-    --- Человек доигрывает минуты исходного бана — или получает его остаток.
-    local function reEngineBan(ply, rec)
-        local steamid = util.SteamIDFrom64 and util.SteamIDFrom64(tostring(ply:SteamID64() or "")) or nil
-        if not steamid then return end
-        local minutes = 60
-        if rec.permanent then minutes = 0
-        elseif tonumber(rec["until"]) and rec["until"] > os.time() then
-            minutes = math.max(1, math.ceil((rec["until"] - os.time()) / 60))
-        end
-        if ULib and ULib.addBan then
-            pcall(ULib.addBan, steamid, minutes,
-                ("HWID-добан по записи %s: %s"):format(tostring(rec.name or rec.by or ""), rec.reason or ""), nil, nil)
-        else
-            game.ConsoleCommand(("banid %d %s\n"):format(minutes, steamid))
-        end
-        game.ConsoleCommand("writeid\n")
-    end
 
     --- Отчёт клиента о машине: принять, запомнить, сравнить с индексами.
     --  Приём один раз на соединение (плюс явный запрос админа) — потоку
@@ -754,25 +806,59 @@ if SERVER then
         ply.GRM_MachineRep = clean
         SB.MachineLog[sid64] = { t = os.time(), rep = clean }
 
+        local hash = SB.HwidOf(clean)
+        -- Смена снимка в живую сессию — сигнал подмены клиента: фиксируем
+        -- (поведенческий античит превращает это в флаг hwidSwap).
+        local prevHash = ply.GRM_MachineHash
+        ply.GRM_MachineHash = hash
+        if prevHash and hash and prevHash ~= hash then
+            announce(("Снимок машины сменился в сессии: %s (%s) — сверка с индексами")
+                :format(ply:Nick(), sid64))
+            hook.Run("GRM_AC_HwidSwap", ply)
+        end
+
         local waiter = SB.MachineWait[sid64]
+        SB.MachineWait[sid64] = nil
         if IsValid(waiter) then
-            SB.MachineWait[sid64] = nil
             local lines = { "Снимок машины " .. tostring(ply:Nick()) .. " · " .. sid64 }
             for _, k in ipairs(SB.MachineFields) do
                 lines[#lines + 1] = ("  %s = %s"):format(k, tostring(clean[k] or "—"))
             end
-            lines[#lines + 1] = "  hwid = " .. tostring(SB.HwidOf(clean) or "—")
+            lines[#lines + 1] = "  hwid = " .. tostring(hash or "—")
             for _, l in ipairs(lines) do waiter:PrintMessage(HUD_PRINTCONSOLE, "[GRM Ban] " .. l) end
             if GRM.Notify then GRM.Notify(waiter, "Снимок машины получен (консоль).", 100, 220, 130) end
         end
 
-        local hit = SB.HwidIndex[SB.HwidOf(clean) or ""]
+        -- Бэкфилл: если бан на ЭТОТ аккаунт заводили офлайн (без снимка),
+        -- дописываем отпечаток и IP сейчас — с этого мгновения вход с его
+        -- железа под любым SteamID ловится на PlayerAuthed, до спавна.
+        local own = SB.GlobalRec(sid64)
+        if own and hash and not own.hwid then
+            own.hwid = hash
+            SB.HwidIndex[hash] = sid64
+            local ip = SB.IpPlain(ply.IPAddress and ply:IPAddress() or "")
+            if ip ~= "" then
+                own.ip = ip
+                SB.IpIndex[ip] = sid64
+            end
+            saveBans("бэкфилл hwid " .. sid64)
+        end
+
+        local hit = hash and SB.HwidIndex[hash] or nil
         if hit and hit ~= sid64 then
             local rec = SB.GlobalRec(hit)
             if rec then
                 announce(("HWID-срабатывание: %s (%s) зашёл с машины забаненного %s — аккаунт добанавливается")
                     :format(ply:Nick(), sid64, tostring(rec.name or hit)))
                 reEngineBan(ply, rec)
+                -- Цепочка: альт получает СОЮ запись с тем же отпечатком и
+                -- текущим IP — следующий вход уже ловится по IP на auth, не
+                -- дожидаясь снимка. Смена и стима, и адреса от этого не
+                -- спасает: перебан бьёт по железу.
+                local leftMin = rec.permanent and 0 or math.max(1, math.ceil((tonumber(rec["until"]) or 0) - os.time()) / 60)
+                SB.GlobalBan(sid64, tostring(ply:Nick()), math.floor(leftMin),
+                    tostring(rec.reason or "нарушение правил") .. " (авто-добан по железу)",
+                    nil, clean, ply.IPAddress and ply:IPAddress() or "")
                 pushHistory("hwid-hit", sid64, rec, nil)
                 saveBans("hwid-hit " .. sid64)
                 ply:Kick("Вход с этого компьютера заблокирован (бан по железу). Причина: "
@@ -831,6 +917,50 @@ if SERVER then
         SB.CheckJoinIP(ply)
         -- Снимок машины приедет сам через клиентский хук; пинговать раньше
         -- смысла нет — до InitPostEntity net-приёмник клиента молчит.
+    end)
+
+    -------------------------------------------------------------------
+    -- ДОСПАВННЫЕ И СЕССИОННЫЕ ПРОВЕРКИ (заказ 02.09: «перебанит СРАЗУ»)
+    -------------------------------------------------------------------
+    -- Auth — момент, когда SteamID64 уже известен, а человек ещё не в мире.
+    -- Если движковый banid по какой-то причине не сработал (затёртый
+    -- scripts/bans.cfg, чистка перед рестартом), запись модуля выкидывает
+    -- и восстанавливает движковый бан.
+    hook.Add("PlayerAuthed", "GRM_ServerBan_GlobalAuth", function(ply, _, authSid64)
+        local sid64 = tostring(authSid64 or accountKey(ply))
+        local rec = SB.GlobalRec(sid64)
+        if rec then
+            announce(("Глобал-запись сработала на auth: %s (%s)%s")
+                :format(tostring(ply:Nick()), sid64, rec.permanent and " — бессрочно" or ""))
+            reEngineBan(ply, rec)
+            pushHistory("auth-hit", sid64, rec, nil)
+            ply:Kick("Глобальный бан активен. Причина: " .. tostring(rec.reason or "нарушение правил"))
+            return
+        end
+        SB.CheckJoinIP(ply)
+    end)
+
+    -- Ре-валидация снимка по кругу (4 игрока на такт): подмена машины или
+    -- чит-лоадер «на лету» ловятся сверкой хешей в живую — без ожидания
+    -- переподключения. Принятый в сессии новый хеш отличается → GRM_AC_HwidSwap.
+    local recheckIdx = 0
+    timer.Create("GRM_ServerBan_MachineRecheck", 240, 0, function()
+        local list = player.GetAll()
+        if #list == 0 then return end
+        for _ = 1, 4 do
+            recheckIdx = recheckIdx % #list + 1
+            local p = list[recheckIdx]
+            if IsValid(p) then
+                local psid = accountKey(p)
+                if psid ~= "" then
+                    -- true-марка: второй и последующие отчёты за сессию
+                    -- принимаются только когда их сам сервер попросил
+                    SB.MachineWait[psid] = true
+                    net.Start(SB.Net.MACHINE_REQ)
+                    net.Send(p)
+                end
+            end
+        end
     end)
 
     --- Строки глобальной книги для админ-окна и команд.
@@ -1451,7 +1581,9 @@ if CLIENT then
     -- Первый пакет — сам, без запроса: добан по железу должен случиться
     -- ДО того, как человек успеет что-то сделать в мире.
     hook.Add("InitPostEntity", "GRM_ServerBan_MachineJoin", function()
-        timer.Simple(1.5, SB.SendMachine)
+        -- 0.3 с вместо 1.5: окно, в котором альт-читер успевает что-то
+        -- сделать в мире до добана, должно быть минимальным.
+        timer.Simple(0.3, SB.SendMachine)
     end)
     -- Явный запрос админа (окно админки «Снимок машины»).
     net.Receive(SB.Net.MACHINE_REQ, function() SB.SendMachine() end)
