@@ -183,7 +183,7 @@ GRMRPChat.RP = {
         if ctx and ctx.self then return "* " .. b .. " (возле вас)" end
         return "* " .. b .. " (возле " .. n .. ")"
     end },
-    it = { chan = "me", fmt = function(n, b, ctx)
+    it = { chan = "me", echo = true, fmt = function(n, b, ctx)
         if ctx and ctx.to then return "* " .. b .. " (в ответ " .. ctx.to .. ")" end
         return "* " .. b
     end },

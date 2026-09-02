@@ -5,11 +5,14 @@
 
 if SERVER then return end
 
+-- Segoe UI (Windows) вместо бандлованного Roboto: кириллица та же, а
+-- отсутствующие глифы (emoji) дотягиваются системным линкингом — в Roboto
+-- «🙂» рисовался квадратом («плохо обрабатывает текст» со скрина 03.09).
 surface.CreateFont("GRMRP_Chat14", {
-    font = "Roboto", size = 14, weight = 500, extended = true
+    font = "Segoe UI", size = 14, weight = 400, extended = true
 })
 surface.CreateFont("GRMRP_ChatChip", {
-    font = "Roboto", size = 13, weight = 700, extended = true
+    font = "Segoe UI", size = 13, weight = 700, extended = true
 })
 
 GRMRPChat = GRMRPChat or {}
@@ -34,10 +37,31 @@ function GRMRPChat.AddLine(chanId, name, text, t)
         name, text, t, false)
 end
 
-function GRMRPChat.AddSelfLine(chanId, text)
+-- Эхо автора печатается ФОРМАТРОМ ЯДРА (тот же ParseSay/RP, что и у
+-- слушателей): «/me идёт» в ленту идёт как «* Вася идёт», а не сырой
+-- слэш-текст (жалоба «результат прорисовки» 03.09).
+function GRMRPChat.AddSelfLine(raw, selChan)
+    raw = tostring(raw or "")
+    local nick = LocalPlayer():Nick()
+    local name, text, chanId = nick, raw, selChan
+    if string.sub(raw, 1, 1) == "/" then
+        local cid, body, extra = GRMRPChat.ParseSay(raw, selChan)
+        if cid then
+            chanId = cid
+            local rp = extra and GRMRPChat.RP and GRMRPChat.RP[extra.cmd or ""]
+            if rp then
+                name = ""
+                text = rp.fmt(nick, body, extra.cmd == "do" and { self = true } or nil)
+            elseif cid == "pm" then
+                name, text = "📩 " .. (extra.target or "?"), body
+            else
+                name, text = nick, body
+            end
+        end
+    end
     local chan = GRMRPChat.GetChannel and GRMRPChat.GetChannel(chanId)
     push(chan or { title = "·", color = { r = 255, g = 255, b = 255 } },
-        LocalPlayer():Name(), text, CurTime(), true)
+        name, text, CurTime(), true)
 end
 
 function GRMRPChat.ClearLines()
@@ -45,7 +69,7 @@ function GRMRPChat.ClearLines()
 end
 
 net.Receive(GRMRP.Net.MSG, function()
-    if not IsValid(GRMRPChat) then return end
+    if not GRMRPChat.lines then return end
     local chanId = net.ReadString()
     local name = net.ReadString()
     local text = net.ReadString()
@@ -76,7 +100,9 @@ hook.Add("HUDPaint", "GRMRPChat_HUD", function()
         local ln = lines[i]
         if shown < 18 then
             local age = nowRT - ln.t
-            local lifeLeft = (hold and 0) or math.Clamp((TTL + FADE - age) / FADE, 0, 1)
+            -- Открыт ввод/история → лента ДЕРЖИТСЯ (не гаснет — ровно та
+            -- «непоказываемость чата», что мешала печатать, §5.17).
+            local lifeLeft = (hold and 1) or math.Clamp((TTL + FADE - age) / FADE, 0, 1)
             if lifeLeft > 0 then
                 shown = shown + 1
                 local y = yBase - shown * 22

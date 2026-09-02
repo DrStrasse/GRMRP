@@ -32,19 +32,23 @@ local function commands()
 end
 
 local function send(text)
-    text = GRMRPChat.Sanitize and GRMRPChat.Sanitize(text, 512) or text
+    -- ОДИН владелец sanitize — сервер (ядро парсит и чистит там); клиент
+    -- печатает и шлёт сырьё, иначе превью/эхо показывают «［текст］＜» и
+    -- выглядит как «плохо обрабатывает текст» (скрин 03.09).
+    text = string.Trim(tostring(text or ""))
     if #text == 0 then return end
+    if #text > 512 then text = string.sub(text, 1, 512) end
     table.insert(history, text)
     if #history > 50 then table.remove(history, 1) end
     histIdx = 0
 
-    -- Локальный эхо-каст: свою строку печатаем сразу (UX), но для
-    -- rand-действий (try/roll) результат знает только сервер — там
-    -- ждём настоящую строку (echo-флаг в RP-таблице ядра, §5.1.3).
+    -- Локальный эхо-каст форматром ядра; для rand-действий (try/roll) и
+    -- /it результат знает только сервер — там ждём настоящую строку
+    -- (echo-флаг в RP-таблице, §5.1.3).
     local first = string.match(text, "^/([%w_]+)")
     local def = first and GRMRPChat.RP and GRMRPChat.RP[string.lower(first)]
     if not (def and def.echo) then
-        GRMRPChat.AddSelfLine(selChan, text)
+        GRMRPChat.AddSelfLine(text, selChan)
     end
 
     net.Start(GRMRP.Net.SAY)
@@ -123,6 +127,7 @@ end
 local function setChannel(id)
     if not (GRMRPChat.GetChannel and GRMRPChat.GetChannel(id)) then return end
     selChan = id
+    if IsValid(entry) and entry.updatePreview then entry:updatePreview() end
 end
 
 local function build()
@@ -169,7 +174,10 @@ local function build()
                 isSel and color_white or Color(col.r, col.g, col.b, 200),
                 TEXT_ALIGN_CENTER)
         end
-        btn.DoClick = function(p) setChannel(p.chanId) end
+        btn.DoClick = function(p)
+            setChannel(p.chanId)
+            if IsValid(entry) then entry:RequestFocus() end
+        end
         table.insert(chips, btn)
     end
 
@@ -194,6 +202,7 @@ local function build()
                 break
             end
         end
+        if IsValid(entry) then entry:RequestFocus() end
     end
 
 
@@ -240,6 +249,48 @@ local function build()
         updatePreview(p)
     end
 
+    local function doComplete(p)
+        local v = p:GetValue()
+        if v:lower():sub(1, 4) == "/pm " then
+            local partial = string.lower(string.sub(v, 5))
+            local cand = {}
+            for _, tgt in ipairs(player.GetAll()) do
+                if tgt ~= LocalPlayer() then
+                    local n = tgt:Nick()
+                    if string.lower(n):sub(1, #partial) == partial then
+                        table.insert(cand, n)
+                    end
+                end
+            end
+            if #cand > 0 then
+                table.sort(cand, function(a2, b2)
+                    if #a2 == #b2 then return a2 < b2 end
+                    return #a2 < #b2
+                end)
+                p.tabIdx = (p.tabIdx or 0) % #cand + 1
+                p:SetText("/pm " .. cand[p.tabIdx])
+            end
+        elseif v:sub(1, 1) == "/" and #v > 1 then
+            local low = v:lower()
+            for _, c in ipairs(commands()) do
+                if c:lower():sub(1, #low) == low then
+                    p:SetText(c)
+                    break
+                end
+            end
+        end
+    end
+    entry.doComplete = doComplete
+
+    entry.OnKeyCodeTyped = function(p, code)
+        if code == KEY_TAB then
+            doComplete(p)
+            return true -- съедаем: иначе фокус упрыгивает на кнопки, Enter «теряется»
+        elseif code == KEY_UP or code == KEY_DOWN then
+            return true -- локальная история важнее нативной
+        end
+    end
+
     entry.OnEnter = function(p)
         local v = string.Trim(p:GetValue())
         p:SetText("")
@@ -266,33 +317,6 @@ local function build()
             else
                 histIdx = 0
                 p:SetText("")
-            end
-        elseif code == KEY_TAB then
-            local v = p:GetValue()
-            if v:lower():sub(1, 4) == "/pm " then
-                local partial = string.lower(string.sub(v, 5))
-                local cand = {}
-                for _, tgt in ipairs(player.GetAll()) do
-                    if tgt ~= LocalPlayer() then
-                        local n = tgt:Nick()
-                        if string.lower(n):sub(1, #partial) == partial then
-                            table.insert(cand, n)
-                        end
-                    end
-                end
-                if #cand > 0 then
-                    table.sort(cand, function(a2, b2) return #a2 < #b2 end)
-                    p.tabIdx = (p.tabIdx or 0) % #cand + 1
-                    p:SetText("/pm " .. cand[p.tabIdx])
-                end
-            elseif v:sub(1, 1) == "/" and #v > 1 then
-                local low = v:lower()
-                for _, c in ipairs(commands()) do
-                    if c:lower():sub(1, #low) == low then
-                        p:SetText(c)
-                        break
-                    end
-                end
             end
         elseif code == KEY_ESCAPE then
             closeInput()

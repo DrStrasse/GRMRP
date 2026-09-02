@@ -115,7 +115,7 @@ function GRMRPChat.RPAction(kind, ply, body, chanId)
             sendSystem(ply, "свежего /do рядом не было — отвечать не на что")
             return nil
         end
-        return deliver(chan, ply, body, nil, def.fmt(authorName, body, { to = ctx.name }), false)
+        return deliver(chan, ply, body, nil, def.fmt(authorName, body, { to = ctx.name }), true)
     end
 
     if kind == "try" then

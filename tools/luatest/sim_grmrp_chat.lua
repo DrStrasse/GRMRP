@@ -210,6 +210,8 @@ T("preview unknown cmd", GRMRPChat.PreviewText("Вася", "/nope x", "ic"):find
 T("preview pm", GRMRPChat.PreviewText("Вася", "/pm Петя hi", "ic") == "📩 Петя: hi")
 T("dice channel", GRMRPChat.GetChannel("dice").cmd == "roll")
 T("me aliases registered", GRMRPChat.GetChannel("me").cmds["it"] == true)
+T("it echoed only by server", GRMRPChat.RP.it.echo == true)
+T("me/do self-echoed", GRMRPChat.RP.me.echo == nil and GRMRPChat.RP["do"].echo == nil)
 
 print(string.format("GRMRP_CHAT[%s]: %d/%d, провалов: %d", which,
     passed, passed + failed, failed))
