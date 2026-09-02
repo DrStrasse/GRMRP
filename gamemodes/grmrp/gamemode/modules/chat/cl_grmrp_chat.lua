@@ -7,6 +7,45 @@ if SERVER then return end
 
 local history = {}
 local histIdx = 0
+
+-- Вечер-12.2 («запоминание»): история ВВОДА пережила рестарт — последние
+-- 50 строк в DATA, отложенная запись dirty-таймером. Голый RAM означал
+-- «чат ничего не помнит после перезахода» — ровно досадная мелочь из
+-- «всё те же проблемы».
+local INP_FILE = "grm_chat/input.txt"
+local function saveInput()
+    if not (file and file.CreateDir and file.Write and util and util.TableToJSON) then return end
+    pcall(function()
+        file.CreateDir("grm_chat")
+        local out = {}
+        for i = math.max(1, #history - 49), #history do
+            out[#out + 1] = tostring(history[i])
+        end
+        file.Write(INP_FILE, util.TableToJSON(out))
+        GRMRPChat._inpDirty = false
+    end)
+end
+local function loadInput()
+    pcall(function()
+        if not (file and file.Exists and util and util.JSONToTable) then return end
+        if not file.Exists(INP_FILE, "DATA") then return end
+        local tbl = util.JSONToTable(file.Read(INP_FILE, "DATA") or "")
+        if not istable(tbl) then return end
+        for i = 1, #tbl do
+            local s = tostring(tbl[i] or "")
+            if #s > 0 then history[#history + 1] = s end
+        end
+        while #history > 50 do table.remove(history, 1) end
+    end)
+end
+loadInput()
+GRMRPChat.inputHistory = history -- виден диагностике
+GRMRPChat.SaveInput = saveInput
+if timer and timer.Create then
+    timer.Create("GRMRPChat_InpSave", 20, 0, function()
+        if GRMRPChat._inpDirty then saveInput() end
+    end)
+end
 local histPanel = nil
 local frame = nil
 local entry = nil
@@ -45,16 +84,26 @@ local function send(text)
     -- выглядит как «плохо обрабатывает текст» (скрин 03.09).
     text = string.Trim(tostring(text or ""))
     if #text == 0 then return end
+    if string.lower(text) == "/clear" then
+        -- лента — витрина: чистится только экран, архив истории НЕ трогается
+        if GRMRPChat.ClearLines then GRMRPChat.ClearLines() end
+        return
+    end
     if string.lower(text) == "/chatdiag" then
         -- Самодиагностика ленты (вечер-8): строку-диагностику печатает в
         -- ту же ленту — видно её = чат рендерит; не видно = сборка старая.
         if GRMRPChat.Diagnose then GRMRPChat.Diagnose() end
         return
     end
-    if #text > 512 then text = string.sub(text, 1, 512) end
+    -- 512 по UTF-8 границе (Utf8Cut из ядра), не посередине буквы
+    if #text > 512 then
+        text = (GRMRPChat.Utf8Cut and GRMRPChat.Utf8Cut(text, 512))
+            or string.sub(text, 1, 512)
+    end
     table.insert(history, text)
     if #history > 50 then table.remove(history, 1) end
     histIdx = 0
+    GRMRPChat._inpDirty = true
 
     -- Локальный эхо-каст форматром ядра; для rand-действий (try/roll) и
     -- /it результат знает только сервер — там ждём настоящую строку
@@ -116,13 +165,15 @@ local function toggleHistory()
         draw.RoundedBox(6, 0, 0, w, h, Color(8, 14, 23, 245))
         surface.SetDrawColor(40, 62, 92, 140)
         surface.DrawOutlinedRect(0, 0, w, h)
-        draw.SimpleText("История чата · выделения копируются Ctrl+C", "GRMRP_ChatChip",
-            14, 8, Color(132, 160, 178))
+        local arc = GRMRPChat.archive or {}
+        draw.SimpleText(("История чата · %d строк · дописывается живьём · ESC — закрыть · Ctrl+C копирует")
+            :format(#arc), "GRMRP_ChatChip", 14, 8, Color(132, 160, 178))
     end
     win.OnRemove = function()
         GRMRPChat.HIST_OPEN = false
         histPanel = nil
         if timer and timer.Remove then timer.Remove("GRMRPChat_HistRefr") end
+        hook.Remove("OnScreenSizeChanged", "GRMRPChat_HistSize")
     end
     win.OnKeyCodeTyped = function(_, code)
         if code == KEY_ESCAPE then win:Remove() end
@@ -134,6 +185,16 @@ local function toggleHistory()
     body:SetPaintBackground(false)
     body:Dock(TOP)
     local state = { y = 0, n = 0 }
+    -- вечер-12.2: «окна» — при смене разрешения окно и скролл пересчитываются
+    -- (прежде край съедал строки после alt+enter/fullscreen)
+    hook.Add("OnScreenSizeChanged", "GRMRPChat_HistSize", function()
+        if not IsValid(win) then return end
+        win:SetSize(math.Clamp(ScrW() * 0.62, 760, 1400), math.Clamp(ScrH() * 0.72, 480, 1120))
+        win:Center()
+        if IsValid(scroll) then
+            scroll:SetSize(win:GetWide() - 20, win:GetTall() - 38)
+        end
+    end)
 
     -- Вечер-12 («хранение/история»): источник — АРХИВ, а не кормовой буфер:
     -- строки ленты подметаются TTL через ~49 с, «история» оказывалась самой
@@ -160,14 +221,34 @@ local function toggleHistory()
         return line
     end
     local lastLine = nil
+    -- вечер-12.2: прилипание к низу по API из dscrollpanel.lua движка
+    -- (GetVBar/GetCanvas/SetScroll/GetScroll — греп gsrc; ничего выдуманного)
+    local function maxScroll()
+        if not IsValid(scroll) then return 0 end
+        local cv = scroll.GetCanvas and scroll:GetCanvas()
+        local tall = IsValid(cv) and cv:GetTall() or 0
+        return math.max(0, tall - scroll:GetTall())
+    end
+    local function stick()
+        local vb = IsValid(scroll) and scroll.GetVBar and scroll:GetVBar()
+        if not (IsValid(vb) and isfunction(vb.SetScroll)) then
+            if IsValid(scroll) and IsValid(lastLine) and isfunction(scroll.ScrollToChild) then
+                pcall(function() scroll:ScrollToChild(lastLine) end)
+            end
+            return
+        end
+        vb:SetScroll(maxScroll())
+    end
+    local function atBottom()
+        local vb = IsValid(scroll) and scroll.GetVBar and scroll:GetVBar()
+        if not (IsValid(vb) and isfunction(vb.GetScroll)) then return true end
+        return vb:GetScroll() >= maxScroll() - 4
+    end
     local src = GRMRPChat.archive or GRMRPChat.lines or {}
     for i = 1, #src do lastLine = addLine(src[i]) end
     state.n = #src
-    -- прокрутка в конец — канон DScrollPanel (ScrollToChild), не VBar:GetCanvas
     timer.Simple(0.02, function()
-        if IsValid(scroll) and IsValid(lastLine) and isfunction(scroll.ScrollToChild) then
-            pcall(function() scroll:ScrollToChild(lastLine) end)
-        end
+        if IsValid(scroll) then stick() end
     end)
     -- окно живое: пока открыто, новые строки ДОПИСЫВАЮТСЯ (не пересборка —
     -- пересборка убивала бы выделение и прокрутку)
@@ -178,10 +259,15 @@ local function toggleHistory()
                 return
             end
             local arc = GRMRPChat.archive or {}
+            if state.n >= #arc then return end
+            -- если пользователь отскроллил вверх читать — НЕ утаскиваем вниз;
+            -- если стоит у конца — дописка тянет ленту за собой
+            local stickBottom = atBottom()
             while state.n < #arc do
                 state.n = state.n + 1
-                addLine(arc[state.n])
+                lastLine = addLine(arc[state.n])
             end
+            if stickBottom then stick() end
         end)
     end
     GRMRPChat.HIST_OPEN = true
@@ -409,7 +495,7 @@ function GRMRPChat.OpenInput()
     end
     if not GRMRPChat._bannered and GRMRPChat.AddSystem then
         GRMRPChat._bannered = true
-        GRMRPChat.AddSystem("чат GRM · сборка вечер-12 (03.09) · самодиагностика: /chatdiag · биндер синхронизирован")
+        GRMRPChat.AddSystem("чат GRM · сборка вечер-12.2 (03.09) · /chatdiag · память ввода — переживает рестарт · /clear — очистить ленту")
     end
     if not IsValid(frame) then build() end
     frame:Show()

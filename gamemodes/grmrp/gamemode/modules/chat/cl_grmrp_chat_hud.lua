@@ -96,17 +96,31 @@ function GRMRPChat.Diagnose()
     local cv = GetConVar and GetConVar("grmrp_chat_enable")
     local n = #(GRMRPChat.lines or {})
     local hold = GRMRPChat.INPUT_OPEN and "ввод открыт" or "ввод закрыт"
+    -- вечер-12.2: диагностика покрывает ВСЕ пять мест жалобы — отправка,
+    -- хранение (архив+диск), запоминание (память ввода), история, окно.
+    local arcN = #(GRMRPChat.archive or {})
+    local inpN = #(GRMRPChat.inputHistory or {})
+    local fdesc = "диск: нет файла"
+    pcall(function()
+        if file and file.Exists and file.Size and file.Exists("grm_chat/archive.txt", "DATA") then
+            local sz = file.Size("grm_chat/archive.txt", "DATA")
+            local tm = file.Time and file.Time("grm_chat/archive.txt", "DATA", "mtime")
+            fdesc = "диск: " .. tostring(sz or "?") .. " Б" ..
+                (tm and (" (запись " .. os.date("%H:%M", tm) .. ")") or "")
+        end
+    end)
     local bits = {
-        "чат вечер-12 (03.09), лента = панель · SendText для модулей",
-        "лента: " .. n .. " строк",
-        "часы: CurTime (RealTime-дефект ленты исправлен)",
+        "чат вечер-12.2 (03.09), лента = панель · SendText для модулей",
+        "лента: " .. n .. " строк · архив истории: " .. arcN .. " · " .. fdesc,
+        "память ввода: " .. inpN .. " строк (↑/↓, переживает рестарт)",
+        "окно истории: " .. (GRMRPChat.HIST_OPEN and "открыто" or "закрыто") .. " · источник — архив, не лента",
         "enable=" .. (cv and tostring(cv:GetBool()) or "cvar нет → вкл"),
         hold,
     }
     for _, s in ipairs(bits) do print("[GRMRP chat] " .. s) end
     if GRMRPChat.AddLine then
         GRMRPChat.AddLine("ooc", "чат-диаг",
-            bits[1] .. " · " .. bits[2] .. " · " .. bits[3])
+            bits[1] .. " · " .. bits[2] .. " · " .. bits[3] .. " · " .. bits[4])
     end
 end
 
@@ -263,6 +277,33 @@ local function saveArchive()
 end
 GRMRPChat.SaveArchive = saveArchive
 
+-- вечер-12.2: «хранение» доводится до надёжности — флеш при выходе из игры
+-- (движковый глобальный хук Shutdown), ручная команда и очистка. Таймер
+-- 45 с → 20 с: окно «последние полминуты не сохранены» сокращено вдвое.
+local function flushAll()
+    saveArchive()
+    if GRMRPChat.SaveInput then GRMRPChat.SaveInput() end
+end
+hook.Add("Shutdown", "GRMRPChat_ArchiveFlush", flushAll)
+
+if concommand and concommand.Add then
+    concommand.Add("grm_chat_save", function()
+        flushAll()
+        print("[GRM chat] архив и память ввода записаны на диск")
+    end)
+    concommand.Add("grm_chat_clear", function()
+        GRMRPChat.archive = {}
+        GRMRPChat._histDirty = false
+        pcall(function()
+            if file and file.Remove then file.Remove(HIST_FILE, "DATA") end
+        end)
+        GRMRPChat.lines = {}
+        if GRMRPChat.AddSystem then
+            GRMRPChat.AddSystem("архив истории очищен (память и диск); grm_chat_clear")
+        end
+    end)
+end
+
 local function loadArchive()
     pcall(function()
         if not (file and file.Exists and util and util.JSONToTable) then return end
@@ -290,7 +331,7 @@ end
 loadArchive()
 
 if timer and timer.Create then
-    timer.Create("GRMRPChat_HistSave", 45, 0, function()
+    timer.Create("GRMRPChat_HistSave", 20, 0, function()
         if GRMRPChat._histDirty then saveArchive() end
     end)
 end

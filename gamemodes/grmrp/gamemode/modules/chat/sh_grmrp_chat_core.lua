@@ -36,6 +36,11 @@ local function utf8Clamp(s, maxBytes)
     return string.sub(s, 1, lastEnd)
 end
 
+-- Вечер-12.2: гранично-безопасная обрезка наружу (клиентский ввод режет
+-- 512 ЭТИМ, а не сырым string.sub — иначе кириллица на границе превращается
+-- в «битый хвост», ровно класс жалоб «плохо обрабатывает текст»).
+GRMRPChat.Utf8Cut = utf8Clamp
+
 -- Эмодзи: текстовые смайлы заменяются живыми символами, готовые многобайтные
 -- символы sanitize и так сохраняет (продовольствие UTF-8-safe). Дёшево и
 -- чисто: ровно те же данные видит превью клиента и лента сервера.
@@ -339,6 +344,10 @@ function GRMRPChat.ResolveAudience(chan, author, players, distSqrFn, isDeadFn)
         if ply ~= author then
             local dead = isDeadFn and isDeadFn(ply) or false
             if chan.scope == "world" then
+                -- Вечер-12.2 сверка с контрактом веч.-8 (стенд «everyone
+                -- ALIVE hears» пиновал его намеренно): мирские каналы — для
+                -- живых, мертвец живёт в dead-чате. Мёртвый слушатель тут
+                -- НЕ лишний — это политика, а не дефект: не меняем.
                 if not dead or chan.onlyDead or dead == authorDead then
                     table.insert(list, ply)
                 end

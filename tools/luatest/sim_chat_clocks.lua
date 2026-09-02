@@ -58,10 +58,10 @@ do
     check(pair[2] .. ": /chatdiag перехвачендо отправки", s2:find('"/chatdiag"', 1, true) ~= nil
         and s2:find(pair[2] .. ".Diagnose()", 1, true) ~= nil)
     end
-    check("баннер вечер-12 в режиме", read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua")
-        :find("сборка вечер-12 (03.09)", 1, true) ~= nil)
-    check("баннер вечер-12 в порту", read("lua/autorun/client/cl_08_grm_chat_input.lua")
-        :find("сборка вечер-12 (03.09)", 1, true) ~= nil)
+    check("баннер вечер-12.2 в режиме", read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua")
+        :find("сборка вечер-12.2 (03.09)", 1, true) ~= nil)
+    check("баннер вечер-12.2 в порту", read("lua/autorun/client/cl_08_grm_chat_input.lua")
+        :find("сборка вечер-12.2 (03.09)", 1, true) ~= nil)
     local hud1 = read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua")
     local hud2 = read("lua/autorun/client/cl_08_grm_chat_hud.lua")
     check("режим: Diagnose печатает в ленту через AddLine", hud1:find("function GRMRPChat.Diagnose", 1, true) ~= nil
@@ -86,7 +86,7 @@ for _, pair in ipairs({
     check(pair[2] .. ": акцент канала слева", s2:find("draw.RoundedBox(0, x - 8", 1, true) ~= nil)
     check(pair[2] .. ": старой гадалки «130 + tw» нет", s2:find("130 + tw", 1, true) == nil)
     check(pair[2] .. ": ленты шире (900px)", s2:find("math.min(900, ScrW() - 32)", 1, true) ~= nil)
-    check(pair[2] .. ": Diagnose — вечер-12", s2:find("чат вечер-12 (03.09)", 1, true) ~= nil)
+    check(pair[2] .. ": Diagnose — вечер-12.2", s2:find("чат вечер-12.2 (03.09)", 1, true) ~= nil)
 end
 
 print("\n=== 6. ИСТОРИЯ/ХРАНЕНИЕ (вечер-12) ===")
@@ -112,6 +112,38 @@ for _, pair in ipairs({
     check(pair[1] .. ": архив на диске (DATA)", s2:find("grm_chat/archive.txt", 1, true) ~= nil)
     check(pair[1] .. ": чтение на старте", s2:find("loadArchive()", 1, true) ~= nil)
     check(pair[1] .. ": запись отложенная (dirty-флаг)", s2:find("_histDirty", 1, true) ~= nil)
+end
+
+print("\n=== 7. ПАМЯТЬ ВВОДА / ФЛЕШ / ОКНО ЖИВОЕ (вечер-12.2) ===")
+for _, pair in ipairs({
+    { "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua", "GRMRPChat" },
+    { "lua/autorun/client/cl_08_grm_chat_input.lua", "GRMChat" },
+}) do
+    local s2 = read(pair[1])
+    check(pair[1] .. ": история ввода персистится", s2:find("grm_chat/input.txt", 1, true) ~= nil)
+    check(pair[1] .. ": чтение памяти на старте", s2:find("loadInput()", 1, true) ~= nil)
+    check(pair[1] .. ": обрезка 512 по UTF-8 границе", s2:find("Utf8Cut", 1, true) ~= nil)
+    check(pair[1] .. ": /clear чистит ленту, не архив",
+        s2:find('string.lower(text) == "/clear"', 1, true) ~= nil
+        and s2:find("ClearLines()", 1, true) ~= nil)
+    check(pair[1] .. ": окно прилипает к низу (VBar-канон из dscrollpanel)",
+        s2:find("GetVBar()", 1, true) ~= nil and s2:find("atBottom()", 1, true) ~= nil)
+    check(pair[1] .. ": окно переживает смену разрешения",
+        s2:find("_HistSize", 1, true) ~= nil)
+end
+check("ядро отдаёт Utf8Cut наружу",
+    read("gamemodes/grmrp/gamemode/modules/chat/sh_grmrp_chat_core.lua"):find("GRMRPChat.Utf8Cut = utf8Clamp", 1, true) ~= nil)
+for _, pair in ipairs({
+    { "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua", "GRMRPChat" },
+    { "lua/autorun/client/cl_08_grm_chat_hud.lua", "GRMChat" },
+}) do
+    local s2 = read(pair[1])
+    check(pair[1] .. ": флеш архива на Shutdown", s2:find('"Shutdown"', 1, true) ~= nil
+        and s2:find("ArchiveFlush", 1, true) ~= nil)
+    check(pair[1] .. ": ручная команда сохранения", s2:find("grm_chat_save", 1, true) ~= nil)
+    check(pair[1] .. ": очистка без потерь контракта", s2:find("grm_chat_clear", 1, true) ~= nil)
+    check(pair[1] .. ": таймер сохранений ускорен до 20 с", s2:find("_HistSave\", 20, 0", 1, true) ~= nil)
+    check(pair[1] .. ": diag знает про архив и диск", s2:find("file.Size", 1, true) ~= nil)
 end
 
 print(("\nCHAT CLOCKS: %d/%d, провалов: %d"):format(total - fails, total, fails))
