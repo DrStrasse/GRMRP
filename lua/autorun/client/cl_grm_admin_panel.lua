@@ -1386,7 +1386,14 @@ local function buildConsole(pnl)
 
     local out = vgui.Create("DTextEntry", pnl)
     out:Dock(FILL) out:DockMargin(0, 6, 0, 6)
-    out:SetMultiline(true) out:SetReadOnly(true) out:SetFont("GRMAdm_Body")
+    out:SetMultiline(true) out:SetFont("GRMAdm_Body")
+    -- Живой крах 1389 (владелец, вечер-9): у DTextEntry нет SetReadOnly —
+    -- по исходнику движка (garrysmod/lua/vgui/dtextentry.lua) там только
+    -- SetEditable/SetDisabled/AllowInput. Вызов несуществующего метода
+    -- ронял всю сборку вкладки «Консоль» (builder → DoClick). Настоящий
+    -- read-only: снять клавиатурный ввод, оставить мышь — текст можно
+    -- выделить и скопировать.
+    out:SetKeyboardInputEnabled(false)
     out:SetTextColor(C.text) out:SetBackgroundColor(C.sidebar)
     for _, l in ipairs(AD.ConsoleLines or {}) do out:SetText(out:GetValue() .. l .. "\n") end
 
@@ -1424,7 +1431,13 @@ local function buildConsole(pnl)
     local function onLine(block)
         if not IsValid(out) then return end
         out:SetText(out:GetValue() .. block .. "\n")
-        if IsValid(out.VBar) then out.VBar:SetScroll(out.VBar:GetCanvas():GetTall()) end
+        -- DTextEntry не DScrollPanel: VBar/GetCanvas — тот же фантом, что
+        -- в истории чата (вечер-9). Движковый multiline следит за каретой:
+        -- ставим карету в конец — прокрутка едет за ней (SetCaretPos —
+        -- реальный метод DTextEntry).
+        if out.SetCaretPos then
+            pcall(function() out:SetCaretPos(#(out:GetValue() or "")) end)
+        end
     end
     hook.Add("GRM_AdminConsoleLine", "GRM_AdminPanel_Console", onLine)
 end

@@ -59,7 +59,19 @@ check("смена модели — полная пересъёмка", has("appl
 print("\n=== 5. РАЗМЕР И ОТТИСК ===")
 check("окно модели не меньше 240px", has("240, 440"))
 check("карточка раздвинута до 430px", has("320, 430"))
-check("оттиск сборки вечер-9", has("вечер-9 (03.09)"))
+check("оттиск сборки вечер-10", has("вечер-10 (03.09)"))
+
+print("\n=== 2. СТАРЫЕ ОКНА, БЛЮР, ESC (вечер-10) ===")
+check("блюр кадра за меню (Derma_DrawBackgroundBlur)", has("Derma_DrawBackgroundBlur(s, s.animStart)"))
+check("настройки — диалог движка через очередь", has('Menu.OpenGameuiWith("OpenOptionsDialog")'))
+check("сетевая игра — старое окно браузера движка", has('Menu.OpenGameuiWith("OpenServerBrowser")'))
+check("мастерская — стандартное меню, не внешняя URL", has("Menu.OpenGameuiWith(nil)"))
+check("gui.OpenURL из меню вырезан", not has("gui.OpenURL"))
+check("подавления на фиксированные 30 секунд нет", not has("CurTime() + 30"))
+check("сессия gameui помечается своей", has("Menu.ownsGameui = true"))
+check("команда ждёт реального menu-состояния", has("if Menu.pendingCmd then"))
+check("ESC сперва отдаёт верхний слой (ввод/история чата)",
+    has("GRMRPChat.INPUT_OPEN or GRMRPChat.HIST_OPEN"))
 check("фолбек-копия групп 1..8 для кривых списков", has("ply:GetBodygroup(i)"))
 
 print(("\nMENU SHOWCASE: %d/%d, провалов: %d"):format(total - fails, total, fails))

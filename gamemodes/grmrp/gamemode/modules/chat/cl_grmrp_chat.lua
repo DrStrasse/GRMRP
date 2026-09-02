@@ -76,7 +76,8 @@ local function toggleHistory()
     if IsValid(histPanel) then histPanel:Close() return end
     local win = vgui.Create("EditablePanel")
     histPanel = win
-    win:SetSize(600, 400)
+    -- вечер-10: «окно истории слишком мелкое» (владелец) — было 600x400
+    win:SetSize(math.Clamp(ScrW() * 0.62, 760, 1400), math.Clamp(ScrH() * 0.72, 480, 1120))
     win:Center()
     win:MakePopup()
     win.Paint = function(_, w, h)
@@ -100,6 +101,7 @@ local function toggleHistory()
     body:SetPaintBackground(false)
     body:Dock(TOP)
     local y = 0
+    local lastLine = nil
     local lines = GRMRPChat.lines or {}
     local shift = RealTime() - CurTime()
     for i = 1, #lines do
@@ -119,11 +121,15 @@ local function toggleHistory()
         local hh = math.max(18, line:GetTall())
         line:SetTall(hh)
         y = y + hh
+        lastLine = line
     end
     body:SetTall(y + 4)
+    -- Вечер-10, живой крах таймера истории (строка 126, «GetCanvas (a nil
+    -- value)»): GetCanvas — метод DScrollPanel, у DVScrollBar его нет
+    -- (движковый dscrollpanel.lua). Канон прокрутки в конец — ScrollToChild.
     timer.Simple(0.02, function()
-        if IsValid(scroll) and IsValid(scroll.VBar) then
-            scroll.VBar:SetY(scroll.VBar:GetCanvas():GetTall())
+        if IsValid(scroll) and IsValid(lastLine) and isfunction(scroll.ScrollToChild) then
+            pcall(function() scroll:ScrollToChild(lastLine) end)
         end
     end)
     GRMRPChat.HIST_OPEN = true
@@ -351,7 +357,7 @@ function GRMRPChat.OpenInput()
     end
     if not GRMRPChat._bannered and GRMRPChat.AddSystem then
         GRMRPChat._bannered = true
-        GRMRPChat.AddSystem("чат GRM · сборка вечер-9 (03.09) · самодиагностика: /chatdiag")
+        GRMRPChat.AddSystem("чат GRM · сборка вечер-10 (03.09) · самодиагностика: /chatdiag · ленты крупнее")
     end
     if not IsValid(frame) then build() end
     frame:Show()

@@ -6,7 +6,15 @@ local function grmBootStart(id, tier, fn)
 end
 
 --[[--------------------------------------------------------------------
-    GRM HUD v10.5 — Полноценный HUD для Sandbox
+    GRM HUD v10.6 — Полноценный HUD для Sandbox
+    v10.6: селектор — «листать невозможно» (владелец 03.09 вечер-9): обход
+           слотов был зашит в 1..6, а когда our обход не мог сдвинуться,
+           бинд всё равно глотался (return true) — колесо молчало целиком.
+           Теперь: слоты 1..10 (TFA/CW/ARC9 живут за шестёркой), оружие из
+           «неудобных» слотов не выбрасывается, а при нулевом ходе бинд
+           уходит движку (ванильное листание сохраняется); ширина бара —
+           по факту инвентаря; grm_sel_diag — самодиагностика «доходят ли
+           бинды и что с ними стало».
     v10.5: колесо ПЕРЕКЛЮЧАЕТ оружие сразу, как ванильный GMod (заказ
            владельца 03.09 вечер-6: «селектор так и не починили» = тик
            колеса не менял оружие; бар GRM — визуальный слой, ЛКМ только
@@ -245,7 +253,8 @@ local function AnimateValues()
 end
 
 -- СЕЛЕКТОР ОРУЖИЯ
-local selector = { active = false, slot = 1, pos = 1, lastInput = 0, alpha = 0, weapons = {}, lastRefresh = 0 }
+local MAXSLOT = 10 -- GMod: реальные интерфейсы доходят до 10-го слота
+local selector = { active = false, slot = 1, pos = 1, lastInput = 0, alpha = 0, weapons = {}, lastRefresh = 0, maxSlot = 0, seen = 0 }
 
 --[[ Звуки селектора оружия — стоковые HL2, ровно те же, что играет ванильный
      выбор оружия. Раньше наш селектор листался молча: визуально работает, а
@@ -277,12 +286,17 @@ local function RefreshWeapons()
     local lp = LocalPlayer()
     if not IsValid(lp) then return end
     selector.weapons = {}
+    selector.maxSlot = 0
     for _, wep in ipairs(lp:GetWeapons()) do
         if IsValid(wep) then
-            local s = wep:GetSlot() + 1
-            local p = wep:GetSlotPos() + 1
+            -- slot -1 / хвосты за 6-кой (дробные BaseSlot у TFA-подобных):
+            -- не выбрасываем, а зажимаем в 1..10, иначе оружие исчезало
+            -- из листания совсем
+            local s = math.Clamp((tonumber(wep:GetSlot()) or 0) + 1, 1, MAXSLOT)
+            local p = (tonumber(wep:GetSlotPos()) or 0) + 1
             if not selector.weapons[s] then selector.weapons[s] = {} end
             table.insert(selector.weapons[s], { weapon = wep, name = wep:GetPrintName() or wep:GetClass(), slotPos = p })
+            if s > selector.maxSlot then selector.maxSlot = s end
         end
     end
     for s, weps in pairs(selector.weapons) do table.sort(weps, function(a, b) return a.slotPos < b.slotPos end) end
@@ -305,7 +319,7 @@ local function FindCurrentWeapon()
     if not IsValid(lp) then return end
     local activeWep = lp:GetActiveWeapon()
     if IsValid(activeWep) then
-        local curSlot = activeWep:GetSlot() + 1
+        local curSlot = math.Clamp((tonumber(activeWep:GetSlot()) or 0) + 1, 1, MAXSLOT)
         selector.slot = curSlot
         local slotWeps = selector.weapons[curSlot]
         if slotWeps then
@@ -324,16 +338,16 @@ local function NextWeapon()
     if slotWeps and #slotWeps > 0 then
         selector.pos = selector.pos + 1
         if selector.pos > #slotWeps then
-            for offset = 1, 6 do
-                local nextSlot = ((selector.slot - 1 + offset) % 6) + 1
+            for offset = 1, MAXSLOT do
+                local nextSlot = ((selector.slot - 1 + offset) % MAXSLOT) + 1
                 if selector.weapons[nextSlot] and #selector.weapons[nextSlot] > 0 then
                     selector.slot = nextSlot; selector.pos = 1; return
                 end
             end
         end
     else
-        for offset = 1, 6 do
-            local nextSlot = ((selector.slot - 1 + offset) % 6) + 1
+        for offset = 1, MAXSLOT do
+            local nextSlot = ((selector.slot - 1 + offset) % MAXSLOT) + 1
             if selector.weapons[nextSlot] and #selector.weapons[nextSlot] > 0 then
                 selector.slot = nextSlot; selector.pos = 1; return
             end
@@ -346,16 +360,16 @@ local function PrevWeapon()
     if slotWeps and #slotWeps > 0 then
         selector.pos = selector.pos - 1
         if selector.pos < 1 then
-            for offset = 1, 6 do
-                local prevSlot = ((selector.slot - 1 - offset) % 6) + 1
+            for offset = 1, MAXSLOT do
+                local prevSlot = ((selector.slot - 1 - offset) % MAXSLOT) + 1
                 if selector.weapons[prevSlot] and #selector.weapons[prevSlot] > 0 then
                     selector.slot = prevSlot; selector.pos = #selector.weapons[prevSlot]; return
                 end
             end
         end
     else
-        for offset = 1, 6 do
-            local prevSlot = ((selector.slot - 1 - offset) % 6) + 1
+        for offset = 1, MAXSLOT do
+            local prevSlot = ((selector.slot - 1 - offset) % MAXSLOT) + 1
             if selector.weapons[prevSlot] and #selector.weapons[prevSlot] > 0 then
                 selector.slot = prevSlot; selector.pos = #selector.weapons[prevSlot]; return
             end
@@ -396,8 +410,17 @@ local function AbortSelectorQuiet()
     selector.alpha = 0
 end
 
+-- Кольцевой лог решений селектора (для grm_sel_diag): «колесо жмёт, тишина»
+-- различимо без дебаггера — бинды видны? глотаются? кем?
+local SELLOG = {}
+local function sellog(line)
+    SELLOG[#SELLOG + 1] = string.format("%6.1f %s", CurTime(), line)
+    if #SELLOG > 8 then table.remove(SELLOG, 1) end
+end
+
 hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
     if not pressed then return end
+    selector.seen = selector.seen + 1 -- для grm_sel_diag: доходят ли бинды
     if not IsValid(ply) or not ply:Alive() then return end
     if GRM_HUD_MobileOpen() then
         bind = string.lower(tostring(bind or ""))
@@ -436,9 +459,15 @@ hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
         if was ~= (selector.slot .. ":" .. selector.pos) then
             selectorSound("move")
             PickCurrent()
+            selector.lastInput = CurTime()
+            return true
         end
+        -- Сдвинуться нечем: НЕ глотаем — пусть листает движок (его обход
+        -- видит все слоты мира). Вечер-9 урок: return true при нулевом ходе
+        -- и был «невозможно листать».
+        sellog("invnext: ход нулевой → пас движку")
         selector.lastInput = CurTime()
-        return true
+        return
     elseif bind == "invprev" then
         RefreshWeapons()
         if not selector.active then selector.active = true selectorSound("open", 0.05) FindCurrentWeapon() end
@@ -447,11 +476,14 @@ hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
         if was ~= (selector.slot .. ":" .. selector.pos) then
             selectorSound("move")
             PickCurrent()
+            selector.lastInput = CurTime()
+            return true
         end
+        sellog("invprev: ход нулевой → пас движку")
         selector.lastInput = CurTime()
-        return true
+        return
     end
-    for i = 1, 6 do
+    for i = 1, MAXSLOT do
         if bind == "slot" .. i then
             RefreshWeapons()
             local slotWeps = selector.weapons[i]
@@ -474,6 +506,31 @@ hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
     if (bind == "+attack" or bind == "attack") and selector.active then CloseSelector(); return true end
     if (bind == "+attack2" or bind == "attack2") and selector.active then CloseSelector(); return true end
 end)
+
+-- Самодиагностика (вечер-10, по образцу /chatdiag): «селектор не работает»
+-- перестаёт быть слепым пятном. В консоли: версия, живой ли хук, сколько
+-- биндов дошло, что с ними стало, инвентарь по слотам.
+if concommand and concommand.Add then
+    concommand.Add("grm_sel_diag", function()
+        local lp = LocalPlayer()
+        local wep = IsValid(lp) and lp:GetActiveWeapon()
+        print(string.format("[GRM sel] v10.6 (вечер-10) bind seen=%d, active=%s, выбор=%d:%d",
+            selector.seen, tostring(selector.active), selector.slot, selector.pos))
+        print(string.format("[GRM sel] в руке: %s (slot=%s) · mobile=%s · propbusy=%s",
+            IsValid(wep) and tostring(wep:GetClass()) or "—",
+            IsValid(wep) and tostring(wep:GetSlot()) or "—",
+            tostring(GRM_HUD_MobileOpen()), tostring(GRM.HUD.IsPropToolBusy(lp))))
+        for s = 1, MAXSLOT do
+            local list = selector.weapons[s]
+            if list and #list > 0 then print("[GRM sel] слот " .. s .. ": " .. #list .. " шт") end
+        end
+        for i = 1, #SELLOG do print("[GRM sel] " .. SELLOG[i]) end
+        if selector.seen == 0 then
+            print("[GRM sel] ВЫВОД: к our хуку не приходило НИ ОДНОГО бинда —")
+            print("[GRM sel] проверьте привязки «След. оружие»/«Пред. оружие» (мышь) в настройках.")
+        end
+    end)
+end
 
 local hideElements = {
     ["CHudHealth"]          = true,
@@ -685,12 +742,17 @@ local function DrawWeaponSelector()
     if selector.alpha < 1 then return end
     local sw = ScrW()
     local alpha = selector.alpha / 255
-    local slotW, slotH, slotGap, headerH, padding = 170, 30, 5, 26, 6
-    local totalSlots = 6
-    local totalW = totalSlots * (slotW + slotGap) - slotGap
-    local startX, startY = (sw - totalW) / 2, 20
-
     RefreshWeapons()
+    -- вечер-10: бар по фактической геометрии инвентаря (до 10 слотов),
+    -- пустые хвосты не раздуваем, привычная сетка — минимум 6.
+    local totalSlots = math.Clamp(selector.maxSlot or 6, 6, MAXSLOT)
+    local slotW, slotH, slotGap, headerH, padding = (totalSlots > 6 and 150 or 170), 30, 5, 26, 6
+    local totalW = totalSlots * (slotW + slotGap) - slotGap
+    if totalW > sw - 40 then
+        slotW = math.floor((sw - 40 - totalSlots * slotGap) / totalSlots)
+        totalW = totalSlots * (slotW + slotGap) - slotGap
+    end
+    local startX, startY = (sw - totalW) / 2, 20
     for slot = 1, totalSlots do
         local sx = startX + (slot - 1) * (slotW + slotGap)
         local slotWeps = selector.weapons[slot] or {}
@@ -740,7 +802,7 @@ local function DrawWeaponSelector()
     if selector.active then
         local hintX = startX + totalW + 16
         local hintY = startY + 4
-        local hints = {{"ЛКМ","Выбрать"},{"ПКМ","Отмена"},{"Колесо","Листать"},{"1-6","Слот"}}
+        local hints = {{"ЛКМ","Выбрать"},{"ПКМ","Отмена"},{"Колесо","Листать"},{"1-10","Слот"}}
         for i, hint in ipairs(hints) do
             local hy = hintY + (i - 1) * 18
             draw.SimpleText(hint[1], "GRM_SlotKey", hintX, hy, Color(cfg.slotKeyColor.r, cfg.slotKeyColor.g, cfg.slotKeyColor.b, 180 * alpha), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
@@ -788,4 +850,4 @@ grmBootStart("GRM_HUD_Welcome", "late", function()
     end)
 end)
 
-print("[GRM] HUD v10.5 загружен")
+print("[GRM] HUD v10.6 загружен")

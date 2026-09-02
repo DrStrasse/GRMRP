@@ -14,11 +14,13 @@ if SERVER then return end
 -- Segoe UI (Windows) вместо бандлованного Roboto: кириллица та же, а
 -- отсутствующие глифы (emoji) дотягиваются системным линкингом — в Roboto
 -- «🙂» рисовался квадратом («плохо обрабатывает текст» со скрина 03.09).
+-- вечер-10: «чат маленький» (владелец) — лента поднята 14→17, чип 13→15;
+-- имя шрифта историческое (GRMRP_Chat14), размер — authoritative тут.
 surface.CreateFont("GRMRP_Chat14", {
-    font = "Segoe UI", size = 14, weight = 400, extended = true
+    font = "Segoe UI", size = 17, weight = 400, extended = true
 })
 surface.CreateFont("GRMRP_ChatChip", {
-    font = "Segoe UI", size = 13, weight = 700, extended = true
+    font = "Segoe UI", size = 15, weight = 700, extended = true
 })
 
 GRMChat = GRMChat or {}
@@ -89,7 +91,7 @@ function GRMChat.Diagnose()
     local n = #(GRMChat.lines or {})
     local hold = GRMChat.INPUT_OPEN and "ввод открыт" or "ввод закрыт"
     local bits = {
-        "чат вечер-9 (03.09), лента = панель",
+        "чат вечер-10 (03.09), лента = панель",
         "лента: " .. n .. " строк",
         "часы: CurTime (RealTime-дефект ленты исправлен)",
         "enable=" .. (cv and tostring(cv:GetBool()) or "cvar нет → вкл"),
@@ -136,10 +138,11 @@ end)
      искажается тем, что и ввод, то есть ничем. Буфер, часы и hold-логика
      не меняются. ]]
 local feed = nil
+local ROW = 26 -- строка ленты вечером-10 крупнее: 22 -> 26
 
 feedLayout = function(p)
-    local w = math.min(780, ScrW() - 32)
-    local hgt = 22 * 18 + 14
+    local w = math.min(900, ScrW() - 32)
+    local hgt = ROW * 18 + 14
     p:SetBounds(8, math.max(0, ScrH() - 268 - hgt), w, hgt)
 end
 
@@ -164,24 +167,35 @@ ensureFeed = function()
             local lifeLeft = (hold and 1) or math.Clamp((TTL + FADE - age) / FADE, 0, 1)
             if lifeLeft > 0 then
                 shown = shown + 1
-                local x, y = 8, h - 10 - shown * 22
+                local x, y = 10, h - 12 - shown * ROW
                 local chan = ln.chan
+                local tag = chan.title or "·"
                 local col = chan.color or { r = 255, g = 255, b = 255 }
                 local a = math.floor(255 * lifeLeft + 0.5)
 
+                -- «Странные полосы» вечера-9: фон рисовался по формуле
+                -- «130 + ширина текста» и не накрывал имя. Полоса м.10
+                -- измеряется по ФАКТУ строки (шрифт->ширина), со скруглением
+                -- и цветным акцентом канала слева.
+                surface.SetFont("GRMRP_ChatChip")
+                local cw = surface.GetTextSize("[" .. tag .. "]") or 30
+                local nw = 0
+                if #ln.name > 0 then nw = (surface.GetTextSize(ln.name .. ":") or 0) + 8 end
                 surface.SetFont("GRMRP_Chat14")
                 local tw = surface.GetTextSize(ln.text) or 40
-                surface.SetDrawColor(8, 14, 23, math.floor(a * 0.55))
-                surface.DrawRect(x - 6, y - 3, math.min(760, 130 + tw), 20)
-                draw.DrawText("[" .. (chan.title or "·") .. "]", "GRMRP_ChatChip", x, y - 1,
+                local strip = math.min(w - 16, 16 + cw + 6 + nw + tw + 10)
+                draw.RoundedBox(5, x - 8, y - 4, strip, ROW - 5, Color(8, 14, 23, math.floor(a * 0.72)))
+                draw.RoundedBox(0, x - 8, y - 4, 3, ROW - 5, Color(col.r, col.g, col.b, a))
+                local tx = x
+                draw.DrawText("[" .. tag .. "]", "GRMRP_ChatChip", tx, y - 3,
                     Color(col.r, col.g, col.b, a), TEXT_ALIGN_LEFT)
-                local tx = x + 14 + #tostring(chan.title or "·") * 9
+                tx = tx + cw + 6
                 if #ln.name > 0 then
-                    draw.DrawText(ln.name .. ":", "GRMRP_ChatChip", tx, y - 1,
+                    draw.DrawText(ln.name .. ":", "GRMRP_ChatChip", tx, y - 3,
                         Color(170, 190, 210, a), TEXT_ALIGN_LEFT)
-                    tx = tx + #ln.name * 8 + 10
+                    tx = tx + nw
                 end
-                draw.DrawText(ln.text, "GRMRP_Chat14", tx, y,
+                draw.DrawText(ln.text, "GRMRP_Chat14", tx, y - 2,
                     ln.mine and Color(255, 255, 255, a) or Color(225, 238, 247, a),
                     TEXT_ALIGN_LEFT)
             end

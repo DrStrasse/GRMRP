@@ -58,16 +58,35 @@ do
     check(pair[2] .. ": /chatdiag перехвачендо отправки", s2:find('"/chatdiag"', 1, true) ~= nil
         and s2:find(pair[2] .. ".Diagnose()", 1, true) ~= nil)
     end
-    check("баннер вечер-9 в режиме", read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua")
-        :find("сборка вечер-9 (03.09)", 1, true) ~= nil)
-    check("баннер вечер-9 в порту", read("lua/autorun/client/cl_08_grm_chat_input.lua")
-        :find("сборка вечер-9 (03.09)", 1, true) ~= nil)
+    check("баннер вечер-10 в режиме", read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua")
+        :find("сборка вечер-10 (03.09)", 1, true) ~= nil)
+    check("баннер вечер-10 в порту", read("lua/autorun/client/cl_08_grm_chat_input.lua")
+        :find("сборка вечер-10 (03.09)", 1, true) ~= nil)
     local hud1 = read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua")
     local hud2 = read("lua/autorun/client/cl_08_grm_chat_hud.lua")
     check("режим: Diagnose печатает в ленту через AddLine", hud1:find("function GRMRPChat.Diagnose", 1, true) ~= nil
         and hud1:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
     check("порт: Diagnose синхронен", hud2:find("function GRMChat.Diagnose", 1, true) ~= nil
         and hud2:find('GRMChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
+end
+
+print("\n=== 5. РАЗМЕР И ПОЛОСЫ ЛЕНТЫ (вечер-10) ===")
+for _, pair in ipairs({
+    { "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua", "GRMRPChat" },
+    { "lua/autorun/client/cl_08_grm_chat_hud.lua", "GRMChat" },
+}) do
+    local s2 = read(pair[1])
+    check(pair[2] .. ": текст ленты 17px (жалоба «маленький»)",
+        s2:find("size = 17, weight = 400", 1, true) ~= nil)
+    check(pair[2] .. ": чип канала 15px", s2:find("size = 15, weight = 700", 1, true) ~= nil)
+    check(pair[2] .. ": полоса меряется по факту (GetTextSize чипа)",
+        s2:find('cw = surface.GetTextSize("[" .. tag .. "]")', 1, true) ~= nil)
+    check(pair[2] .. ": фон строки — rounded, по ширине строки",
+        s2:find("draw.RoundedBox(5, x - 8", 1, true) ~= nil)
+    check(pair[2] .. ": акцент канала слева", s2:find("draw.RoundedBox(0, x - 8", 1, true) ~= nil)
+    check(pair[2] .. ": старой гадалки «130 + tw» нет", s2:find("130 + tw", 1, true) == nil)
+    check(pair[2] .. ": ленты шире (900px)", s2:find("math.min(900, ScrW() - 32)", 1, true) ~= nil)
+    check(pair[2] .. ": Diagnose — вечер-10", s2:find("чат вечер-10 (03.09)", 1, true) ~= nil)
 end
 
 print(("\nCHAT CLOCKS: %d/%d, провалов: %d"):format(total - fails, total, fails))

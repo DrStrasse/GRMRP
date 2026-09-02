@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-9 (03.09)'
+Menu.BuildStamp = 'вечер-10 (03.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -77,12 +77,11 @@ Menu.AddTab({ id = "resume", order = 10, title = "Вернуться в игру
     action = function() Menu.Close() end })
 Menu.AddTab({ id = "settings", order = 20, title = "Настройки", accent = COL.accent,
     action = function() Menu.OpenStandardSettings() end })
+-- «Сетевая игра» = СТАРОЕ окно движка: server browser через gamemenucommand
+-- (указание владельца вечером-9: «функционал должен выводить на старые окна»,
+-- никаких подмен). Очередь подождёт menu-состояния — см. OpenGameuiWith.
 Menu.AddTab({ id = "servers", order = 30, title = "Сетевая игра", accent = COL.accent,
-    action = function()
-        Menu.suppressUntil = CurTime() + 30
-        Menu.Close()
-        RunConsoleCommand("gameui_activate")
-    end })
+    action = function() Menu.OpenGameuiWith("OpenServerBrowser") end })
 Menu.AddTab({ id = "newgame", order = 40, title = "Новая игра (локально)", accent = COL.gold,
     visible = function() return game.SinglePlayer() end,
     action = function()
@@ -91,12 +90,10 @@ Menu.AddTab({ id = "newgame", order = 40, title = "Новая игра (лока
         end)
         if not ok then Menu.SystemLine("Не удалось: " .. tostring(err)) end
     end })
+-- «Мастерская» — стандартное окно: главное меню движка (Addons/Workshop
+-- живут в нём). Внешний URL был подменой функционала — снято (вечер-9).
 Menu.AddTab({ id = "workshop", order = 50, title = "Мастерская", accent = COL.gold,
-    action = function()
-        if gui.OpenURL then
-            gui.OpenURL("https://steamcommunity.com/app/4000/workshop/")
-        end
-    end })
+    action = function() Menu.OpenGameuiWith(nil) end })
 Menu.AddTab({ id = "disconnect", order = 70, title = "Отключиться от сервера", accent = COL.red,
     visible = function() return not game.SinglePlayer() end,
     action = function() RunConsoleCommand("disconnect") end })
@@ -145,7 +142,7 @@ end
 function Menu.Open()
     if IsValid(Menu.root) then return end
 
-    Menu.suppressUntil = 0
+    Menu.ownsGameui = false -- играем по-честному: чужая gameui-сессия не наша
     if not GRMRP.JoinTime then GRMRP.JoinTime = CurTime() end
     local scrW, scrH = ScrW(), ScrH()
     local root = vgui.Create("DPanel")
@@ -160,6 +157,12 @@ function Menu.Open()
     -- оружия «умер» именно так — крах Skin() в модели, лив 03.09).
     function root:OnKeyCodeTyped(code)
         if code == KEY_ESCAPE then
+            -- обратный порядок (претензия вечера-9): ESC гасит ВЕРХНИЙ
+            -- слой — открытый ввод/историю чата оставляет себе, меню
+            -- закрывается, только когда оно и есть верхний слой
+            if GRMRPChat and (GRMRPChat.INPUT_OPEN or GRMRPChat.HIST_OPEN) then
+                return false
+            end
             Menu.Close()
             return true
         end
@@ -168,7 +171,12 @@ function Menu.Open()
     local colW = math.Clamp(scrW * 0.24, 300, 380)
 
     root.Paint = function(s, w, h)
-        -- фон: тонировка кадра + лёгкий вертикальный градиент
+        -- фон: блюр кадра (заказ вечера-10: «не хватает блюра») — тот же
+        -- Derma_DrawBackgroundBlur, что рисует standard-меню под своими
+        -- попопами, + тонировка + лёгкий вертикальный градиент
+        if Derma_DrawBackgroundBlur then
+            Derma_DrawBackgroundBlur(s, s.animStart)
+        end
         local a = s.bgAlpha
         draw.RoundedBox(0, 0, 0, w, h, Color(4, 8, 14, math.floor(170 * a / 255 + 0.5)))
         for i = 0, 15 do
@@ -417,45 +425,60 @@ function Menu.Close()
     Menu.justClosedRT = RealTime()
 end
 
--- Настройки = СТАНДАРТНЫЙ диалог движка (вкладки Game/Клавиатура/Мышь/Аудио/
--- Видео/Голос/Legal — «почему нет вкладок стандартного меню»: были сами
--- лепим — снято, указание владельца 03.09). runGameUICommand/OpenOptionsDialog —
--- официальный путь (GMod wiki «RunGameUICommand»); our меню закрывается,
--- gameui намеренно остаётся видимым (suppressUntil) — стандартный стек
--- «настройки» живёт внутри gameui, гасить его нельзя.
-function Menu.OpenStandardSettings()
+-- Настройки/браузер/мастерская = СТАРОЕ: диалоги движка через gamemenucommand
+-- (wiki «RunGameUICommand»: команда принимается только в menu-состоянии).
+-- Вечер-10 по замечанию владельца: «украшать; функционал выводить на старые
+-- окна и настройки». Раньше: gameui_activate + команда в тот же кадр (не
+-- всякий раз принималась — «проблемы с настройками»), подавление our меню
+-- на фиксированные 30 секунд (истёкли — Takeover погасил живой диалог:
+-- «меню багнутое», ESC не в обратном порядке), внешняя URL для мастерской
+-- (подмена — снята). Теперь: команда стоит в очереди и исполняется, лишь
+-- движок реально показал gameui; пока сессия gameui открыта нами — перехват
+-- молчит; пользователь закрывает engine-UI сам, и порядок ESC = диалог →
+-- меню движка → игра.
+function Menu.OpenGameuiWith(cmd)
     Menu.Close()
-    Menu.justClosedRT = nil -- это не гонка ESC: gameui открыт нами — не трогать
-    Menu.suppressUntil = CurTime() + 30
-    if not gui.IsGameUIVisible() then
-        pcall(function() RunConsoleCommand("gameui_activate") end)
-    end
-    local ok = pcall(function() RunGameUICommand("OpenOptionsDialog") end)
-    if ok then return end
-    -- Совсем старый клиент без RunGameUICommand: остаёмся на стандартном
-    -- gameui — там «Настройки» работают испокон века.
+    Menu.justClosedRT = nil -- это не гонка ESC: gameui открыт нами
+    Menu.ownsGameui = true
+    Menu.pendingCmd = cmd
+    Menu.pendingTries = cmd and 0 or nil
     if not gui.IsGameUIVisible() then
         pcall(function() RunConsoleCommand("gameui_activate") end)
     end
 end
 
+function Menu.OpenStandardSettings()
+    Menu.OpenGameuiWith("OpenOptionsDialog")
+end
+
 ------------------------------------------------------------------ перехват ESC
 -- Движок открывает gameui по ESC без lua-хука; стандартный приём gamemode'ов —
--- поймать видимый gameui в тот же кадр, спрятать его (SP: снимает паузу) и
--- показать своё окно. Свои кнопки, сами зовущие gameui (вкладка «Сетевая
--- игра»), помечают окно подавленным через suppressUntil.
+-- поймать видимый gameui, спрятать его (SP: снимает паузу) и показать своё
+-- окно. Кнопки, сами зовущие gameui (настройки/браузер/мастерская), помечают
+-- сессию своей (ownsGameui) — в своей сессии движку не мешаем.
 hook.Add("Think", "GRMRPMenu_Takeover", function()
-    if IsValid(Menu.root) then return end
-    if Menu.justClosedRT and RealTime() - Menu.justClosedRT < 0.4 then
-        if gui.IsGameUIVisible() then gui.HideGameUI() end
-        return
-    end
-    if Menu.suppressUntil and CurTime() < Menu.suppressUntil then return end
     if gui.IsGameUIVisible() then
+        if IsValid(Menu.root) then return end
+        if Menu.justClosedRT and RealTime() - Menu.justClosedRT < 0.4 then
+            gui.HideGameUI()
+            return
+        end
+        if Menu.pendingCmd then
+            local ok = pcall(function() RunGameUICommand(Menu.pendingCmd) end)
+            Menu.pendingTries = (Menu.pendingTries or 0) + 1
+            if ok then Menu.pendingCmd = nil
+            elseif Menu.pendingTries > 10 then Menu.pendingCmd = nil end
+            return
+        end
+        if Menu.ownsGameui then return end
         gui.HideGameUI()
         Menu.Open()
+        return
+    end
+    if Menu.ownsGameui then
+        -- пользователь закрыл engine-UI: обратный порядок сыгран до конца,
+        -- перехват снова свободен
+        Menu.ownsGameui = false
+        Menu.pendingCmd = nil
     end
 end)
-
--- Q-меню (spawnmenu) ужимаем до инструментов? — нет: sandbox-наследие живёт,
--- но our menu не конфликтует: gameui подавлен, spawnmenu не трогаем.
