@@ -52,8 +52,12 @@ local function closeInput()
     GRMRPChat.INPUT_OPEN = false
 end
 
+local function chanNow()
+    return GRMRPChat.GetChannel and GRMRPChat.GetChannel(selChan)
+end
+
 local function setChannel(id)
-    if not GRMRPChat.GetChannel(id) then return end
+    if not (GRMRPChat.GetChannel and GRMRPChat.GetChannel(id)) then return end
     selChan = id
 end
 
@@ -103,8 +107,8 @@ local function build()
     more:DockMargin(3, 3, 0, 1)
     more:SetWide(70)
     more.Paint = function(p, w, h)
-        draw.SimpleText(GRMRPChat.GetChannel(selChan) and
-            ("в " .. GRMRPChat.GetChannel(selChan).title) or "",
+        local ch = chanNow()
+        draw.SimpleText(ch and ("в " .. ch.title) or "",
             "GRMRP_ChatChip", w / 2, 3, Color(132, 160, 178), TEXT_ALIGN_CENTER)
     end
     more.DoClick = function()
@@ -128,7 +132,7 @@ local function build()
         surface.SetDrawColor(16, 27, 42, 235)
         surface.DrawRect(0, 0, p:GetWide(), p:GetTall())
         p:DrawTextEntryText(Color(225, 238, 247), Color(48, 204, 255), Color(48, 204, 255))
-        local chan = GRMRPChat.GetChannel(selChan)
+        local chan = chanNow()
         if chan and #p:GetValue() == 0 then
             draw.SimpleText(chan.title .. ": скажите…", "GRMRP_Chat14", 4, 3,
                 Color(132, 160, 178, 160))
@@ -140,7 +144,7 @@ local function build()
         p:SetText("")
         if #v == 0 then closeInput() return end
         if v:sub(1, 1) ~= "/" and selChan ~= "ic" then
-            local chan = GRMRPChat.GetChannel(selChan)
+            local chan = chanNow()
             if chan and chan.cmd then v = "/" .. chan.cmd .. " " .. v end
         end
         send(v)
@@ -179,6 +183,15 @@ local function build()
 end
 
 function GRMRPChat.OpenInput()
+    if not (GRMRPChat.GetChannel and GRMRPChat.Sanitize) then
+        -- ядро не загрузилось (битый install/ошибка файла) —Say тихо, но один раз
+        -- в консоль: без ядра ввод рисовать нельзя, и молчание тут хуже ошибки.
+        if not GRMRPChat._warned then
+            GRMRPChat._warned = true
+            GRMRP.ErrorNoHalt("чат: ядро не загружено — ввод отключён")
+        end
+        return
+    end
     if not IsValid(frame) then build() end
     frame:Show()
     frame:SetPos(16, ScrH() - frame:GetTall() - 16)

@@ -1,5 +1,20 @@
 # CHANGELOG — история изменений
 
+## 2026-09-03 (ночь-2) — вендорный EasyChat ВЫРЕЗАН (указание владельца)
+
+«чат из easychat надо вырезать и свой нормальный сделать»: удалены
+`lua/easychat/` (50 файлов, ~16.3k строк вендора), `lua/autorun/easychat_init.lua`,
+мосты `zz_grm_easychat_cmds.lua` / `zz_easychat_grm_fix.lua` /
+`zz_grm_chathud_lift.lua` и потерявший смысл `sim_easychat_unknown_cmd`.
+Все 9 обращений модулей аддона к EasyChat были под `if EasyChat and` с
+цепочками резерва (GRM_RPChat net → ChatPrint) — удаление безопасно,
+проверено грепом. Чат: режим — свой core.chat (+защита ввода от незагруженного
+ядра: один ErrorNoHalt вместо покадрового спама, урок смешанной установки —
+ошибка `cl_grmrp_chat:106 GetChannel nil` означала старый core на клиенте);
+песочница с аддоном — sh_grm_rp_chat v1.1. Чеклист 7.4 п.3 закрыт, §4.21
+помечен историческим. Гейты: suite = baseline (33+1 удалённого), стиль OK,
+43/43 + 28/28.
+
 ## 2026-09-03 (ночь) — goto-фикс ядра + GRM-меню паузы (замена gameui)
 
 Третий смоук владельца: `sh_grmrp_chat_core.lua:30 '=' expected near
