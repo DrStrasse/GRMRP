@@ -11,6 +11,10 @@ if SERVER then return end
 
 GRMRPMenu = GRMRPMenu or {}
 local Menu = GRMRPMenu
+-- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
+-- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
+-- уже жгли дважды; теперь опознание — один взгляд).
+Menu.BuildStamp = 'вечер-5 (03.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -177,7 +181,9 @@ function Menu.Open()
         draw.RoundedBox(8, bx, by, bw, bh + 26, Color(COL.panel.r, COL.panel.g, COL.panel.b, math.floor(230 * a / 255 + 0.5)))
         draw.SimpleText("GRM", "GRMRP_MenuBrand", bx + 18, by - 52, COL.accent)
         draw.SimpleText("RP", "GRMRP_MenuBrand", bx + 78, by - 52, COL.text)
-        draw.SimpleText("меню паузы · v" .. (GRMRP and GRMRP.VERSION or "?"), "GRMRP_MenuDim", bx + 18, by - 18, COL.dim)
+        draw.SimpleText("меню паузы · v" .. (GRMRP and GRMRP.VERSION or "?") ..
+            " · сборка " .. (Menu.BuildStamp or "∅ СТАРАЯ, перерапакуйте grmrp целиком"),
+            "GRMRP_MenuDim", bx + 18, by - 18, COL.dim)
         draw.SimpleText("ESC — закрыть", "GRMRP_MenuDim", w - 130, h - 30, COL.dim)
     end
 
