@@ -9,6 +9,8 @@
   grm_fix_hud_tab_currency.zip — точечный фикс HUD/TAB/валюты
   grm_textscreens.zip   — 3D2D Textscreens (отдельная папка в addons/)
   grm_addon_studio.zip  — Студия аддона (отдельный аддон, addons/grm_addon_studio/)
+  grmrp_gamemode.zip    — игровой режим (gamemodes/grmrp/**, распаковка в
+                          garrysmod/gamemodes/; НЕ входит в аддон-архивы)
 
 Запуск: python3 tools/build_dist.py
 """
@@ -150,6 +152,28 @@ PRONE_ADDON_JSON = """{
 """
 
 
+def build_gamemode(name, folder, prefix=""):
+    """Игровой режим gamemodes/<folder> — распаковать в garrysmod/gamemodes/."""
+    base = os.path.join(ROOT, "gamemodes", folder)
+    if not os.path.isdir(base):
+        print("  пропуск (нет папки): gamemodes/%s" % folder)
+        return
+    files = []
+    for root, dirs, names in os.walk(base):
+        dirs[:] = [d for d in dirs if d not in (".git", ".github")]
+        for fn in names:
+            full = os.path.join(root, fn)
+            files.append(os.path.relpath(full, base))
+    files.sort()
+    path = os.path.join(DIST, name)
+    tmp = path + ".tmp"
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
+        for rel in files:
+            z.write(os.path.join(base, rel), prefix + rel)
+    shutil.move(tmp, path)
+    print("%-34s %4d файлов, %8.1f КБ" % (name, len(files), os.path.getsize(path) / 1024.0))
+
+
 def pack_system_prone():
     """Prone Mod — отдельный аддон из SYSTEM PRONE.zip, не смешиваем с lua/ GRM."""
     src = os.path.join(ROOT, "SYSTEM PRONE.zip")
@@ -192,6 +216,9 @@ def main():
     build_addon("grm_textscreens.zip", "grm_textscreens", prefix="grm_textscreens/")
     # Студия аддона: отдельный аддон (в lua/ её нет — см. addons/grm_addon_studio)
     build_addon("grm_addon_studio.zip", "grm_addon_studio", prefix="grm_addon_studio/")
+    # Игровой режим: отдельный архив (указание владельца 03.09 — ссылка на
+    # gamemode в каждом финале; аддон-dist не затрагивает)
+    build_gamemode("grmrp_gamemode.zip", "grmrp", prefix="grmrp/")
     pack_system_prone()
 
 

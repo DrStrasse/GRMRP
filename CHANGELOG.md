@@ -1,5 +1,14 @@
 # CHANGELOG — история изменений
 
+## 2026-09-03 (вечер-3) — dist/grmrp_gamemode.zip: постоянная ссылка на gamemode
+
+Указание владельца: «нужна всегда ссылка на gamemode». tools/build_dist.py
+получил build_gamemode(): gamemodes/grmrp/** → dist/grmrp_gamemode.zip
+(9 файлов, ~17 КБ; распаковка в garrysmod/gamemodes/, корень архива —
+«grmrp/»). Указания I.4/I.5 обновлены: пересобираются grm_full_code.zip И
+grmrp_gamemode.zip, в финале каждого запроса — обе ссылки; прежнее
+«не собирать» отменено. 7.4 п.5, README — синхронно.
+
 ## 2026-09-03 (вечер-2) — GRMRP: Enabled-тумблер переехал в shared (спам-фикс)
 
 Второй смоук: `cl_init.lua:42 attempt to call field 'Enabled' (a nil value)`
