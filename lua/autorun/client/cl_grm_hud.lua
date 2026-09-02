@@ -6,7 +6,13 @@ local function grmBootStart(id, tier, fn)
 end
 
 --[[--------------------------------------------------------------------
-    GRM HUD v10.6 — Полноценный HUD для Sandbox
+    GRM HUD v10.7 — Полноценный HUD для Sandbox
+    v10.7: деньги переехали в ДВЕ НИЖНИЕ КАССЕТЫ «СОСТОЯНИЯ» (контракт
+           sim_hud_bars, ожидавший с вечера-8): верхний левый угол занят
+           подсказкой инструмента — движок рисует tool-HUD поверх попопов,
+           и «НАЛИЧНЫЕ/СЧЁТ» под ним терялись (владелец, вечер-10: «деньги
+           не отражает, где наличка и счёт?»). Кассеты всегда в панели —
+           перекрыть нечем.
     v10.6: селектор — «листать невозможно» (владелец 03.09 вечер-9): обход
            слотов был зашит в 1..6, а когда our обход не мог сдвинуться,
            бинд всё равно глотался (return true) — колесо молчало целиком.
@@ -614,7 +620,7 @@ local function DrawMainHUD()
         and ((GRM.Format and GRM.Format(math.Round(anim.bank))) or ("$" .. string.Comma(math.Round(anim.bank))))
         or "—"
 
-    local hx, hy, hw, hh = 16, 16, 356, 112
+    local hx, hy, hw, hh = 16, 16, 356, 72
     draw.RoundedBox(8, hx, hy, hw, hh, Color(8, 14, 23, 150))
     surface.SetDrawColor(cfg.lineColor.r, cfg.lineColor.g, cfg.lineColor.b, 85)
     surface.DrawOutlinedRect(hx, hy, hw, hh, 1)
@@ -647,11 +653,6 @@ local function DrawMainHUD()
     draw.SimpleText("ID: " .. tostring(cid), "GRM_HUD_Label", hx + 64, hy + 50,
         cfg.labelColor, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 
-    draw.SimpleText("НАЛИЧНЫЕ", "GRM_HUD_Label", hx + 12, hy + 70, cfg.labelColor, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-    draw.SimpleText(cashTxt, "GRM_HUD_Money", hx + 12, hy + 90, cfg.moneyColor, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-    draw.SimpleText("СЧЁТ", "GRM_HUD_Label", hx + hw - 12, hy + 70, cfg.labelColor, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-    draw.SimpleText(bankTxt, "GRM_HUD_Money", hx + hw - 12, hy + 90, cfg.bankColor or cfg.moneyColor, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
-
     -- Реальное время: отдельная плашка в правом верхнем углу.
     -- Источник общий с таблистой (GRM.Time) — секунды/минуты совпадают.
     do
@@ -677,7 +678,8 @@ local function DrawMainHUD()
     local pw = 320
     local pad, rowH, gap = 10, 24, 4
     local headerH = 24
-    local ph = headerH + pad + #rows * (rowH + gap) + pad - gap
+    local moneyH = 40 -- кассеты финансов (нижняя строка панели, sim_hud_bars)
+    local ph = headerH + pad + #rows * (rowH + gap) + moneyH + pad - gap
     ph = math.min(ph, sh - 48)
     local px, py = 16, math.max(16, sh - 28 - ph)
 
@@ -706,6 +708,23 @@ local function DrawMainHUD()
         draw.SimpleText(row.text, "GRM_HUD_Value", x + w - 8, y + rowH / 2, cfg.textColor,
             TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
         y = y + rowH + gap
+    end
+
+    -- Вечер-11: финансы — две нижние кассеты «СОСТОЯНИЯ». Наличку видно
+    -- даже с зажатой «мышкой» в руках: панель снизу перекрыть нечем.
+    y = y - gap
+    local cellW = math.floor((w - gap) / 2)
+    for i, cell in ipairs({
+        { label = "НАЛИЧНЫЕ", value = cashTxt, color = cfg.moneyColor },
+        { label = "СЧЁТ", value = bankTxt, color = cfg.bankColor or cfg.moneyColor },
+    }) do
+        local cx = x + (i - 1) * (cellW + gap)
+        draw.RoundedBox(4, cx, y, cellW, moneyH - 6, Color(17, 29, 45, 150))
+        draw.RoundedBox(2, cx, y, 3, moneyH - 6, cell.color)
+        draw.SimpleText(cell.label, "GRM_HUD_Label", cx + 10, y + (moneyH - 6) / 2 - 7,
+            cfg.labelColor, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+        draw.SimpleText(cell.value, "GRM_HUD_Money", cx + cellW - 10, y + (moneyH - 6) / 2 + 7,
+            cell.color, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
     end
 
     -- ── патроны: отдельный блок справа снизу ────────────────────────
@@ -850,4 +869,4 @@ grmBootStart("GRM_HUD_Welcome", "late", function()
     end)
 end)
 
-print("[GRM] HUD v10.6 загружен")
+print("[GRM] HUD v10.7 загружен")

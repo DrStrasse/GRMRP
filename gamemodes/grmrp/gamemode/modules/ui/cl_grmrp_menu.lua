@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-10 (03.09)'
+Menu.BuildStamp = 'вечер-11 (03.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -256,9 +256,9 @@ function Menu.Open()
     -- раздвинуты; раньше модель упиралась в потолок 120px на малых экранах.
     local rightW = math.Clamp(scrW * 0.30, 320, 430)
     local cardH = math.Clamp(scrH - 150, 420, 700)
-    local modelH = math.Clamp(cardH - 62 - 196, 240, 440)
+    local modelH = math.Clamp(cardH - 62 - 224, 240, 440)
     local statsBase = 62 + modelH + 12
-    cardH = statsBase + 6 * 28 + 18
+    cardH = statsBase + 7 * 28 + 18
 
     local card = newCard(root, rightW, cardH)
     card:SetPos(scrW - rightW - 16, 76)
@@ -360,9 +360,10 @@ function Menu.Open()
     local vHP = statRow(card, statsBase, "Здоровье")
     local vAR = statRow(card, statsBase + 28, "Броня")
     local vMoney = statRow(card, statsBase + 56, "Деньги")
-    local vJob = statRow(card, statsBase + 84, "Работа")
-    local vTime = statRow(card, statsBase + 112, "В игре")
-    local vMap = statRow(card, statsBase + 140, "Карта")
+    local vBank = statRow(card, statsBase + 84, "На счёту")
+    local vJob = statRow(card, statsBase + 112, "Работа")
+    local vTime = statRow(card, statsBase + 140, "В игре")
+    local vMap = statRow(card, statsBase + 168, "Карта")
 
     card.nextStats = 0
     card.UpdateStats = function()
@@ -376,8 +377,29 @@ function Menu.Open()
         local mxHP = pl.GetMaxHealth and pl:GetMaxHealth() or 100
         vHP:SetText(tostring(math.max(0, pl:Health())) .. " / " .. tostring(mxHP))
         vAR:SetText(tostring(math.max(0, pl:Armor())))
-        vMoney:SetText(GRMRP.Economy and GRMRP.Economy.GetBalance
-            and tostring(GRMRP.Economy.GetBalance(pl)) or "—")
+        -- Вечер-11 («деньги не отражает»): экономика живёт в аддоне, не в
+        -- gamemode — обращение к GRMRP.Economy давало «—» навечно. Цепочка:
+        -- движковая экономика режима → синхронизированный аддоном баланс
+        -- (grm_balance/GRM_Bank_Sync) → «—» только если данных правда нет.
+        local mb = "—"
+        do
+            local eco = GRMRP.Economy and GRMRP.Economy.GetBalance
+            if isfunction(eco) then
+                local okb, v = pcall(eco, pl)
+                if okb and v ~= nil then mb = tostring(v) end
+            end
+        end
+        if mb == "—" and GRM and GRM.PlayerBalance ~= nil then
+            mb = (GRM.Format and GRM.Format(math.Round(GRM.PlayerBalance)))
+                or ("$" .. string.Comma(math.Round(GRM.PlayerBalance)))
+        end
+        vMoney:SetText(mb)
+        local bnk = "—"
+        if GRM and GRM.PlayerBank ~= nil then
+            bnk = (GRM.Format and GRM.Format(math.Round(GRM.PlayerBank)))
+                or ("$" .. string.Comma(math.Round(GRM.PlayerBank)))
+        end
+        vBank:SetText(bnk)
         vJob:SetText(GRMRP.Jobs and GRMRP.Jobs.GetJobName
             and tostring(GRMRP.Jobs.GetJobName(pl)) or "—")
         vTime:SetText(fmtTime(CurTime() - (GRMRP.JoinTime or CurTime())))

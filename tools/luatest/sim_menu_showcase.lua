@@ -59,7 +59,14 @@ check("смена модели — полная пересъёмка", has("appl
 print("\n=== 5. РАЗМЕР И ОТТИСК ===")
 check("окно модели не меньше 240px", has("240, 440"))
 check("карточка раздвинута до 430px", has("320, 430"))
-check("оттиск сборки вечер-10", has("вечер-10 (03.09)"))
+check("оттиск сборки вечер-11", has("вечер-11 (03.09)"))
+
+print("\n=== 3. ДЕНЬГИ: КАРТОЧКА + КАССЕТЫ (вечер-11) ===")
+check("карточка: «На счёту» рядом с «Деньги»", has('statRow(card, statsBase + 84, "На счёту")'))
+check("карточка: баланс с фолбеком на аддонский GRM.PlayerBalance",
+    has("GRM.PlayerBalance"))
+check("карточка: GRMRP.Economy через pcall (нет — не креш)", has("pcall(eco, pl)"))
+check("семь строк статов в карточке", has("statsBase + 7 * 28 + 18"))
 
 print("\n=== 2. СТАРЫЕ ОКНА, БЛЮР, ESC (вечер-10) ===")
 check("блюр кадра за меню (Derma_DrawBackgroundBlur)", has("Derma_DrawBackgroundBlur(s, s.animStart)"))
