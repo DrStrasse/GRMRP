@@ -66,6 +66,9 @@ end
 -- выключенном модуле (чтобы чат не «исчез молча»).
 function GM:PlayerSay(ply, text, teamChat, isDead)
     if GRMRPChat and GRMRPChat.Enabled and GRMRPChat.Enabled() then
+        -- ProcessLine сам дёргает цепочку PlayerSay ради внешних команд
+        -- модулей (вечер-12) — вложенный вызов methods глушим точкой входа
+        if GRMRPChat._inExternal then return "" end
         GRMRPChat.OnPlayerSay(ply, text, teamChat, isDead)
         return ""
     end

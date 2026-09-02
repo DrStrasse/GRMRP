@@ -21,7 +21,8 @@ GRMRPChat = GRMRPChat or {}
 GRMRPChat.lines = GRMRPChat.lines or {}
 GRMRPChat.INPUT_OPEN = false
 
-local MAX_LINES = 300 -- рисуем 18, история (окно) видит все 300
+local MAX_LINES = 300 -- рисуем 18; архив истории — отдельный, свой лимит
+local MAX_ARCHIVE = 400
 local TTL, FADE = 45, 4          -- сек; fade — последние FADE секунд жизни
 
 -- forward: push зовёт ensureFeed (создать ленту до первой строки) — без
@@ -30,12 +31,23 @@ local TTL, FADE = 45, 4          -- сек; fade — последние FADE с�
 local feedLayout, ensureFeed
 
 local function push(chan, name, text, t, mine)
-    table.insert(GRMRPChat.lines, {
-        chan = chan, name = name, text = text, t = t, mine = mine and true or false
-    })
+    local entry = {
+        chan = chan, name = name, text = text, t = t, mine = mine and true or false,
+        wallT = os.time(), -- вечер-12: стенное время для истории/хранения
+    }
+    table.insert(GRMRPChat.lines, entry)
     if #GRMRPChat.lines > MAX_LINES then
         table.remove(GRMRPChat.lines, 1)
     end
+    -- Вечер-12 («хранение»): лента — витрина (TTL-подметание её честно
+    -- убивает), история — архив. Архив TTL не подметается, живёт дольше
+    -- ленты и доживает до записи на диск (низ этого файла).
+    GRMRPChat.archive = GRMRPChat.archive or {}
+    table.insert(GRMRPChat.archive, entry)
+    if #GRMRPChat.archive > MAX_ARCHIVE then
+        table.remove(GRMRPChat.archive, 1)
+    end
+    GRMRPChat._histDirty = true
     ensureFeed() -- лента живёт панелью: создана до первой строки
 end
 
@@ -85,7 +97,7 @@ function GRMRPChat.Diagnose()
     local n = #(GRMRPChat.lines or {})
     local hold = GRMRPChat.INPUT_OPEN and "ввод открыт" or "ввод закрыт"
     local bits = {
-        "чат вечер-10 (03.09), лента = панель",
+        "чат вечер-12 (03.09), лента = панель · SendText для модулей",
         "лента: " .. n .. " строк",
         "часы: CurTime (RealTime-дефект ленты исправлен)",
         "enable=" .. (cv and tostring(cv:GetBool()) or "cvar нет → вкл"),
@@ -220,4 +232,65 @@ end
 
 function GRMRPChat.EnsureFeed()
     return ensureFeed()
+end
+
+--[[ Вечер-12: ХРАНЕНИЕ истории. Архив пишется в DATA раз в 45 секунд
+     (только когда менялся) и читается на старте — история пережила
+     рестарт клиента. Нет file/util — молча живём в RAM: окно истории
+     работоспособность от этого не теряет. ]]
+local HIST_FILE = "grm_chat/archive.txt"
+
+local function saveArchive()
+    if not (GRMRPChat.archive and #GRMRPChat.archive > 0) then return end
+    local out = {}
+    local from = math.max(1, #GRMRPChat.archive - 120 + 1)
+    for i = from, #GRMRPChat.archive do
+        local ln = GRMRPChat.archive[i]
+        out[#out + 1] = {
+            w = ln.wallT or 0,
+            c = tostring(ln.chan and ln.chan.title or "·"),
+            n = tostring(ln.name or ""),
+            x = tostring(ln.text or ""),
+        }
+    end
+    pcall(function()
+        if file and file.CreateDir and file.Write and util and util.TableToJSON then
+            file.CreateDir("grm_chat")
+            file.Write(HIST_FILE, util.TableToJSON(out))
+            GRMRPChat._histDirty = false
+        end
+    end)
+end
+GRMRPChat.SaveArchive = saveArchive
+
+local function loadArchive()
+    pcall(function()
+        if not (file and file.Exists and util and util.JSONToTable) then return end
+        if not file.Exists(HIST_FILE, "DATA") then return end
+        local raw = file.Read(HIST_FILE, "DATA")
+        if not isstring(raw) or #raw < 2 then return end
+        local tbl = util.JSONToTable(raw)
+        if not istable(tbl) then return end
+        GRMRPChat.archive = GRMRPChat.archive or {}
+        for i = 1, #tbl do
+            local e = tbl[i]
+            if istable(e) and isstring(e.x) then
+                table.insert(GRMRPChat.archive, {
+                    chan = { title = tostring(e.c or "·"), color = { r = 132, g = 160, b = 178 } },
+                    name = tostring(e.n or ""), text = tostring(e.x),
+                    wallT = tonumber(e.w) or 0,
+                })
+            end
+        end
+        local over = #GRMRPChat.archive - MAX_ARCHIVE
+        for i = 1, over do table.remove(GRMRPChat.archive, 1) end
+        -- восстановленные строки в ЛЕНТУ не попадают: лента остаётся живой
+    end)
+end
+loadArchive()
+
+if timer and timer.Create then
+    timer.Create("GRMRPChat_HistSave", 45, 0, function()
+        if GRMRPChat._histDirty then saveArchive() end
+    end)
 end

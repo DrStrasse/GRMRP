@@ -6,8 +6,11 @@ local function grmBootStart(id, tier, fn)
 end
 
 --[[--------------------------------------------------------------------
-    GRM HUD v10.7 — Полноценный HUD для Sandbox
-    v10.7: деньги переехали в ДВЕ НИЖНИЕ КАССЕТЫ «СОСТОЯНИЯ» (контракт
+    GRM HUD v10.8 — Полноценный HUD для Sandbox
+    v10.8: grm_money_diag — самодиагностика денежного трека (владелец
+           вечер-11: «деньги не отражает»: данные шли, вопрос был в слое
+           отрисовки — теперь видно и то, и другое: баланс, счёт, давность
+           последнего grm_balance).    v10.7: деньги переехали в ДВЕ НИЖНИЕ КАССЕТЫ «СОСТОЯНИЯ» (контракт
            sim_hud_bars, ожидавший с вечера-8): верхний левый угол занят
            подсказкой инструмента — движок рисует tool-HUD поверх попопов,
            и «НАЛИЧНЫЕ/СЧЁТ» под ним терялись (владелец, вечер-10: «деньги
@@ -183,9 +186,25 @@ if not GRM.HUD._balRcv then
     net.Receive("grm_balance", function()
         local bal = net.ReadInt(32)
         GRM.PlayerBalance = bal
+        GRM.HUD._balT = CurTime() -- штамп получения — для grm_money_diag
         -- Фан-аут для Tab Menu (Код 47) и других модулей: HUD грузится
         -- последним и перекрывает их ресиверы, поэтому рассылаем хук.
         hook.Run("GRM_BalanceUpdated", bal)
+    end)
+end
+
+-- Вечер-12: самодиагностика денег (по образцу grm_sel_diag): отличает
+-- «данные не приходят» от «данные есть, но их негде увидеть».
+if concommand and concommand.Add then
+    concommand.Add("grm_money_diag", function()
+        local lp = LocalPlayer()
+        print(string.format("[GRM money] v10.8 наличка=%s · счёт=%s · NW2=%s · net %s",
+            tostring(GRM.PlayerBalance), tostring(GRM.PlayerBank),
+            IsValid(lp) and tostring(lp:GetNW2Int("GRM_Money", -1)) or "—",
+            GRM.HUD._balT and string.format("%.1fс назад", CurTime() - GRM.HUD._balT) or "НИКОГДА"))
+        if GRM.HUD._balT == nil then
+            print("[GRM money] ВЫВОД: grm_balance ни разу не приходил — виновата синхронизация экономики (сервер), а не HUD")
+        end
     end)
 end
 
@@ -869,4 +888,4 @@ grmBootStart("GRM_HUD_Welcome", "late", function()
     end)
 end)
 
-print("[GRM] HUD v10.7 загружен")
+print("[GRM] HUD v10.8 загружен")

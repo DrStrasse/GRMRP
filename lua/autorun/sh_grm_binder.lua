@@ -1,5 +1,11 @@
 --[[--------------------------------------------------------------------
-    GRM Binder v2.0.0 — бинды-последовательности для отыгровки
+    GRM Binder v2.2.0 — бинды-последовательности для отыгровки
+    v2.2.0 (вечер-12): ДВУСТОРОНЯЯ синхронизация с чатом режима — строки
+           уходят через GRMRPChat.SendText (локальное эхо автора, форматер
+           /me /do, история ввода — как у живого набора); свои команды
+           зарегистрированы в реестре чата («/binder» открывается и из
+           окна GRM-чата); словарь отыгровок сверяется с реестром ядра;
+           EasyChat-ветка вырезана (указание владельца).
 
     Команды: /binder, /autobinder, /rpbinder, /бинды (и консольная grm_binder)
 
@@ -52,6 +58,17 @@ if SERVER then
         ["/бинды"] = true, ["/биндер"] = true,
     }
 
+    local function svRegisterToChat()
+        if GRMRPChat and GRMRPChat.RegisterExternalChatCommand then
+            for cmd in pairs(CMDS) do GRMRPChat.RegisterExternalChatCommand(cmd) end
+        elseif GRMChat and GRMChat.RegisterExternalChatCommand then
+            for cmd in pairs(CMDS) do GRMChat.RegisterExternalChatCommand(cmd) end
+        else
+            timer.Simple(0.5, svRegisterToChat)
+        end
+    end
+    svRegisterToChat()
+
     local function handleBinderChat(ply, text)
         if not IsValid(ply) then return false end
         local cmd = string.lower(string.Trim(tostring(text or "")))
@@ -78,7 +95,24 @@ end
 GRM = GRM or {}
 GRM.Binder = GRM.Binder or {}
 local BD = GRM.Binder
-BD.Version = "2.1.0"
+BD.Version = "2.2.0"
+
+-- Вечер-12: заявляем свои команды реестру чата (gamemode-модуль GRMRPChat
+-- или аддонский GRMChat) — по ним чат маршрутизирует ввод и не считает их
+-- «неизвестными». Отложенно: gamemode грузится после addon-авторана.
+BD.ChatCommands = { "/binder", "!binder", "/autobinder", "/rpbinder",
+    "/бинды", "/биндер" }
+local function registerToChat()
+    local done
+    for _, ns in ipairs({ GRMRPChat, GRMChat }) do
+        if ns and ns.RegisterExternalChatCommand then
+            for _, c in ipairs(BD.ChatCommands) do ns.RegisterExternalChatCommand(c) end
+            done = true
+        end
+    end
+    if not done then timer.Simple(0.5, registerToChat) end
+end
+registerToChat()
 
 BD.MaxSlots      = 40
 BD.DefaultSlots  = 20
@@ -413,18 +447,18 @@ end
 local lastRun = {}
 BD.Running = BD.Running or {}   -- id таймеров активных сцен
 
--- Движок обрезает консольную команду say примерно на 127 байтах, поэтому
--- длинные /me /do /it через RunConsoleCommand("say", ...) приходили урезанными,
--- хотя тот же текст, набранный руками в окне EasyChat, уходит целиком
--- (EasyChat шлёт сообщение своей net-строкой, лимит easychat_max_chars = 3000).
--- Отправляем через EasyChat, когда он есть; иначе режем по словам на куски,
--- влезающие в say, и сохраняем ведущую команду (/me, /do, /dep …) в каждом куске.
+-- Движок обрезает консольную команду say примерно на 127 байтах. Полноценная
+-- длинная строка режима — net-канал GRM-чата (SendText; сервер физрежет 1024,
+-- клиент 512): через него шаг уходит целиком. EasyChat вырезан из сборки
+-- совсем (указание владельца, вечер-12) — его 3000-символьный лимит больше
+-- нигде не опора. Без чата — режем по словам на куски, влезающие в say,
+-- ведущая команда (/me, /do, /dep …) сохраняется в каждом куске.
 BD.SayLimit = 120   -- запас от движкового 127 (байты, не символы)
 
 function BD.ChatLimit()
-    local cv = GetConVar and GetConVar("easychat_max_chars")
-    if EasyChat and isfunction(EasyChat.SendGlobalMessage) then
-        return cv and math.max(50, cv:GetInt()) or 3000
+    if (GRMRPChat and isfunction(GRMRPChat.SendText))
+        or (GRMChat and isfunction(GRMChat.SendText)) then
+        return 500 -- под клиентским clamp 512: строка не «схлопнется»
     end
     return BD.SayLimit
 end
@@ -467,24 +501,60 @@ function BD.SplitChat(text, limit)
 end
 
 local function sendChat(text)
-    if EasyChat and isfunction(EasyChat.SendGlobalMessage) then
-        EasyChat.SendGlobalMessage(text, false, false)
-        return 1
+    -- Вечер-12: приоритет — чат режима (GRMRPChat/GRMChat.SendText): тот же
+    -- путь, что Enter в окне (локальное эхо автора — сервер автору НЕ
+    -- ретранслирует; форматер /me /do; история ввода; антифлуд-лесенка).
+    -- EasyChat вырезан полностью (указание владельца): ветки к нему нет.
+    local ns = (GRMRPChat and isfunction(GRMRPChat.SendText) and GRMRPChat)
+        or (GRMChat and isfunction(GRMChat.SendText) and GRMChat)
+    local function put(part)
+        if ns then ns.SendText(part)
+        else RunConsoleCommand("say", part) end
     end
-    local parts = BD.SplitChat(text, BD.SayLimit)
+    -- С чатом лимит = ChatLimit (500 байт < клиентского clamp 512): целая
+    -- строка идёт через net-канал без порезки; без чата — SayLimit с
+    -- запасом от движкового 127 на say.
+    local parts = BD.SplitChat(text, ns and BD.ChatLimit() or BD.SayLimit)
     for i, part in ipairs(parts) do
         if i == 1 then
-            RunConsoleCommand("say", part)
+            put(part)
         else
             local tname = ("GRM_BinderSay_%d_%f"):format(i, RealTime())
             BD.Running[tname] = true
             timer.Create(tname, BD.MinChatGap * (i - 1), 1, function()
                 BD.Running[tname] = nil
-                RunConsoleCommand("say", part)
+                put(part)
             end)
         end
     end
     return #parts
+end
+
+-- Вечер-12: «синхронизация с /me и другими командами» — словарь отыгровок
+-- и каналов берётся у ядра чата (RPCommandNames/Channels/ExternalCommands),
+-- своего домысла нет. Неизвестное подсвечивается предупреждением при
+-- прогоне, НО не блокируется: чат может быть выключен cvar'ом.
+function BD.UnknownChatCommand(text)
+    text = string.Trim(tostring(text or ""))
+    local cmd = string.match(text, "^/([%w_]+)")
+    if not cmd then return false end
+    local ns = (GRMRPChat and GRMRPChat.RP) and GRMRPChat or (GRMChat and GRMChat.RP and GRMChat)
+    if not ns then return false end
+    cmd = string.lower(cmd)
+    if ns.RP[cmd] then return false end
+    for _, chan in pairs(ns.Channels or {}) do
+        if chan.cmd and string.lower(chan.cmd) == cmd then return false end
+        if chan.cmds then
+            for alias in pairs(chan.cmds) do
+                if string.lower(alias) == cmd then return false end
+            end
+        end
+    end
+    if cmd == "pm" then return false end
+    for c in pairs(ns.ExternalCommands or {}) do
+        if string.lower(c) == "/" .. cmd then return false end
+    end
+    return true
 end
 
 local function runStep(step)
@@ -496,6 +566,15 @@ local function runStep(step)
         if GRM.Social and GRM.Social.Request then GRM.Social.Request(text)
         else RunConsoleCommand("grm_social", text) end
     else
+        if BD.UnknownChatCommand(text) then
+            local ns = (GRMRPChat and GRMRPChat.AddSystem and GRMRPChat)
+                or (GRMChat and GRMChat.AddSystem and GRMChat)
+            if ns then
+                ns.AddSystem("биндер: чат не знает команду «"
+                    .. tostring(string.match(text, "^/[%w_]+"))
+                    .. "» — шаг ушёл как есть")
+            end
+        end
         sendChat(text)
     end
     return true
@@ -1151,7 +1230,7 @@ function BD.Open()
             "GRMBind_Small", 14, 14, C.dim, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
         draw.SimpleText("Пауза указывается ПЕРЕД шагом; между сообщениями в чат автоматически держится минимум " .. BD.MinChatGap .. " с, чтобы антифлуд не съел строки.",
             "GRMBind_Small", 14, 30, C.dim, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Длина строки: до " .. BD.ChatLimit() .. " символов за сообщение. Если EasyChat выключен, длинный текст сам разобьётся по словам на несколько сообщений.",
+        draw.SimpleText("Длина строки: до " .. BD.ChatLimit() .. " символов за сообщение. Длинный текст сам разобьётся по словам на несколько кусков (через чат режима — уходит целиком).",
             "GRMBind_Small", 14, 46, C.dim, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
     end
 

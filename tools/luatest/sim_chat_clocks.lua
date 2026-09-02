@@ -58,10 +58,10 @@ do
     check(pair[2] .. ": /chatdiag перехвачендо отправки", s2:find('"/chatdiag"', 1, true) ~= nil
         and s2:find(pair[2] .. ".Diagnose()", 1, true) ~= nil)
     end
-    check("баннер вечер-10 в режиме", read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua")
-        :find("сборка вечер-10 (03.09)", 1, true) ~= nil)
-    check("баннер вечер-10 в порту", read("lua/autorun/client/cl_08_grm_chat_input.lua")
-        :find("сборка вечер-10 (03.09)", 1, true) ~= nil)
+    check("баннер вечер-12 в режиме", read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua")
+        :find("сборка вечер-12 (03.09)", 1, true) ~= nil)
+    check("баннер вечер-12 в порту", read("lua/autorun/client/cl_08_grm_chat_input.lua")
+        :find("сборка вечер-12 (03.09)", 1, true) ~= nil)
     local hud1 = read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua")
     local hud2 = read("lua/autorun/client/cl_08_grm_chat_hud.lua")
     check("режим: Diagnose печатает в ленту через AddLine", hud1:find("function GRMRPChat.Diagnose", 1, true) ~= nil
@@ -86,7 +86,32 @@ for _, pair in ipairs({
     check(pair[2] .. ": акцент канала слева", s2:find("draw.RoundedBox(0, x - 8", 1, true) ~= nil)
     check(pair[2] .. ": старой гадалки «130 + tw» нет", s2:find("130 + tw", 1, true) == nil)
     check(pair[2] .. ": ленты шире (900px)", s2:find("math.min(900, ScrW() - 32)", 1, true) ~= nil)
-    check(pair[2] .. ": Diagnose — вечер-10", s2:find("чат вечер-10 (03.09)", 1, true) ~= nil)
+    check(pair[2] .. ": Diagnose — вечер-12", s2:find("чат вечер-12 (03.09)", 1, true) ~= nil)
+end
+
+print("\n=== 6. ИСТОРИЯ/ХРАНЕНИЕ (вечер-12) ===")
+for _, pair in ipairs({
+    { "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua", "GRMRPChat" },
+    { "lua/autorun/client/cl_08_grm_chat_input.lua", "GRMChat" },
+}) do
+    local s2 = read(pair[1])
+    check(pair[1] .. ": история не зовёт фантомный :Close()",
+        s2:find("histPanel:Close()", 1, true) == nil and s2:find("win:Close()", 1, true) == nil)
+    check(pair[1] .. ": история через Remove", s2:find("histPanel:Remove()", 1, true) ~= nil)
+    check(pair[1] .. ": источник истории — архив, не кормовая лента",
+        s2:find(pair[2] .. ".archive or " .. pair[2] .. ".lines", 1, true) ~= nil)
+    check(pair[1] .. ": живое пополнение окна", s2:find("_HistRefr", 1, true) ~= nil)
+end
+for _, pair in ipairs({
+    { "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua", "GRMRPChat" },
+    { "lua/autorun/client/cl_08_grm_chat_hud.lua", "GRMChat" },
+}) do
+    local s2 = read(pair[1])
+    check(pair[1] .. ": push пишет архив", s2:find(pair[2] .. ".archive, entry", 1, true) ~= nil)
+    check(pair[1] .. ": строки несут wallT", s2:find("wallT = os.time()", 1, true) ~= nil)
+    check(pair[1] .. ": архив на диске (DATA)", s2:find("grm_chat/archive.txt", 1, true) ~= nil)
+    check(pair[1] .. ": чтение на старте", s2:find("loadArchive()", 1, true) ~= nil)
+    check(pair[1] .. ": запись отложенная (dirty-флаг)", s2:find("_histDirty", 1, true) ~= nil)
 end
 
 print(("\nCHAT CLOCKS: %d/%d, провалов: %d"):format(total - fails, total, fails))

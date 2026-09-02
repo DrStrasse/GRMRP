@@ -175,6 +175,29 @@ GRMRPChat.RegisterChannel("pm", {
 
 -- RP-формат: один источник строк для серверной рассылки и клиентского
 -- превью (предпоказ = то же самое, что увидят остальные; честность §5.1.3).
+-- Вечер-12 (чат ↔ модули, «чат должен взаимодействовать с биндером»):
+-- реестр slash-команд, которые принадлежат АДОНАМ (биндер и др.). Чат их не
+-- парсит и не казнит как «неизвестные»: серверный ProcessLine отдаёт такие
+-- строки общей цепочке PlayerSay, а клиентский ввод ведёт их через движковый
+-- say — перехватчики аддонов срабатывают и из нашего окна ввода.
+GRMRPChat.ExternalCommands = GRMRPChat.ExternalCommands or {}
+function GRMRPChat.RegisterExternalChatCommand(name)
+    name = string.lower(tostring(name or ""))
+    if name == "" then return false end
+    if string.sub(name, 1, 1) ~= "/" then name = "/" .. name end
+    GRMRPChat.ExternalCommands[name] = true
+    return true
+end
+
+-- Единый словарь отыгровок наружу: биндер сверяет пресеты/шаги с НИМ, а не
+-- со своим домыслом («синхронизация с /me и другими командами», вечер-12).
+function GRMRPChat.RPCommandNames()
+    local out = {}
+    for k in pairs(GRMRPChat.RP or {}) do out[#out + 1] = "/" .. k end
+    table.sort(out)
+    return out
+end
+
 GRMRPChat.RP = {
     me = { chan = "me", fmt = function(n, b)
         return "* " .. n .. " " .. b

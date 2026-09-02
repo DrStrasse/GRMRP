@@ -19,9 +19,9 @@ local function has(src, n) return src:find(n, 1, true) ~= nil end
 local hud = read("lua/autorun/client/cl_grm_hud.lua")
 
 print("\n=== КОНТРАКТ ИСТОЧНИКА ===")
-check("версия 10.7 в шапке", has(hud, "GRM HUD v10.7"))
-check("приветствие v10.7", has(hud, "HUD v10.7 загружен"))
-check("принт v10.7", has(hud, '[GRM] HUD v10.7 загружен'))
+check("версия 10.8 в шапке", has(hud, "GRM HUD v10.8"))
+check("приветствие v10.8", has(hud, "HUD v10.8 загружен"))
+check("принт v10.8", has(hud, '[GRM] HUD v10.8 загружен'))
 check("обход слотов до 10 (MAXSLOT)", has(hud, "local MAXSLOT = 10"))
 check("6-слотовых обходов не осталось", not has(hud, "for offset = 1, 6 do"))
 check("нулевой ход — пас движку", has(hud, "пас движку"))

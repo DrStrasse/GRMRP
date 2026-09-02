@@ -27,6 +27,14 @@ local function commands()
     for _, chan in pairs(GRMRPChat.Channels or {}) do
         if chan.cmd then table.insert(out, "/" .. chan.cmd .. " ") end
     end
+    -- Вечер-12: общий словарь — RP-команды ядра и команды модулей (биндер)
+    -- живут в автодополнении наравне с каналами: чат и биндер видят одно и то же.
+    for _, c in ipairs(GRMRPChat.RPCommandNames and GRMRPChat.RPCommandNames() or {}) do
+        table.insert(out, c .. " ")
+    end
+    for c in pairs(GRMRPChat.ExternalCommands or {}) do
+        table.insert(out, c .. " ")
+    end
     table.sort(out)
     return out
 end
@@ -52,6 +60,21 @@ local function send(text)
     -- /it результат знает только сервер — там ждём настоящую строку
     -- (echo-флаг в RP-таблице, §5.1.3).
     local first = string.match(text, "^/([%w_]+)")
+    if first == nil then
+        -- кириллические алиасы (/бинды) вне %w_ — сверка префиксом по реестру
+        local low = string.lower(text)
+        for c in pairs(GRMRPChat.ExternalCommands or {}) do
+            if string.sub(low, 1, #c) == c then first = c:sub(2) break end
+        end
+    end
+    if first and GRMRPChat.ExternalCommands
+        and GRMRPChat.ExternalCommands["/" .. string.lower(first)] then
+        -- Вечер-12 (чат ↔ модули): чужие slash-команды идут ЧЕРЕЗ движковый
+        -- say — их обработчики живут в цепочке PlayerSay; наш net-канал
+        -- «съел» бы их как неизвестные («/binder» из ввода не открывал биндер).
+        RunConsoleCommand("say", text)
+        return
+    end
     local def = first and GRMRPChat.RP and GRMRPChat.RP[string.lower(first)]
     if not (def and def.echo) then
         GRMRPChat.AddSelfLine(text, selChan)
@@ -63,6 +86,12 @@ local function send(text)
     net.SendToServer()
 end
 
+-- Вечер-12: модули (биндер!) печатают отыгровки ЭТИМ путём. Сервер автору не
+-- ретранслирует («оптимистичное эхо», §5.4.3), поэтому без локального эха
+-- строки биндера в ленте/истории автора просто исчезали. SendText = тот же
+-- путь, что и Enter в окне: форматер RP, история ввода, канал выбора.
+GRMRPChat.SendText = send
+
 local function closeInput()
     if IsValid(frame) then frame:Hide() end
     GRMRPChat.INPUT_OPEN = false
@@ -73,7 +102,10 @@ local function chanNow()
 end
 
 local function toggleHistory()
-    if IsValid(histPanel) then histPanel:Close() return end
+    -- Вечер-12: у EditablePanel НЕТ метода :Close() (это DFrame-метод) —
+    -- открытие/закрытие истории крешало фантомным вызовом, ровно тот же
+    -- класс бага, что GetCanvas/SetReadOnly (проверено по dframe.lua).
+    if IsValid(histPanel) then histPanel:Remove() return end
     local win = vgui.Create("EditablePanel")
     histPanel = win
     -- вечер-10: «окно истории слишком мелкое» (владелец) — было 600x400
@@ -90,9 +122,10 @@ local function toggleHistory()
     win.OnRemove = function()
         GRMRPChat.HIST_OPEN = false
         histPanel = nil
+        if timer and timer.Remove then timer.Remove("GRMRPChat_HistRefr") end
     end
     win.OnKeyCodeTyped = function(_, code)
-        if code == KEY_ESCAPE then win:Close() end
+        if code == KEY_ESCAPE then win:Remove() end
     end
     local scroll = vgui.Create("DScrollPanel", win)
     scroll:SetPos(10, 28)
@@ -100,15 +133,17 @@ local function toggleHistory()
     local body = vgui.Create("DPanel", scroll)
     body:SetPaintBackground(false)
     body:Dock(TOP)
-    local y = 0
-    local lastLine = nil
-    local lines = GRMRPChat.lines or {}
-    local shift = RealTime() - CurTime()
-    for i = 1, #lines do
-        local ln = lines[i]
+    local state = { y = 0, n = 0 }
+
+    -- Вечер-12 («хранение/история»): источник — АРХИВ, а не кормовой буфер:
+    -- строки ленты подметаются TTL через ~49 с, «история» оказывалась самой
+    -- лентой. Архив живёт в cl_grmrp_chat_hud (push), пишется на диск и
+    -- несёт стенные метки времени (wallT) — корректные и после рестарта.
+    local function addLine(ln)
         local chan = ln.chan or { title = "·", color = { r = 200, g = 200, b = 200 } }
+        local wallT = tonumber(ln.wallT) or math.max(0, math.ceil((ln.t or 0) + RealTime() - CurTime()))
         local line = vgui.Create("DLabel", body)
-        line:SetText(os.date("%H:%M", math.max(0, math.ceil(ln.t + shift))) ..
+        line:SetText(os.date("%H:%M", wallT) ..
             "  [" .. (chan.title or "·") .. "]  " ..
             ((ln.name and #ln.name > 0) and (ln.name .. ": ") or "") .. (ln.text or ""))
         line:SetFont("GRMRP_Chat14")
@@ -116,22 +151,39 @@ local function toggleHistory()
         line:SetWrap(true)
         line:SetSelectable(true)
         line:SetWide(scroll:GetWide() - 24)
-        line:SetPos(0, y)
+        line:SetPos(0, state.y)
         line:SizeToContents()
         local hh = math.max(18, line:GetTall())
         line:SetTall(hh)
-        y = y + hh
-        lastLine = line
+        state.y = state.y + hh
+        body:SetTall(state.y + 4)
+        return line
     end
-    body:SetTall(y + 4)
-    -- Вечер-10, живой крах таймера истории (строка 126, «GetCanvas (a nil
-    -- value)»): GetCanvas — метод DScrollPanel, у DVScrollBar его нет
-    -- (движковый dscrollpanel.lua). Канон прокрутки в конец — ScrollToChild.
+    local lastLine = nil
+    local src = GRMRPChat.archive or GRMRPChat.lines or {}
+    for i = 1, #src do lastLine = addLine(src[i]) end
+    state.n = #src
+    -- прокрутка в конец — канон DScrollPanel (ScrollToChild), не VBar:GetCanvas
     timer.Simple(0.02, function()
         if IsValid(scroll) and IsValid(lastLine) and isfunction(scroll.ScrollToChild) then
             pcall(function() scroll:ScrollToChild(lastLine) end)
         end
     end)
+    -- окно живое: пока открыто, новые строки ДОПИСЫВАЮТСЯ (не пересборка —
+    -- пересборка убивала бы выделение и прокрутку)
+    if timer and timer.Create then
+        timer.Create("GRMRPChat_HistRefr", 1, 0, function()
+            if not IsValid(win) or not IsValid(body) then
+                timer.Remove("GRMRPChat_HistRefr")
+                return
+            end
+            local arc = GRMRPChat.archive or {}
+            while state.n < #arc do
+                state.n = state.n + 1
+                addLine(arc[state.n])
+            end
+        end)
+    end
     GRMRPChat.HIST_OPEN = true
 end
 
@@ -357,7 +409,7 @@ function GRMRPChat.OpenInput()
     end
     if not GRMRPChat._bannered and GRMRPChat.AddSystem then
         GRMRPChat._bannered = true
-        GRMRPChat.AddSystem("чат GRM · сборка вечер-10 (03.09) · самодиагностика: /chatdiag · ленты крупнее")
+        GRMRPChat.AddSystem("чат GRM · сборка вечер-12 (03.09) · самодиагностика: /chatdiag · биндер синхронизирован")
     end
     if not IsValid(frame) then build() end
     frame:Show()

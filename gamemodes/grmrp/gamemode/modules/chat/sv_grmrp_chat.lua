@@ -145,6 +145,26 @@ function GRMRPChat.ProcessLine(ply, text, defaultChannel)
         return "keep"
     end
 
+    -- Вечер-12: «/binder» и прочие команды модулей, набранные в НАШЕМ вводе
+    -- (net-путь, мимо PlayerSay), уходят в общую цепочку — иначе окно биндера
+    -- открывалось только из движкового say. Префиксная сверка: кириллические
+    -- алиасы (/бинды) вне %w_. Ре-ентерь GM:PlayerSay гасит флаг _inExternal.
+    if string.sub(text, 1, 1) == "/" and GRMRPChat.ExternalCommands
+        and next(GRMRPChat.ExternalCommands) then
+        local low = string.lower(text)
+        local hit
+        for c in pairs(GRMRPChat.ExternalCommands) do
+            if string.sub(low, 1, #c) == c then hit = true break end
+        end
+        if hit then
+            GRMRPChat._inExternal = true
+            local okh, ret = pcall(hook.Run, "PlayerSay", ply, text, defaultChannel == "ooc", false)
+            GRMRPChat._inExternal = nil
+            if (not okh) or ret == nil or ret == "" then return end
+            text = ret
+        end
+    end
+
     local now = CurTime()
     local st = stateFor(ply)
     local ok, warn = GRMRPChat.LadderCheck(st, now, cvRate:GetFloat(),

@@ -62,8 +62,8 @@ ok(select(2, factions:gsub("net%.WriteString%(tag%)", "")) >= 1
     "сервер шлёт поля раздельно (тэг, имя, должность, текст)")
 
 print("\n=== 3. БИНДЕР ДЕЙСТВИЙ (v2: сцены из шагов) ===")
-ok(binder:find('GRM.Binder', 1, true) ~= nil and binder:find('BD.Version = "2.0.0"', 1, true) ~= nil,
-    "модуль GRM.Binder v2.0.0")
+ok(binder:find('GRM.Binder', 1, true) ~= nil and binder:find('BD.Version = "2.2.0"', 1, true) ~= nil,
+    "модуль GRM.Binder v2.2.0")
 ok(binder:find("BD.MaxSlots      = 40", 1, true) ~= nil and binder:find("BD.MaxSteps      = 16", 1, true) ~= nil,
     "до 40 слотов, до 16 шагов в сцене")
 ok(binder:find('["/binder"] = true', 1, true) ~= nil
@@ -74,8 +74,36 @@ ok(binder:find('concommand.Add("grm_binder"', 1, true) ~= nil, "консольн
 ok(binder:find('hook.Add("PlayerSay", "GRM_Binder_Chat"', 1, true) ~= nil
     and binder:find('hook.Add("PlayerSayTransform", "GRM_Binder_ChatEC"', 1, true) ~= nil,
     "команда ловится на сервере (и в EasyChat) — в общий чат не улетает")
-ok(binder:find("EasyChat.SendGlobalMessage(text, false, false)", 1, true) ~= nil,
-    "длинный шаг «в чат» уходит через EasyChat (лимит 3000), а не через обрезающий say")
+ok(binder:find("EasyChat.SendGlobalMessage", 1, true) == nil,
+    "EasyChat вырезан и из биндера (указание владельца; вечер-12)")
+ok(binder:find("ns.SendText(part)", 1, true) ~= nil,
+    "шаг «в чат» идёт через SendText чата режима — эхо автора, форматер /me, история ввода")
+ok(binder:find("function BD.UnknownChatCommand", 1, true) ~= nil
+    and binder:find("RPCommandNames", 1, true) ~= nil,
+    "словарь /me-подобных команд — из реестра чата, не свой домысел (вечер-12)")
+ok(binder:find("RegisterExternalChatCommand", 1, true) ~= nil,
+    "свои команды биндер регистрирует в чате: «/binder» открывается и из GRM-ввода")
+
+print("\n=== 3b. ЧАТ ↔ БИНДЕР: СЕРВЕРНЫЙ МАРШРУТ (вечер-12) ===")
+local sv = read("gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua")
+ok(sv:find("GRMRPChat._inExternal = true", 1, true) ~= nil
+    and sv:find('hook.Run, "PlayerSay"', 1, true) ~= nil,
+    "ProcessLine отдаёт внешние /команды цепочке PlayerSay (маршрут из net-канала)")
+local ini = read("gamemodes/grmrp/gamemode/init.lua")
+ok(ini:find('if GRMRPChat._inExternal then return "" end', 1, true) ~= nil,
+    "ре-ентерь guard GM:PlayerSay — маршрутизация не зацикливается")
+local core = read("gamemodes/grmrp/gamemode/modules/chat/sh_grmrp_chat_core.lua")
+ok(core:find("function GRMRPChat.RegisterExternalChatCommand", 1, true) ~= nil
+    and core:find("function GRMRPChat.RPCommandNames", 1, true) ~= nil,
+    "ядро чата держит реестр внешних команд и словарь RP")
+local cli = read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua")
+ok(cli:find("GRMRPChat.SendText = send", 1, true) ~= nil,
+    "чат экспортирует SendText — общий путь отправки для модулей")
+ok(cli:find('RunConsoleCommand("say", text)', 1, true) ~= nil,
+    "внешние команды из ввода идут через say (перехватчики аддонов видят их)")
+local hud = read("lua/autorun/client/cl_grm_hud.lua")
+ok(hud:find("grm_money_diag", 1, true) ~= nil,
+    "grm_money_diag — различимы «данные не приходят» и «данные есть, но не видно»")
 ok(binder:find('RunConsoleCommand("say", part)', 1, true) ~= nil
     and binder:find("function BD.SplitChat", 1, true) ~= nil,
     "без EasyChat текст режется по словам на куски, влезающие в say")
@@ -499,17 +527,41 @@ for _, p in ipairs(parts) do restored[#restored + 1] = p:sub(5) end
 ok(table.concat(restored, " ") == (long:sub(5):gsub("%s+$", "")), "слова не теряются и не режутся посередине")
 ok(#BD.SplitChat("/do короткая строка", BD.SayLimit) == 1, "короткая строка уходит одним сообщением")
 
--- когда EasyChat есть, сообщение уходит целиком одной строкой
+-- вечер-12: целиком — через чат режима (SendText), а не EasyChat (вырезан)
 sentSay = {}
-_G.EasyChat = { SendGlobalMessage = function(msg) sentSay[#sentSay + 1] = msg end }
-_G.GetConVar = _G.GetConVar or function() return { GetInt = function() return 3000 end } end
+local sentChat = {}
+_G.EasyChat = nil
+_G.GRMRPChat = { SendText = function(msg) sentChat[#sentChat + 1] = msg end }
 BD.Slots[5] = BD.BlankSlot(5)
 BD.Slots[5].cooldown = 0
 BD.Slots[5].steps = { { mode = "chat", text = long, delay = 0, enabled = true } }
 stub.time = 400
+local sBase = #scheduled
 BD.Run(5, 1, {}, true)
-ok(sentSay[1] == (long:gsub("%s+$", "")), "с EasyChat длинный /me уходит целиком, одним сообщением", sentSay[1] and #sentSay[1])
-_G.EasyChat = nil
+for i = sBase + 1, #scheduled do scheduled[i].fn() end -- лесенка кусков отстреляла
+-- Лимит длинной строки = 500 байт (под клиентским clamp 512): куски <=500,
+-- каждый со своим /me, склейка восстанавливает текст целиком (Trim-хвост —
+-- стоящий контракт SplitChat). Превысившие лимит режутся, всё остальное — одним.
+local okSizes, okCmd, body = true, true, {}
+for _, p in ipairs(sentChat) do
+    if #p > BD.ChatLimit() then okSizes = false end
+    if p:sub(1, 4) ~= "/me " then okCmd = false end
+    body[#body + 1] = p:sub(5)
+end
+ok(#sentChat >= 2 and okSizes, "строка >500 разбита на куски SendText в лимите", #sentChat)
+ok(okCmd and table.concat(body, " ") == (string.Trim(long):sub(5)):gsub("%s+$", ""),
+    "склейка кусков = исходный текст, /me в каждом куске")
+ok(#sentSay == 0, "ни один кусок не уехал в say, пока жив чат режима")
+ok(#sentSay == 0, "задвоения в say нет: SendText — единственный канал")
+-- без чата — откат на say-куски в лимите
+_G.GRMRPChat = nil
+sentChat = {}
+sentSay = {}
+BD.Run(5, 1, {}, true)
+ok(#sentSay >= 1, "без чата строки идут через say кусками", #sentSay)
+local fitsSay = true
+for _, p in ipairs(sentSay) do if #p > BD.SayLimit then fitsSay = false end end
+ok(fitsSay, "куски в say-режиме не превышают лимит 120")
 
 print(("\nBINDER + CHAT + FORMS: %d/%d, провалов: %d"):format(total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)
