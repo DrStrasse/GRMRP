@@ -24,6 +24,17 @@ GRMRP = GRMRP or {
     Modules = GRMRP and GRMRP.Modules or {},
 }
 
+-- Тумблер чата читается ОБЕИМИ сторонами (инцидент 03.09 вечер: Enabled()
+-- жила только в sv-файле, клиентский HUDShouldDraw звал её каждый кадр →
+-- спам «attempt to call field 'Enabled'»). Правило: любой API, который
+-- трогает обе realm-стороны, объявляется в shared-слое.
+GRMRPChat = GRMRPChat or {}
+function GRMRPChat.Enabled()
+    local cv = GetConVar("grmrp_chat_enable")
+    if not cv then return true end -- ранний клиент/меню: включён
+    return cv:GetBool()
+end
+
 GRMRP.Net = GRMRP.Net or {
     SAY = "grmrp/chat_say",
     MSG = "grmrp/chat_msg",

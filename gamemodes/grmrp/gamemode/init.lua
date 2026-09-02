@@ -65,7 +65,7 @@ end
 -- никогда не отдаётsay наружу, кроме явного BaseClass-fallback при
 -- выключенном модуле (чтобы чат не «исчез молча»).
 function GM:PlayerSay(ply, text, teamChat, isDead)
-    if GRMRPChat and GRMRPChat.Enabled() then
+    if GRMRPChat and GRMRPChat.Enabled and GRMRPChat.Enabled() then
         GRMRPChat.OnPlayerSay(ply, text, teamChat, isDead)
         return ""
     end

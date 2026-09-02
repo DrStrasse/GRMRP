@@ -1,5 +1,14 @@
 # CHANGELOG — история изменений
 
+## 2026-09-03 (вечер-2) — GRMRP: Enabled-тумблер переехал в shared (спам-фикс)
+
+Второй смоук: `cl_init.lua:42 attempt to call field 'Enabled' (a nil value)`
+×4/кадр (цепочка усиливалась вендорным EasyChat+ULib-обёрткой хуков на машине
+владельца). Причина: GRMRPChat.Enabled существовала только в sv-обвязке, аеё
+звал клиентский HUDShouldDraw. Enabled() — в shared.lua поверх реплицируемого
+cvar'а; гарды полей в init/cl_init; StartChat подчиняется тумблеру. WIKI
+§7.3.1 п.4. Гейты: синтаксис, 43/43 + 28/28, стиль — зелено.
+
 ## 2026-09-03 (вечер) — GRMRP: фиксы канона входа по клиентскому смоуку (владелец)
 
 Консоль живого GMod: `cl_init.lua:21 attempt to index global 'GRMRP'` →

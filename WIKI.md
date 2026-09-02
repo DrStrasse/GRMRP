@@ -21989,6 +21989,16 @@ phys.doors/fin.core → ... (таблица выше — верх-вниз по 
    сервер перебивает ранги cvar'ом в рантайме (ProcessLine). `AddCSLuaFile`
    из shared убран (серверная функция; на клиенте — мина).
 
+4. **API, которое зовут обе realm-стороны, — в shared.** Тумблер
+   `GRMRPChat.Enabled` был объявлен только в sv-файле, а клиентский
+   `GM:HUDShouldDraw` звал его каждый кадр; вендорный EasyChat из старого
+   аддона (`addons/grm/lua/easychat`) дополнительно дёргал тот же хук через
+   ULib-обёртку — консоль тонула в «attempt to call field 'Enabled' (x4)».
+   Лечится переносом `Enabled()` в shared.lua (читает FCVAR_REPLICATED cvar,
+   фолбэк на раннем клиенте = включён) + страховкой опциональных полей в
+   точках входа. `GM:StartChat` тоже уважает тумблер: при
+   `grmrp_chat_enable 0` Y возвращается движковому чату.
+
 Манифест: корневой блок = имя папки (`"grmrp" { ... }`), поля
 `title/base/maps/author/authorurl/license` + `menusystem 1`/`category rp`
 (иначе режим не виден в меню выбора; голый `{...}` парсится «на удачу»).

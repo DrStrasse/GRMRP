@@ -9,8 +9,9 @@ if SERVER then
     util.AddNetworkString(GRMRP.Net.MSG)
 end
 
-local cvEnable = CreateConVar("grmrp_chat_enable", "1",
+CreateConVar("grmrp_chat_enable", "1",
     { FCVAR_REPLICATED, FCVAR_ARCHIVE }, "Чат режима: 1 вкл, 0 — возврат к движковому")
+-- GRMRPChat.Enabled читает этот реплицируемый cvar; объявлен в shared.lua.
 local cvMax = CreateConVar("grmrp_chat_max_chars", "256",
     { FCVAR_REPLICATED, FCVAR_ARCHIVE }, "Максимум байт в сообщении (жёсткий потолок 512)", 1, 512)
 local cvRate = CreateConVar("grmrp_chat_rate", "0.35",
@@ -21,10 +22,6 @@ local cvWindow = CreateConVar("grmrp_chat_window", "10",
     { FCVAR_REPLICATED, FCVAR_ARCHIVE }, "Окно пересчёта burst, сек", 1, 120)
 local cvIcRange = CreateConVar("grmrp_chat_ic_range", "700",
     { FCVAR_REPLICATED, FCVAR_ARCHIVE }, "Дальность IC-крика, юнитов", 0, 4096)
-
-function GRMRPChat.Enabled()
-    return cvEnable:GetBool()
-end
 
 -- Каналы объявлены в sh-ядре (общий реестр для обеих сторон). Тут только
 -- рантайм-перебивки cvar'ами (см. ProcessLine).

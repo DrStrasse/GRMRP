@@ -39,13 +39,15 @@ hook.Run("GRMRPFinishedLoadingClient")
 
 -- Движковый чат скрыт: окно и лента — наши (cl_grmrp_chat*).
 function GM:HUDShouldDraw(name)
-    if name == "CHudChat" and GRMRPChat and GRMRPChat.Enabled() then return false end
+    if name == "CHudChat" and GRMRPChat and GRMRPChat.Enabled
+        and GRMRPChat.Enabled() then return false end
     return self.BaseClass:HUDShouldDraw(name)
 end
 
 -- Y открывает наш ввод вместо движкового.
 function GM:StartChat()
-    if GRMRPChat and GRMRPChat.OpenInput then
+    if GRMRPChat and GRMRPChat.OpenInput and GRMRPChat.Enabled
+        and GRMRPChat.Enabled() then
         GRMRPChat.OpenInput()
         return false
     end
