@@ -62,7 +62,13 @@ FUNC_RE = re.compile(r"^(\s*)(?:local\s+)?function\s+([\w\.\:]*)\s*\(|^(\s*)(?:l
 HOOK_RE = re.compile(r"""hook\.Add\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']""")
 HOT_HOOKS = ("HUDPaint", "Think", "Tick", "PostDrawOpaqueRenderables", "PreDrawHalos",
              "HUDPaintBackground", "RenderScreenspaceEffects", "CalcView", "PostDrawHUD")
-HOT_CALL_RE = re.compile(r"\b(Color|Vector|Angle|Material|string\.format|table\.Copy|util\.TableToJSON)\s*\(")
+# Конструкторы — только самостоятельные вызовы: obj:Angle( и a.b.Vector( это
+# методы, их аллокации лежат вне контроля модуля (движок сам решает, что
+# вернуть). Квалифицированные помощники (table.Copy и т.п.) — наоборот, их
+# пишет автор, и они всегда аллоцируют.
+HOT_CALL_RE = re.compile(
+    r"(?<![:.\w])(Color|Vector|Angle|Material)\s*\("
+    r"|\b(table\.Copy|util\.TableToJSON|string\.format)\s*\(")
 BLOCK_OPEN_RE = re.compile(r"^\s*(if\b|for\b|while\b|repeat\b|function\b|local function\b)")
 
 

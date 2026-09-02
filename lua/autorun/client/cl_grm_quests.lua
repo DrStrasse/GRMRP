@@ -74,7 +74,32 @@ hook.Add("PlayerDeath", "GRM_Quest_MusicStop", function(ply)
 end)
 
 net.Receive("GRM_Quest_Notice",function()local ok=net.ReadBool();local msg=net.ReadString();local sound=net.ReadString();local duration=net.ReadFloat();local banner=net.ReadBool();local heading=net.ReadString();surface.PlaySound(sound~=""and sound or(ok and"buttons/button14.wav"or"buttons/button10.wav"));if notification then notification.AddLegacy(msg,ok and NOTIFY_GENERIC or NOTIFY_ERROR,duration)end;if banner then Q.NoticeToast={text=msg,heading=heading,untilAt=CurTime()+duration,started=CurTime()}end end)
-hook.Add("HUDPaint","GRM_Quest_CompletionNotice",function()local t=Q.NoticeToast;if not t then return end;if CurTime()>t.untilAt then Q.NoticeToast=nil return end;local fade=math.Clamp(math.min((CurTime()-t.started)*4,(t.untilAt-CurTime())*3),0,1);local w=math.min(620,ScrW()-60);local x=ScrW()/2-w/2;local y=105;draw.RoundedBox(12,x,y,w,78,Color(10,18,30,math.floor(235*fade)));surface.SetDrawColor(242,190,75,math.floor(255*fade));surface.DrawOutlinedRect(x,y,w,78,2);draw.SimpleText(t.heading~=""and t.heading or"УВЕДОМЛЕНИЕ","GRMQ_Small",ScrW()/2,y+16,Color(242,190,75,math.floor(255*fade)),TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER);draw.SimpleText(t.text,"GRMQ_Head",ScrW()/2,y+48,Color(245,248,252,math.floor(255*fade)),TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)end)
+--[[ Кадровые краски. Все создаются один раз при загрузке файла: тост,
+     диалог и трекер перерисовываются каждый кадр, и любой Color() внутри
+     их Paint = мусорная таблица на кадр (§6.1.8). Динамический alfa
+     (затухание тоста) пишется в .a постоянного цвета — Color в GMod таблица. ]]
+local QCOL = {
+    toastBg = Color(10, 18, 30, 235), toastHead = Color(242, 190, 75), toastText = Color(245, 248, 252),
+    dlgBg = Color(12, 16, 24, 236), dlgClose = Color(40, 48, 60),
+    optHover = Color(36, 52, 74), opt = Color(22, 30, 44),
+    npcDone = Color(35, 75, 55), npcDoneHover = Color(31, 70, 52),
+    stepDone = Color(32, 72, 53),
+    trackBg = Color(10, 16, 25, 220), trackChip = Color(14, 24, 38, 225),
+}
+local QT_TARGET_V = Vector(0, 0, 0)
+hook.Add("HUDPaint","GRM_Quest_CompletionNotice",function()
+ local t=Q.NoticeToast;if not t then return end
+ if CurTime()>t.untilAt then Q.NoticeToast=nil return end
+ local fade=math.Clamp(math.min((CurTime()-t.started)*4,(t.untilAt-CurTime())*3),0,1)
+ local w=math.min(620,ScrW()-60);local x=ScrW()/2-w/2;local y=105
+ QCOL.toastBg.a=math.floor(235*fade)
+ draw.RoundedBox(12,x,y,w,78,QCOL.toastBg)
+ surface.SetDrawColor(242,190,75,math.floor(255*fade));surface.DrawOutlinedRect(x,y,w,78,2)
+ QCOL.toastHead.a=math.floor(255*fade)
+ draw.SimpleText(t.heading~=""and t.heading or"УВЕДОМЛЕНИЕ","GRMQ_Small",ScrW()/2,y+16,QCOL.toastHead,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+ QCOL.toastText.a=math.floor(255*fade)
+ draw.SimpleText(t.text,"GRMQ_Head",ScrW()/2,y+48,QCOL.toastText,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)
+end)
 
 local function dialogueNodes(value)
  if isstring(value)then return value~=""and{{id="legacy",text=value,choices={}}}or{}end
@@ -87,7 +112,7 @@ local function playDialogue(npcName,nodes,onAction)
  f:SetSize(math.min(720,ScrW()-80),math.min(420,ScrH()-80));f:SetPos(40,ScrH()-f:GetTall()-48)
  f:SetTitle("");f:ShowCloseButton(false);f:MakePopup();f:SetDraggable(false)
  f.Paint=function(_,w,h)
-  draw.RoundedBox(10,0,0,w,h,Color(12,16,24,236))
+  draw.RoundedBox(10,0,0,w,h,QCOL.dlgBg)
   surface.SetDrawColor(70,110,150,80);surface.DrawOutlinedRect(0,0,w,h,1)
  end
  local byID={};for i,n in ipairs(nodes)do byID[tostring(n.id or i)]=i end;local index=1
@@ -97,7 +122,7 @@ local function playDialogue(npcName,nodes,onAction)
   -- чего PerformLayout окна спамил «NULL Panel» в консоль каждый кадр.
   if GRM.UI and GRM.UI.SafeClear then GRM.UI.SafeClear(f) else f:Clear() end
   local close=vgui.Create("DButton",f);close:SetSize(28,24);close:SetPos(f:GetWide()-36,10);close:SetText("")
-  close.Paint=function(s,w,h)draw.RoundedBox(4,0,0,w,h,s:IsHovered()and C.red or Color(40,48,60));draw.SimpleText("X","GRMQ_Body",w/2,h/2,color_white,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)end
+  close.Paint=function(s,w,h)draw.RoundedBox(4,0,0,w,h,s:IsHovered()and C.red or QCOL.dlgClose);draw.SimpleText("X","GRMQ_Body",w/2,h/2,color_white,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)end
   close.DoClick=function()f:Close()end
   label(f,tostring(n.speaker~=""and n.speaker or npcName),20,14,f:GetWide()-70,26,"GRMQ_Head",C.yellow)
   local wrap=vgui.Create("DLabel",f);wrap:SetPos(20,46);wrap:SetSize(f:GetWide()-40,110);wrap:SetWrap(true);wrap:SetFont("GRMQ_Body");wrap:SetTextColor(C.text);wrap:SetText(tostring(n.text or""))
@@ -112,7 +137,7 @@ local function playDialogue(npcName,nodes,onAction)
   local function opt(num,text,fn)
    local b=vgui.Create("DButton",f);b:SetPos(20,y);b:SetSize(f:GetWide()-40,42);b:SetText("")
    b.Paint=function(s,w,h)
-    draw.RoundedBox(6,0,0,w,h,s:IsHovered()and Color(36,52,74)or Color(22,30,44))
+    draw.RoundedBox(6,0,0,w,h,s:IsHovered()and QCOL.optHover or QCOL.opt)
     draw.SimpleText(tostring(num),"GRMQ_Head",16,h/2,C.blue,TEXT_ALIGN_LEFT,TEXT_ALIGN_CENTER)
     draw.SimpleText(text,"GRMQ_Body",42,h/2,C.text,TEXT_ALIGN_LEFT,TEXT_ALIGN_CENTER)
    end
@@ -150,14 +175,14 @@ local function openNPC()
   elseif p and p.status=="completed"and d.repeatable then button(detail,"Начать квест заново",18,446,180,46,C.green,function()playerOp("restart",d.id);f:Close()end)end
   button(detail,"Закрыть",214,446,180,46,C.card,function()f:Close()end)
  end
- for i,row in ipairs(rows)do local d,p=row.definition,row.progress;local b=button(scroll,d.title,0,(i-1)*76,280,66,p and p.status=="completed"and Color(35,75,55)or C.card,function()show(row)end);b.Paint=function(self,w,h)draw.RoundedBox(8,0,0,w,h,self:IsHovered()and C.hover or(p and p.status=="completed"and Color(31,70,52)or C.card));draw.SimpleText(d.title,"GRMQ_Body",12,13,C.text);draw.SimpleText(not p and"Новое задание"or(p.status=="active"and objectiveText(d,p)or"Завершено"),"GRMQ_Small",12,42,p and p.status=="completed"and C.green or C.dim)end end
+ for i,row in ipairs(rows)do local d,p=row.definition,row.progress;local b=button(scroll,d.title,0,(i-1)*76,280,66,p and p.status=="completed"and QCOL.npcDone or C.card,function()show(row)end);b.Paint=function(self,w,h)draw.RoundedBox(8,0,0,w,h,self:IsHovered()and C.hover or(p and p.status=="completed"and QCOL.npcDoneHover or C.card));draw.SimpleText(d.title,"GRMQ_Body",12,13,C.text);draw.SimpleText(not p and"Новое задание"or(p.status=="active"and objectiveText(d,p)or"Завершено"),"GRMQ_Small",12,42,p and p.status=="completed"and C.green or C.dim)end end
  if rows[1]then show(rows[1])else label(detail,"У этого персонажа пока нет заданий.",20,30,370,60,"GRMQ_Head",C.dim)end
 end
 net.Receive("GRM_Quest_OpenNPC",openNPC)
 
 local function openJournal()
  local f=frame("ЖУРНАЛ ЗАДАНИЙ",860,620);local rows=Q.ClientRows or{};local list=vgui.Create("DScrollPanel",f);list:SetPos(18,62);list:SetSize(350,536);local detail=vgui.Create("DPanel",f);detail:SetPos(382,62);detail:SetSize(460,536);detail.Paint=function(_,w,h)draw.RoundedBox(9,0,0,w,h,C.panel)end
- local function show(row)local d,p=row.definition,row.progress;detail:Clear();label(detail,d.title,18,18,424,38,"GRMQ_Head");label(detail,d.summary,18,68,424,110,"GRMQ_Body",C.dim);label(detail,p.status=="completed"and"ЗАВЕРШЕНО"or objectiveText(d,p),18,190,424,62,"GRMQ_Head",p.status=="completed"and C.green or C.yellow);local y=265;for i,step in ipairs(d.steps or{})do local done=i<(p.step or 1)or p.status=="completed";draw.RoundedBox(6,18,y,424,38,done and Color(32,72,53)or C.card);draw.SimpleText((done and"✓  "or"○  ")..step.title,"GRMQ_Body",30,y+19,done and C.green or C.text,TEXT_ALIGN_LEFT,TEXT_ALIGN_CENTER);y=y+44;if y>450 then break end end;if p.status=="active"then button(detail,"Отказаться от задания",18,478,210,40,C.red,function()playerOp("abandon",d.id);f:Close()end)elseif p.status=="completed"and d.repeatable then button(detail,"Начать заново",18,478,210,40,C.green,function()playerOp("restart",d.id);f:Close()end)end end
+ local function show(row)local d,p=row.definition,row.progress;detail:Clear();label(detail,d.title,18,18,424,38,"GRMQ_Head");label(detail,d.summary,18,68,424,110,"GRMQ_Body",C.dim);label(detail,p.status=="completed"and"ЗАВЕРШЕНО"or objectiveText(d,p),18,190,424,62,"GRMQ_Head",p.status=="completed"and C.green or C.yellow);local y=265;for i,step in ipairs(d.steps or{})do local done=i<(p.step or 1)or p.status=="completed";draw.RoundedBox(6,18,y,424,38,done and QCOL.stepDone or C.card);draw.SimpleText((done and"✓  "or"○  ")..step.title,"GRMQ_Body",30,y+19,done and C.green or C.text,TEXT_ALIGN_LEFT,TEXT_ALIGN_CENTER);y=y+44;if y>450 then break end end;if p.status=="active"then button(detail,"Отказаться от задания",18,478,210,40,C.red,function()playerOp("abandon",d.id);f:Close()end)elseif p.status=="completed"and d.repeatable then button(detail,"Начать заново",18,478,210,40,C.green,function()playerOp("restart",d.id);f:Close()end)end end
  local shown=0;for _,row in ipairs(rows)do if row.progress then shown=shown+1;local idx=shown;local d,p=row.definition,row.progress;local b=button(list,d.title,0,(idx-1)*72,330,62,C.card,function()show(row)end);b.Paint=function(self,w,h)draw.RoundedBox(8,0,0,w,h,self:IsHovered()and C.hover or C.card);draw.SimpleText(d.title,"GRMQ_Body",12,16,C.text);draw.SimpleText(p.status=="completed"and"Завершено"or objectiveText(d,p),"GRMQ_Small",12,43,p.status=="completed"and C.green or C.dim)end;if shown==1 then show(row)end end end
  if shown==0 then label(detail,"Активных и завершённых заданий пока нет. Поговорите с персонажами в мире.",24,30,412,100,"GRMQ_Head",C.dim)end
 end
@@ -167,9 +192,12 @@ concommand.Add("grm_quests",openJournal)
 hook.Add("HUDPaint","GRM_Quest_Tracker",function()
  if Q.Cutscene.active or(GRM.CCTV and GRM.CCTV.IsViewing and GRM.CCTV.IsViewing())then return end
  local active={};for _,row in ipairs(Q.ClientRows or {})do if row.progress and row.progress.status=="active"then active[#active+1]=row end end
- if#active==0 then return end;local w=320;local x=ScrW()-w-22;local y=90;draw.RoundedBox(9,x,y,w,36+#active*52,Color(10,16,25,220));draw.SimpleText("ЗАДАНИЯ","GRMQ_Head",x+14,y+18,C.yellow,TEXT_ALIGN_LEFT,TEXT_ALIGN_CENTER)
+ if#active==0 then return end;local w=320;local x=ScrW()-w-22;local y=90;draw.RoundedBox(9,x,y,w,36+#active*52,QCOL.trackBg);draw.SimpleText("ЗАДАНИЯ","GRMQ_Head",x+14,y+18,C.yellow,TEXT_ALIGN_LEFT,TEXT_ALIGN_CENTER)
  for i,row in ipairs(active)do local yy=y+32+(i-1)*52;draw.RoundedBox(6,x+9,yy,w-18,45,C.card);draw.SimpleText(row.definition.title,"GRMQ_Body",x+18,yy+12,C.text);draw.SimpleText(objectiveText(row.definition,row.progress),"GRMQ_Small",x+18,yy+31,C.dim)
-  local step=row.definition.steps and row.definition.steps[row.progress.step or 1];if step and step.type=="visit"then local target;if step.pos then target=Vector(step.pos.x,step.pos.y,step.pos.z)elseif step.min and step.max then target=Vector((step.min.x+step.max.x)/2,(step.min.y+step.max.y)/2,(step.min.z+step.max.z)/2)end;if target then local screen=target:ToScreen();local dist=math.floor(LocalPlayer():GetPos():Distance(target)/52.49);local mx=math.Clamp(screen.x,36,ScrW()-36);local my=math.Clamp(screen.y,70,ScrH()-70);draw.RoundedBox(16,mx-70,my-18,140,36,Color(14,24,38,225));draw.SimpleText("◆ "..tostring(step.title),"GRMQ_Small",mx,my-5,C.yellow,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER);draw.SimpleText(dist.." м","GRMQ_Small",mx,my+10,C.text,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)end end
+  local step=row.definition.steps and row.definition.steps[row.progress.step or 1];if step and step.type=="visit"then local target
+  -- точка строится в переиспользуемом векторе: HUDPaint = каждый кадр (§6.1.8)
+  if step.pos then QT_TARGET_V.x=step.pos.x;QT_TARGET_V.y=step.pos.y;QT_TARGET_V.z=step.pos.z;target=QT_TARGET_V
+  elseif step.min and step.max then QT_TARGET_V.x=(step.min.x+step.max.x)/2;QT_TARGET_V.y=(step.min.y+step.max.y)/2;QT_TARGET_V.z=(step.min.z+step.max.z)/2;target=QT_TARGET_V end;if target then local screen=target:ToScreen();local dist=math.floor(LocalPlayer():GetPos():Distance(target)/52.49);local mx=math.Clamp(screen.x,36,ScrW()-36);local my=math.Clamp(screen.y,70,ScrH()-70);draw.RoundedBox(16,mx-70,my-18,140,36,QCOL.trackChip);draw.SimpleText("◆ "..tostring(step.title),"GRMQ_Small",mx,my-5,C.yellow,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER);draw.SimpleText(dist.." м","GRMQ_Small",mx,my+10,C.text,TEXT_ALIGN_CENTER,TEXT_ALIGN_CENTER)end end
  end
 end)
 

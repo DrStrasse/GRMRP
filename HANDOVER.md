@@ -70,9 +70,14 @@
      `sh_grm_economy` (a.action×12), `sh_grm_admin_menu` (atype×11),
      `sh_grm_fleet` (act×10), инспектор `zz_grm_quest_studio` (b.kind×8 —
      ветки РАЗНЫХ форм, переводить с умом), `grm_addon_studio` (n.kind×8).
-  4. 224 аллокации в render-хуках (было 297). Вычищенные файлы стережёт
-     `tools/luatest/sim_render_allocs.lua` — новые чинить и **дописывать
-     в его список**.
+  4. ~~224 аллокации~~ **волна 7 (02.09): 182.** Вычищено 34 в пяти HUD
+     (vehicle_hud, customization, quests, factions, faction_fixes) + GPS
+     миникарты; все они в CLEANED `sim_render_allocs.lua` (13/13).
+     Из остатка 20 — в мёртвом `GRM_Minimap_HUD` (`if false then` внутри,
+     хук снимается сразу: файл в CLEANED не добавлен до решения
+     владельца); остальное — `sh_grm_ban`(8), `sh_grm_estate`(7),
+     `sh_grm_doors`(7), `addons/grm_fire*`, вендор. Детектор `audit_slop`
+     исправлен: `obj:Angle()` — метод, не конструктор.
   6. `sh_grm_minimap.lua`: внутри `GRM_Minimap_HUD` лежит выключенный
      блок `if false then` (~40 строк рендера карты). Это не мусор
      генерации, а отключённая функция — удалять или чинить только по

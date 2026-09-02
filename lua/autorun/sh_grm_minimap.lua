@@ -428,12 +428,13 @@ else
     function MM.RemovePersonal(id)
         for i=#personal,1,-1 do if tostring(personal[i].id)==tostring(id) then table.remove(personal,i) end end
     end
+    local COL_GPS_CHAT = Color(255, 210, 75) -- цвет чат-строки «вы прибыл» — не на кадр
     hook.Add("Think","GRM_GPS_AutoArrival",function()
         if not gpsTarget then arrivalSince=nil return end;local now=CurTime();if now<nextArrivalCheck then return end;nextArrivalCheck=now+.15
         local lp=LocalPlayer();if not IsValid(lp)then return end;local point=gpsPoint(gpsTarget);if not point then MM.ClearGPS()return end
         if MM.HasArrived(lp:GetPos(),point.pos,point.arrivalRadius or MM.GPSArrivalRadius,180)then
             arrivalSince=arrivalSince or now
-            if now-arrivalSince>=.45 then local name=tostring(point.name or"место назначения");if point.temp then reachedTemp[tostring(point.id)]=true end;MM.ClearGPS();notification.AddLegacy("Вы достигли места назначения.",NOTIFY_GENERIC,5);surface.PlaySound("buttons/button15.wav");chat.AddText(Color(255,210,75),"[GPS] ",color_white,"Вы достигли места назначения: "..name)end
+            if now-arrivalSince>=.45 then local name=tostring(point.name or"место назначения");if point.temp then reachedTemp[tostring(point.id)]=true end;MM.ClearGPS();notification.AddLegacy("Вы достигли места назначения.",NOTIFY_GENERIC,5);surface.PlaySound("buttons/button15.wav");chat.AddText(COL_GPS_CHAT,"[GPS] ",color_white,"Вы достигли места назначения: "..name)end
         else arrivalSince=nil end
     end)
     local function openGPS()
@@ -480,11 +481,17 @@ else
     local COL_MARKER_OUTLINE = Color(8, 14, 23, 235)
     local COL_GPS_ACTIVE = Color(255, 215, 70)
     local COL_GPS_TEMP = Color(255, 90, 70)
+    -- Кружки рисуются последовательно и не вложенные — на кадр хватает одного
+    -- переиспользуемого вектора вместо аллокации в HUDPaint (§6.1.8):
+    -- поля пишем, сам Vector создаётся один раз при загрузке.
+    local GPS_POINT_V = Vector(0, 0, 0)
 
     local function paintGpsCircle(point, col, rMin, rMax)
         local lp = LocalPlayer()
         if not (IsValid(lp) and istable(point) and istable(point.pos)) then return end
-        local target = Vector(point.pos.x, point.pos.y, point.pos.z or lp:GetPos().z)
+        local target = GPS_POINT_V
+        target.x, target.y = point.pos.x, point.pos.y
+        target.z = point.pos.z or lp:GetPos().z
         local distance = math.floor(lp:GetPos():Distance(target))
         local x, y = projectWorldCircle(target)
         local radius = math.Clamp((rMin or 10) + distance / 450, rMin or 10, rMax or 22)

@@ -26,6 +26,13 @@ local CLEANED = {
     "lua/autorun/zz_grm_bleedout.lua",
     "lua/entities/grm_comp_base/cl_init.lua",
     "lua/autorun/sh_00_grm_ui.lua",
+    -- волна 7 (02.09): транспортный HUD, HUD функций кастомизации,
+    -- трекер/тост/диалоги квестов, подписи фракций и плашка коменд. часа
+    "lua/autorun/client/cl_grm_vehicle_hud.lua",
+    "lua/autorun/client/cl_grm_customization.lua",
+    "lua/autorun/client/cl_grm_quests.lua",
+    "lua/autorun/sh_factions.lua",
+    "lua/autorun/sh_faction_fixes.lua",
 }
 
 -- Хуки, которые вызываются каждый кадр.
@@ -37,15 +44,26 @@ local RENDER_HOOKS = {
 }
 
 --[[ Конструкторы таблиц, которые нельзя звать в кадре.
-     Ищем по ГРАНИЦЕ СЛОВА: подстрока «Color(» встречается и в безобидном
-     surface.SetDrawColor(), и в render.SetMaterial() — на таких ложных
-     срабатываниях сторож быстро стал бы «шумом, который все игнорируют». ]]
-local FORBIDDEN = {
-    { pattern = "%f[%w_]Color%s*%(", name = "Color(" },
-    { pattern = "%f[%w_]Vector%s*%(", name = "Vector(" },
-    { pattern = "%f[%w_]Angle%s*%(", name = "Angle(" },
-    { pattern = "%f[%w_]Material%s*%(", name = "Material(" },
-}
+     Ищем ТОЛЬКО самостоятельные вызовы: перед именем не должно быть буквы,
+     цифры, '_' или ':'/'.' — иначе ловим безобидные surface.SetDrawColor(),
+     render.SetMaterial() и методы vec:Angle(), которые аллоцирует движок,
+     а не автор. На ложных срабатываниях сторож быстро стал бы «шумом,
+     который все игнорируют». ]]
+local FORBIDDEN = { "Color", "Vector", "Angle", "Material" }
+
+local function hasCtor(line, name)
+    local pos = 1
+    while true do
+        local s, e = line:find(name, pos, true)
+        if not s then return false end
+        local prev = s > 1 and line:sub(s - 1, s - 1) or ""
+        local after = line:sub(e + 1, e + 1):match("^%s*%(") and "(" or ""
+        if after == "(" and (prev == "" or not prev:match("[%w_:.]")) then
+            return true
+        end
+        pos = e + 1
+    end
+end
 
 local pass, fail = 0, 0
 local function ok(cond, name, extra)
@@ -128,9 +146,9 @@ for _, path in ipairs(CLEANED) do
         for _, range in ipairs(ranges) do
             for lineNo = range.from, range.to do
                 for _, bad in ipairs(FORBIDDEN) do
-                    if lines[lineNo]:find(bad.pattern) then
-                        problems[#problems + 1] = ("%s:%d — %s в %s")
-                            :format(path, lineNo, bad.name, range.hook)
+                    if hasCtor(lines[lineNo], bad) then
+                        problems[#problems + 1] = ("%s:%d — %s(...) в %s")
+                            :format(path, lineNo, bad, range.hook)
                     end
                 end
             end
@@ -153,14 +171,18 @@ local canaryRanges = renderRanges(canaryLines)
 local caught = false
 for _, range in ipairs(canaryRanges) do
     for lineNo = range.from, range.to do
-        if canaryLines[lineNo]:find("%f[%w_]Color%s*%(") then caught = true end
+        if hasCtor(canaryLines[lineNo], "Color") then caught = true end
     end
 end
 ok(caught, "сторож ловит Color() внутри HUDPaint (самопроверка)")
 
-local innocent = 'surface.SetDrawColor(1, 2, 3) render.SetMaterial(cached)'
-ok(not innocent:find("%f[%w_]Color%s*%(") and not innocent:find("%f[%w_]Material%s*%("),
-    "сторож не ругается на SetDrawColor/SetMaterial (самопроверка на ложную тревогу)")
+local innocent = 'surface.SetDrawColor(1, 2, 3) render.SetMaterial(cached) local a = target:Angle() self:SetColor(c)'
+ok(not hasCtor(innocent, "Color") and not hasCtor(innocent, "Material")
+    and not hasCtor(innocent, "Angle"),
+    "сторож не ругается на SetDrawColor/SetMaterial/метод vec:Angle() (ложная тревога)")
+ok(hasCtor("  draw.RoundedBox(4, 0, 0, w, h, Color(1, 2, 3))", "Color")
+    and hasCtor("local up = Vector(0, 0, 1)", "Vector"),
+    "самостоятельные конструкторы находятся (самопроверка чувствительности)")
 
 print(("RENDER ALLOCS: %d/%d, провалов: %d"):format(pass, pass + fail, fail))
 os.exit(fail > 0 and 1 or 0)

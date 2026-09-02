@@ -4349,6 +4349,10 @@ if CLIENT then
         return factionHUDCache.index and factionHUDCache.index[steam]
     end
 
+    -- Кадровые примитивы готовятся при загрузке: Vector/Color в HUDPaint
+    -- на каждого ближнего — это мусор GC каждые 16 мс (§6.1.8).
+    local FACTIONHUD_BG = Color(15, 15, 20, 180)
+    local HEAD_UP = Vector(0, 0, 100)
     hook.Add("HUDPaint", "Factions_HUD", function()
         -- 21.08: шапку организации теперь рисует общий GRM.Nameplate одной
         -- плашкой вместе с именем и описанием. Пока он активен, старая
@@ -4372,7 +4376,7 @@ if CLIENT then
                     -- FactionsData нет, а тег отдела показать всё равно надо.
                     local nwTag = ply:GetNWString("GRM_ChannelTag", "")
                     if nwTag ~= "" then fTag = nwTag end
-                    local pos = ply:GetPos() + Vector(0, 0, 100)
+                    local pos = ply:GetPos() + HEAD_UP
                     local screenPos = pos:ToScreen()
                     if screenPos.visible then
                         local x, y = screenPos.x, screenPos.y
@@ -4386,7 +4390,7 @@ if CLIENT then
                         local w = tw + padding * 2
                         local h = th + padding * 2
 
-                        draw.RoundedBox(4, x - w / 2, y - h / 2, w, h, Color(15, 15, 20, 180))
+                        draw.RoundedBox(4, x - w / 2, y - h / 2, w, h, FACTIONHUD_BG)
                         surface.SetDrawColor(fColor.r, fColor.g, fColor.b, 220)
                         surface.DrawRect(x - w / 2, y + h / 2 - 3, w, 3)
                         draw.SimpleText(text, "Factions_HUD", x, y, fColor, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)

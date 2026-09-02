@@ -48,24 +48,51 @@ local function rootVeh(ent)
     return nil
 end
 
-local function lerpCol(a, b, t)
+--[[ Палитра HUD транспорта. Все цвета постоянные и создаются один раз
+     при загрузке файла: этот модуль перерисовывается каждый кадр, и любой
+     Color() внутри хука = мусорная таблица на кадр (§6.1.8). У каждого
+     цвета свой смысл — не «общие серые». ]]
+local COL_PANEL = Color(10, 14, 22, 230)         -- фон кластера и плашки HP
+local COL_SEAT_CARD = Color(10, 14, 22, 228)     -- карточка мест
+local COL_BIG = Color(235, 242, 250)             -- цифры скорости
+local COL_DIM = Color(140, 160, 180)              -- подписи единиц, «бак не привязан»
+local COL_GOOD = Color(90, 200, 120)              -- двигатель вкл, место свободно
+local COL_ENG_OFF = Color(200, 140, 90)           -- двигатель выкл
+local COL_FUEL_TYPE = Color(250, 185, 63)          -- название вида топлива
+local COL_FUEL_OK = Color(240, 170, 50)            -- заполнение бака в норме
+local COL_FUEL_NUM = Color(210, 220, 230)          -- литры цифрами
+local COL_DANGER = Color(220, 70, 50)              -- критический остаток (бак, HP)
+local COL_BROKEN = Color(230, 80, 70)               -- «ПОЛОМКА» и «НЕТ ТОПЛИВА»
+local COL_HP_LBL = Color(180, 195, 210)             -- подпись «прочность»
+local COL_HP_NUM = Color(200, 210, 220)             -- HP цифрами
+local COL_SEAT_TITLE = Color(180, 200, 215)          -- заголовок карточки мест
+local COL_SEAT_FREE_N = Color(130, 150, 165)         -- счётчик свободных мест
+local COL_SEAT_ROW = Color(220, 228, 236)             -- ярлык ряда
+local COL_SEAT_OCCUPIED = Color(230, 160, 90)         -- занятый ряд
+local HP_WARM = Color(230, 190, 50)                   -- 50% прочности (низ градиента)
+local HP_GOOD = Color(70, 200, 95)                    -- 100% прочности
+local HP_CRIT = Color(210, 45, 40)                    -- <22% — плоско, без смешения
+local HP_FILL = Color(0, 0, 0, 255)                   -- скретч результата смешения:
+                                                      -- бар красится сразу после расчёта
+
+local function lerpColInto(dst, a, b, t)
     t = math.Clamp(t, 0, 1)
-    return Color(
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t,
-        255
-    )
+    -- округление к целому: движок ждёт целые компоненты цвета
+    dst.r = math.floor(a.r + (b.r - a.r) * t + 0.5)
+    dst.g = math.floor(a.g + (b.g - a.g) * t + 0.5)
+    dst.b = math.floor(a.b + (b.b - a.b) * t + 0.5)
+    dst.a = 255
+    return dst
 end
 
 local function hpColor(pct)
     if pct >= 0.5 then
-        return lerpCol(Color(230, 190, 50), Color(70, 200, 95), (pct - 0.5) / 0.5)
+        return lerpColInto(HP_FILL, HP_WARM, HP_GOOD, (pct - 0.5) / 0.5)
     end
     if pct >= 0.22 then
-        return lerpCol(Color(220, 70, 50), Color(230, 190, 50), (pct - 0.22) / 0.28)
+        return lerpColInto(HP_FILL, COL_DANGER, HP_WARM, (pct - 0.22) / 0.28)
     end
-    return Color(210, 45, 40)
+    return HP_CRIT
 end
 
 local function addSeat(list, seen, seat, driver)
@@ -188,8 +215,8 @@ local function drawHPBar(veh, x, y, w, h)
     local broken = veh:GetNWBool("GRM_VehBroken", false)
     local pct = math.Clamp(hp / hpmax, 0, 1)
     local bx, by, bw, bh = x + 18, y + h - 20, w - 36, 10
-    draw.SimpleText(broken and "ПОЛОМКА" or "прочность", "GRMVeh_Sm", bx, by - 14, broken and Color(230, 80, 70) or Color(180, 195, 210))
-    draw.SimpleText(string.format("%d / %d", math.floor(hp + 0.5), math.floor(hpmax)), "GRMVeh_Sm", bx + bw, by - 14, Color(200, 210, 220), TEXT_ALIGN_RIGHT)
+    draw.SimpleText(broken and "ПОЛОМКА" or "прочность", "GRMVeh_Sm", bx, by - 14, broken and COL_BROKEN or COL_HP_LBL)
+    draw.SimpleText(string.format("%d / %d", math.floor(hp + 0.5), math.floor(hpmax)), "GRMVeh_Sm", bx + bw, by - 14, COL_HP_NUM, TEXT_ALIGN_RIGHT)
     surface.SetDrawColor(28, 32, 40)
     surface.DrawRect(bx, by, bw, bh)
     surface.SetDrawColor(hpColor(pct))
@@ -218,28 +245,28 @@ local function drawSeatCard(veh)
     local boxW = 248
     local sx = ScrW() - boxW - 18
     local sy = math.floor(ScrH() * 0.5 - boxH * 0.5)
-    draw.RoundedBox(8, sx, sy, boxW, boxH, Color(10, 14, 22, 228))
+    draw.RoundedBox(8, sx, sy, boxW, boxH, COL_SEAT_CARD)
     surface.SetDrawColor(55, 117, 151, 170)
     surface.DrawOutlinedRect(sx, sy, boxW, boxH, 1)
-    draw.SimpleText(vehTitle(veh), "GRMVeh_Sm", sx + 10, sy + 6, Color(180, 200, 215))
+    draw.SimpleText(vehTitle(veh), "GRMVeh_Sm", sx + 10, sy + 6, COL_SEAT_TITLE)
     local freeN = 0
     for i = 1, #shown do
         if not shown[i].who then freeN = freeN + 1 end
     end
-    draw.SimpleText(string.format("%d мест · свободно %d", #shown, freeN), "GRMVeh_Sm", sx + boxW - 10, sy + 6, Color(130, 150, 165), TEXT_ALIGN_RIGHT)
+    draw.SimpleText(string.format("%d мест · свободно %d", #shown, freeN), "GRMVeh_Sm", sx + boxW - 10, sy + 6, COL_SEAT_FREE_N, TEXT_ALIGN_RIGHT)
     for i = 1, #shown do
         local label = "Место " .. i
         if shown[i].driver then label = label .. " (водитель)" end
         local status, col
         if shown[i].who then
             status = "Занято: " .. shown[i].who
-            col = Color(230, 160, 90)
+            col = COL_SEAT_OCCUPIED
         else
             status = "Свободно"
-            col = Color(90, 200, 120)
+            col = COL_GOOD
         end
         local ly = sy + 22 + (i - 1) * rowH
-        draw.SimpleText(label, "GRMVeh_Seat", sx + 10, ly, Color(220, 228, 236))
+        draw.SimpleText(label, "GRMVeh_Seat", sx + 10, ly, COL_SEAT_ROW)
         draw.SimpleText(status, "GRMVeh_Seat", sx + boxW - 10, ly, col, TEXT_ALIGN_RIGHT)
     end
 end
@@ -270,28 +297,28 @@ hook.Add("HUDPaint", "GRM_Vehicle_Cluster", function()
 
     local w, h = 280, 108
     local x, y = ScrW() / 2 - w / 2, ScrH() - h - 28
-    draw.RoundedBox(10, x, y, w, h, Color(10, 14, 22, 230))
+    draw.RoundedBox(10, x, y, w, h, COL_PANEL)
     surface.SetDrawColor(55, 117, 151, 180)
     surface.DrawOutlinedRect(x, y, w, h, 1)
-    draw.SimpleText(string.format("%d", kmh), "GRMVeh_Big", x + 22, y + 14, Color(235, 242, 250))
-    draw.SimpleText("км/ч", "GRMVeh_Sm", x + 22, y + 44, Color(140, 160, 180))
+    draw.SimpleText(string.format("%d", kmh), "GRMVeh_Big", x + 22, y + 14, COL_BIG)
+    draw.SimpleText("км/ч", "GRMVeh_Sm", x + 22, y + 44, COL_DIM)
     local eng = veh:GetNWBool("GRM_EngineOn", false)
-    draw.SimpleText(eng and "двиг. ВКЛ  ·  R" or "двиг. ВЫКЛ  ·  R", "GRMVeh_Sm", x + 118, y + 48, eng and Color(90, 200, 120) or Color(200, 140, 90))
+    draw.SimpleText(eng and "двиг. ВКЛ  ·  R" or "двиг. ВЫКЛ  ·  R", "GRMVeh_Sm", x + 118, y + 48, eng and COL_GOOD or COL_ENG_OFF)
 
     if fuel >= 0 then
         local pct = math.Clamp(fuel / fmax, 0, 1)
         local bx, by, bw, bh = x + 118, y + 24, 140, 10
-        draw.SimpleText(typN, "GRMVeh_Sm", bx, y + 8, Color(250, 185, 63))
+        draw.SimpleText(typN, "GRMVeh_Sm", bx, y + 8, COL_FUEL_TYPE)
         surface.SetDrawColor(30, 36, 46)
         surface.DrawRect(bx, by, bw, bh)
-        surface.SetDrawColor(pct < 0.15 and Color(220, 70, 50) or Color(240, 170, 50))
+        surface.SetDrawColor(pct < 0.15 and COL_DANGER or COL_FUEL_OK)
         surface.DrawRect(bx, by, bw * pct, bh)
-        draw.SimpleText(string.format("%.0f / %.0f л", fuel, fmax), "GRMVeh_Sm", bx, by + 12, Color(210, 220, 230))
+        draw.SimpleText(string.format("%.0f / %.0f л", fuel, fmax), "GRMVeh_Sm", bx, by + 12, COL_FUEL_NUM)
         if empty then
-            draw.SimpleText("НЕТ ТОПЛИВА", "GRMVeh_Mid", x + w / 2, y + 62, Color(230, 80, 70), TEXT_ALIGN_CENTER)
+            draw.SimpleText("НЕТ ТОПЛИВА", "GRMVeh_Mid", x + w / 2, y + 62, COL_BROKEN, TEXT_ALIGN_CENTER)
         end
     else
-        draw.SimpleText("бак не привязан", "GRMVeh_Sm", x + 118, y + 28, Color(140, 160, 180))
+        draw.SimpleText("бак не привязан", "GRMVeh_Sm", x + 118, y + 28, COL_DIM)
     end
 
     drawHPBar(veh, x, y, w, h)
@@ -314,7 +341,7 @@ hook.Add("HUDPaint", "GRM_Vehicle_LookHP", function()
     if lp:GetPos():DistToSqr(veh:GetPos()) > 280 * 280 then return end
     local w, h = 280, 56
     local x, y = ScrW() / 2 - w / 2, ScrH() - h - 28
-    draw.RoundedBox(10, x, y, w, h, Color(10, 14, 22, 230))
+    draw.RoundedBox(10, x, y, w, h, COL_PANEL)
     surface.SetDrawColor(55, 117, 151, 180)
     surface.DrawOutlinedRect(x, y, w, h, 1)
     drawHPBar(veh, x, y, w, h)

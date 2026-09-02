@@ -3636,6 +3636,8 @@ if CLIENT then
     concommand.Add("grm_mask_admin", function() if LocalPlayer():IsSuperAdmin() then openMaskAdminMenu() end end)
     concommand.Add("cl_model", openModelSelection)
 
+    -- цвета плашки постоянны — создаются один раз, не на кадр (§6.1.8)
+    local COL_CURFEW_BG, COL_CURFEW_TEXT = Color(150, 20, 20, 220), Color(255, 220, 220)
     hook.Add("HUDPaint", "FactionsExt_CurfewHUD", function()
         if not CurfewState.active then return end
         local remaining = math.max(0, CurfewState.endTime - CurTime())
@@ -3645,8 +3647,8 @@ if CLIENT then
         local tw, th = surface.GetTextSize(text)
         local x, y = ScrW() / 2 - tw / 2, 40
 
-        draw.RoundedBox(6, x - 12, y - 6, tw + 24, th + 12, Color(150, 20, 20, 220))
-        draw.SimpleText(text, "FactionsExt_Title", x, y, Color(255, 220, 220), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+        draw.RoundedBox(6, x - 12, y - 6, tw + 24, th + 12, COL_CURFEW_BG)
+        draw.SimpleText(text, "FactionsExt_Title", x, y, COL_CURFEW_TEXT, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
     end)
 
     -- GNews client receiver/command.

@@ -323,6 +323,21 @@ hook.Add("Think", "GRM_Customization_CacheMaintenance", function()
     end
 end)
 
+--[[ Кадровые краски HUD функций (часы, противогаз, сумка). Создаются
+     один раз при загрузке: HUDPaint = каждый кадр, Color() внутри него —
+     мусорная таблица на кадр (§6.1.8). ]]
+local COL_HUD_WATCH_BG, COL_HUD_WATCH_TEXT = Color(12, 17, 25, 210), Color(120, 210, 255)
+local COL_HUD_GAS_BG, COL_HUD_GAS_TEXT = Color(12, 20, 24, 195), Color(115, 225, 155)
+local COL_HUD_BAG_BG, COL_HUD_BAG_TEXT, COL_HUD_BAG_HINT = Color(20, 14, 8, 205), Color(255, 200, 90), Color(150, 130, 100)
+-- Орбитальная камера редактора: вектор-константы пересчёта вида.
+-- Пока редактор открыт CalcView крутится каждый кадр; поля движка-Vector
+-- не мутируем (TraceHull держит ссылки), но литералы вынесены.
+local CAM_TARGET_UP = Vector(0, 0, 42)
+local CAM_HULL_MIN, CAM_HULL_MAX = Vector(-4, -4, -4), Vector(4, 4, 4)
+-- углы орбиты — переиспользуемый Angle: редактор всегда один, кадр за
+-- кадром поля перезаписываются перед употреблением (тот же приём, что
+-- correction.z в sv_grm_handcuffs)
+local CAM_ANG = Angle(0, 0, 0)
 hook.Add("HUDPaint", "GRM_Customization_FunctionHUD", function()
     if C.EditorActive then return end
     if C.LocalHasFunction("watch") then
@@ -333,14 +348,14 @@ hook.Add("HUDPaint", "GRM_Customization_FunctionHUD", function()
         surface.SetFont("GRMCustom_Body")
         local tw, th = surface.GetTextSize(text)
         local x, y = ScrW() - tw - 24, 72
-        draw.RoundedBox(6, x - 9, y - 5, tw + 18, th + 10, Color(12, 17, 25, 210))
-        draw.SimpleText(text, "GRMCustom_Body", x, y, Color(120, 210, 255))
+        draw.RoundedBox(6, x - 9, y - 5, tw + 18, th + 10, COL_HUD_WATCH_BG)
+        draw.SimpleText(text, "GRMCustom_Body", x, y, COL_HUD_WATCH_TEXT)
     end
     if C.LocalHasFunction("gasmask") then
         local protection = math.floor(C.LocalFunctionValue("gasmask", "gasProtection", "max") * 100 + 0.5)
         local text = "ПРОТИВОГАЗ  •  ЗАЩИТА " .. protection .. "%"
-        draw.RoundedBox(5, ScrW()/2 - 105, 64, 210, 25, Color(12, 20, 24, 195))
-        draw.SimpleText(text, "GRMCustom_Small", ScrW()/2, 76, Color(115, 225, 155), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.RoundedBox(5, ScrW()/2 - 105, 64, 210, 25, COL_HUD_GAS_BG)
+        draw.SimpleText(text, "GRMCustom_Small", ScrW()/2, 76, COL_HUD_GAS_TEXT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end
     -- Находка 178f: сумка ограбления — счётчик и выгрузка
     if C.LocalHasFunction("loot_bag") and IsValid(LocalPlayer()) then
@@ -350,9 +365,9 @@ hook.Add("HUDPaint", "GRM_Customization_FunctionHUD", function()
         local text = ("СУМКА ОГРАБЛЕНИЯ: %s / %s"):format(
             GRM and GRM.Format and GRM.Format(cur) or tostring(cur),
             GRM and GRM.Format and GRM.Format(maxM) or tostring(maxM))
-        draw.RoundedBox(6, ScrW()/2 - 130, 96, 260, 26, Color(20, 14, 8, 205))
-        draw.SimpleText(text, "GRMCustom_Small", ScrW()/2, 102, Color(255, 200, 90), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("/bag_unload — выгрузить в кошелёк", "GRMCustom_Small", ScrW()/2, 118, Color(150, 130, 100), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.RoundedBox(6, ScrW()/2 - 130, 96, 260, 26, COL_HUD_BAG_BG)
+        draw.SimpleText(text, "GRMCustom_Small", ScrW()/2, 102, COL_HUD_BAG_TEXT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText("/bag_unload — выгрузить в кошелёк", "GRMCustom_Small", ScrW()/2, 118, COL_HUD_BAG_HINT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end
 end)
 
@@ -459,10 +474,11 @@ end
 
 hook.Add("CalcView", "GRM_Customization_OrbitCamera", function(ply, origin, angles, fov)
     if not editor.active or ply ~= LocalPlayer() then return end
-    local target = ply:GetPos() + Vector(0, 0, 42)
-    local ang = Angle(editor.pitch, editor.yaw, 0)
+    local target = ply:GetPos() + CAM_TARGET_UP
+    CAM_ANG.p, CAM_ANG.y, CAM_ANG.r = editor.pitch, editor.yaw, 0
+    local ang = CAM_ANG
     local wanted = target - ang:Forward() * editor.distance
-    local tr = util.TraceHull({ start = target, endpos = wanted, filter = ply, mins = Vector(-4,-4,-4), maxs = Vector(4,4,4), mask = MASK_SOLID })
+    local tr = util.TraceHull({ start = target, endpos = wanted, filter = ply, mins = CAM_HULL_MIN, maxs = CAM_HULL_MAX, mask = MASK_SOLID })
     return { origin = tr.HitPos, angles = (target - tr.HitPos):Angle(), fov = 48, drawviewer = true }
 end)
 hook.Add("ShouldDrawLocalPlayer", "GRM_Customization_DrawLocalPlayer", function()
