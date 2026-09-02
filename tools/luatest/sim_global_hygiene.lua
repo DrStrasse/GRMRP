@@ -129,7 +129,7 @@ for _, n in ipairs({
     "istable", "isstring", "isnumber", "isfunction", "isbool", "isentity",
     "IsValid", "CurTime", "SysTime", "RealTime", "Vector", "Angle", "Color",
     "pairs", "ipairs", "tostring", "tonumber", "type", "pcall", "unpack",
-    "GRM", "EasyChat", "textscreenFonts",
+    "GRM", "GRMChat", "textscreenFonts",
 }) do AMBIENT[n] = true end
 
 local earlyUse = {}
@@ -277,7 +277,7 @@ for _, n in ipairs({
     -- сторонний Textscreens: правим только у себя, апстрим не трогаем
     "resetall", "resetline",
     -- ключевые таблицы движка/аддона
-    "GRM", "ENT", "SWEP", "TOOL", "PANEL", "EasyChat", "textscreenFonts",
+    "GRM", "ENT", "SWEP", "TOOL", "PANEL", "GRMChat", "textscreenFonts",
 }) do ALLOWED_GLOBALS[n] = true end
 
 local leaks = {}

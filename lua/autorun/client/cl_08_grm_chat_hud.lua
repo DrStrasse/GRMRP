@@ -1,7 +1,13 @@
---[[ GRMRPChat HUD-лента: closed-form fade (EasyChat chathud, WIKI 4.21.4),
-    кольцевой буфер, разметка не парсится — рисуем чипами (цвет канала +
-    имя + текст), т.к. пользовательский ввод уже обезврежен на сервере.
+-- СГЕНЕРИРОВАНО tools/sync_chat_addon.py — источник: cl_grmrp_chat_hud.lua
+-- Не править руками: изменения вносите в файл режима и перегенерируйте
+-- (`python3 tools/sync_chat_addon.py`); расхождение ловит --check.
+--[[ GRMChat — аддонский мутированный порт чат-модуля режима (тот же код,
+    другие имена). На серверах с gamemode GRMRP модуль молча выключается
+    целиком: чат режима — единственный владелец, дублей net-имён/cvar'ов/
+    перехвата PlayerSay не возникает никогда.
 ]]
+if SERVER then return end
+if GRMRP and GRMRP.Version then return end
 
 if SERVER then return end
 
@@ -12,40 +18,40 @@ surface.CreateFont("GRMRP_ChatChip", {
     font = "Roboto", size = 13, weight = 700, extended = true
 })
 
-GRMRPChat = GRMRPChat or {}
-GRMRPChat.lines = GRMRPChat.lines or {}
-GRMRPChat.INPUT_OPEN = false
+GRMChat = GRMChat or {}
+GRMChat.lines = GRMChat.lines or {}
+GRMChat.INPUT_OPEN = false
 
 local MAX_LINES = 300 -- рисуем 18, история (окно) видит все 300
 local TTL, FADE = 45, 4          -- сек; fade — последние FADE секунд жизни
 
 local function push(chan, name, text, t, mine)
-    table.insert(GRMRPChat.lines, {
+    table.insert(GRMChat.lines, {
         chan = chan, name = name, text = text, t = t, mine = mine and true or false
     })
-    if #GRMRPChat.lines > MAX_LINES then
-        table.remove(GRMRPChat.lines, 1)
+    if #GRMChat.lines > MAX_LINES then
+        table.remove(GRMChat.lines, 1)
     end
 end
 
-function GRMRPChat.AddLine(chanId, name, text, t)
-    local chan = GRMRPChat.GetChannel and GRMRPChat.GetChannel(chanId)
+function GRMChat.AddLine(chanId, name, text, t)
+    local chan = GRMChat.GetChannel and GRMChat.GetChannel(chanId)
     push(chan or { title = "·", color = { r = 255, g = 255, b = 255 } },
         name, text, t, false)
 end
 
-function GRMRPChat.AddSelfLine(chanId, text)
-    local chan = GRMRPChat.GetChannel and GRMRPChat.GetChannel(chanId)
+function GRMChat.AddSelfLine(chanId, text)
+    local chan = GRMChat.GetChannel and GRMChat.GetChannel(chanId)
     push(chan or { title = "·", color = { r = 255, g = 255, b = 255 } },
         LocalPlayer():Name(), text, CurTime(), true)
 end
 
-function GRMRPChat.ClearLines()
-    GRMRPChat.lines = {}
+function GRMChat.ClearLines()
+    GRMChat.lines = {}
 end
 
-net.Receive(GRMRP.Net.MSG, function()
-    if not IsValid(GRMRPChat) then return end
+net.Receive(GRMChat.Net.MSG, function()
+    if not IsValid(GRMChat) then return end
     local chanId = net.ReadString()
     local name = net.ReadString()
     local text = net.ReadString()
@@ -59,17 +65,17 @@ net.Receive(GRMRP.Net.MSG, function()
         -- напечатан — молча гасим дубль (§5.2 «один владелец строки»)
         return
     end
-    GRMRPChat.AddLine(chanId, name, text, t)
+    GRMChat.AddLine(chanId, name, text, t)
 end)
 
-hook.Add("HUDPaint", "GRMRPChat_HUD", function()
-    local lines = GRMRPChat.lines
+hook.Add("HUDPaint", "GRMChat_HUD", function()
+    local lines = GRMChat.lines
     if #lines == 0 then return end
 
     local h = ScrH()
     local x, yBase = 16, h - 130
     local nowRT = RealTime()
-    local hold = GRMRPChat.INPUT_OPEN or GRMRPChat.HIST_OPEN
+    local hold = GRMChat.INPUT_OPEN or GRMChat.HIST_OPEN
 
     local shown = 0
     for i = #lines, 1, -1 do
@@ -112,3 +118,32 @@ hook.Add("HUDPaint", "GRMRPChat_HUD", function()
         end
     end
 end)
+
+-- Единственный владелец отображения чата: движковая панель скрыта, весь
+-- chat.AddText (его зовут документы/обучение/биндер) течёт в нашу ленту.
+hook.Add("HUDShouldDraw", "GRMChat_HideVanilla", function(name)
+    if name == "CHudChat" and GRMChat.Enabled and GRMChat.Enabled() then
+        return false
+    end
+end)
+
+do
+    local baseAddText = chat.AddText
+    function chat.AddText(...)
+        if not (GRMChat.Enabled and GRMChat.Enabled()) then
+            return baseAddText(...)
+        end
+        local parts = {}
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            if isstring(v) then
+                parts[#parts + 1] = v
+            end
+        end
+        local text = table.concat(parts, " ")
+        if #text == 0 then return end
+        if GRMChat.AddLine then
+            GRMChat.AddLine("ooc", "", text, CurTime())
+        end
+    end
+end

@@ -1,5 +1,20 @@
 # CHANGELOG — история изменений
 
+## 2026-09-03 (ночь-3) — свой чат довезли до конца: GRMChat-порт в аддон
+
+«чат из easychat вырезать и свой нормальный сделать» — вторая половина
+реализована: чат режима расширен (лента 300, окно истории с выделением/
+Ctrl+C/автопрокруткой, Tab-дополнение ников в /pm циклом, `grm_chat_open`),
+и тот же код машинно портирован в аддон для серверов песочницы:
+tools/sync_chat_addon.py генерит lua/autorun/{sh,sv}_08_grm_chat*.lua +
+client/cl_08_grm_chat_{hud,input}.lua с заменой имён (GRMChat, grm_chat_*,
+grm/chat_*), realm-клеем (hook PlayerSay, HUDShouldDraw CHudChat→false,
+переназначение chat.AddText в ленту, Y через HUDKeyPress) и полным
+самоотключением на GRMRP (`if GRMRP.Version then return end`) — дублей
+cvar/net/перехвата не бывает. Гейт --check (расхождение = красные ворота),
+sim_grmrp_chat параметризован (43/43 ×2: режим и аддон), sim_global_hygiene:
+whitelist EasyChat→GRMChat. WIKI 7.2/7.3 синхронны.
+
 ## 2026-09-03 (ночь-2) — вендорный EasyChat ВЫРЕЗАН (указание владельца)
 
 «чат из easychat надо вырезать и свой нормальный сделать»: удалены

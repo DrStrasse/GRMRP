@@ -21959,7 +21959,7 @@ EasyChat замещается собственным core.chat. Права — �
 | телефония/устройства | sh_grm_mobile, phone_access/config/shop/vendor, radionet | mob.core | телефон = Derma-приложение в qmenu-слое; звонки — серверная коммутация (не WebRTC, движковый Voice + can-hear хук: EChat voice_hud precedent) |
 | оптимизация/антилаг | GRM.Perf целиком (Coalesce/Queue/Spread/Throttle/Material/EyeTrace/NW) | core.perf | остаётся ядром; новые системы = только через него; sim_perf-гейты + FProfiler-метрики 4.18 |
 | античит | sh_grm_anticheat (v1.0.0) | core.anticheat | + inflictor-laundering (4.11.3), + hwid-цепь бана (наш ban 1.3) |
-| чат режима | sh_grm_rp_chat, chat_config, qmenu-мосты, EasyChat (удаляемая зависимость!) | core.chat | ПЕРВЫЙ модуль режима (реализован в этом же коммите): каналы ooc/ic/pm/me/advert, filter на сервере, closed-form fade, история, без CEF/DHTML |
+| чат режима | sh_grm_rp_chat, chat_config, qmenu-мосты, EasyChat (УДАЛЁН 03.09) | core.chat | ПЕРВЫЙ модуль режима: каналы ooc/ic/pm/me/advert/dead, лестница, закрытая лента + окно истории (копируется), Tab-дополнение каналов и ников /pm, без CEF/DHTML. Для песочницы — машинный порт GRMChat (lua/autorun/*_08_grm_chat*, генератор tools/sync_chat_addon.py; --check в гейтах; на GRMRP-серверах самоотключается) |
 
 ## 7.3 Фаза I — что уже заложено (этот коммит)
 
@@ -21989,7 +21989,13 @@ sim_grmrp_chat.lua (43 теста — уже нашли и починили 3 р
 phys.doors/fin.core → ... (таблица выше — верх-вниз по зависимостям).
 После смоуков добавлено: cl_grmrp_menu.lua (меню паузы, §7.3.1) и защита
 ввода от «ядро не загрузилось» (один ErrorNoHalt вместо спамa в Paint —
-урок смешанной установки 03.09).
+урок смешанной установки 03.09). Чат доведён до «нормального» (указание
+владельца «чат из EasyChat вырезать и свой нормальный сделать»): лента 300
+строк с окном истории (выделение+Ctrl+C, автопрокрутка), Tab-дополнение
+ников в /pm (цикл по совпадениям), `grm_chat_open`; для серверов песочницы
+— автогенерируемый машинный порт GRMChat (tools/sync_chat_addon.py,
+`--check` в гейтах; на режиме самоотключается — дублей cvar/net/перехвата не
+бывает; Y через HUDKeyPress, chat.AddText переназначен в ленту).
 
 ### 7.3.1 Клиентский смоук-тест 03.09 — канон входа (исправлено в тот же день)
 

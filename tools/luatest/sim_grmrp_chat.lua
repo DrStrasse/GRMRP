@@ -19,7 +19,13 @@ function isstring(v) return type(v) == "string" end
 function isnumber(v) return type(v) == "number" end
 function math.Clamp(v, a, b) return v < a and a or (v > b and b or v) end
 
-dofile("gamemodes/grmrp/gamemode/modules/chat/sh_grmrp_chat_core.lua")
+local which = (arg and arg[1]) or "mode"
+if which == "addon" then
+    dofile("lua/autorun/sh_08_grm_chat_core.lua")
+else
+    dofile("gamemodes/grmrp/gamemode/modules/chat/sh_grmrp_chat_core.lua")
+end
+local GRMRPChat = _G[(which == "addon") and "GRMChat" or "GRMRPChat"]
 
 local passed, failed = 0, 0
 local function T(name, cond)
@@ -180,6 +186,6 @@ local c2 = GRMRPChat.RegisterChannel("t2", { scope = "левый" })
 T("bad scope falls back to range", c2.scope == "range")
 T("bad id rejected", (GRMRPChat.RegisterChannel("", {})) == nil)
 
-print(string.format("GRMRP_CHAT: %d/%d, провалов: %d",
+print(string.format("GRMRP_CHAT[%s]: %d/%d, провалов: %d", which,
     passed, passed + failed, failed))
 os.exit(failed == 0 and 0 or 1)
