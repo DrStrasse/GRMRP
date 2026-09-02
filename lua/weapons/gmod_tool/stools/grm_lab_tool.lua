@@ -88,23 +88,10 @@ function TOOL:RightClick(tr)
     return false
 end
 
-function TOOL:Reload(tr)
-    if CLIENT then return true end
-
-    local ply = self:GetOwner()
-    if not IsValid(ply) or not ply:IsSuperAdmin() then return false end
-
-    local ent = tr.Entity
-    if not IsValid(ent) then return false end
-
-    if ent:GetClass() == "grm_narc_lab" or ent:GetClass() == "grm_med_lab" then
-        ent:Remove()
-        ply:ChatPrint("[Лаборатория] Удалён")
-        return true
-    end
-
-    return false
-end
+--- R — то же удаление, что и ПКМ: раньше тело было продублировано
+--- байт-в-байт (волна дедупа 1, 02.09.2026). Поведение по описанию
+--- инструмента: «R — удалить лабораторию».
+TOOL.Reload = TOOL.RightClick
 
 function TOOL.BuildCPanel(CPanel)
     CPanel:AddControl("Header", {

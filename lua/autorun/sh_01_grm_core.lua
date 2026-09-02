@@ -236,4 +236,41 @@ if CLIENT then
     CreateClientConVar("grm_language", "ru", true, true, "GRM interface language: ru/en")
 end
 
+--[[ Корневой транспорт для сиденья/прицепленной точки (волна дедупа 1,
+     02.09.2026). Прежний вид этой функции был вырезан отдельным клоном
+     в каждом из sh_grm_cruise и sh_grm_vehicle_health; теперь они зовут
+     отсюда. Если подключено топливо — авторитет у F.RootVehicle (там
+     более строгая проверка «это действительно машина»), этот путь —
+     фолбэк для отключенного модуля. ]]
+function C.VehRoot(ent)
+    if GRM.Fuel and isfunction(GRM.Fuel.RootVehicle) then
+        return GRM.Fuel.RootVehicle(ent)
+    end
+    if not (IsValid(ent) and ent.GetParent) then return nil end
+    local p = ent:GetParent()
+    if IsValid(p) then return p end
+    if ent.IsSimfphysCar or ent.LVS or ent.IsLVSVehicle or ent.IsGlideVehicle then return ent end
+    local cls = string.lower(ent:GetClass() or "")
+    if cls == "prop_vehicle_jeep" or cls == "prop_vehicle_airboat" then return ent end
+    return nil
+end
+
+--- Снимок фракций для редакторов доступа (CCTV и телефония держали по
+--- своей копии этого сборщика — волна дедупа 1). Формат payload менять
+--- нельзя: его читают клиентские панели обоих модулей.
+function C.FactionAccessSnapshot()
+    local out = {}
+    for factionName, f in pairs(Factions or {}) do
+        if istable(f) then
+            out[factionName] = {
+                Roles = istable(f.Roles) and f.Roles or {},
+                Departments = istable(f.Departments) and f.Departments or {},
+                Leader = f.Leader,
+                LeaderRoleName = f.LeaderRoleName or "Лидер",
+            }
+        end
+    end
+    return out
+end
+
 print("[GRM Core] contracts and languages v" .. C.Version .. " loaded")

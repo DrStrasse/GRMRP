@@ -112,18 +112,36 @@ local function body(path)
     local fh = io.open(path, "rb") if not fh then return "" end
     local t = fh:read("*a") fh:close() return t
 end
---[[ У HUD, прочности и круиза свои копии root() на случай, если модуль
-     топлива не загрузился. Раньше все три возвращали сам стул. ]]
+--[[ Раньше у HUD, прочности и круиза были свои копии root() на случай,
+     если модуль топлива не загрузился, и все три возвращали сам стул.
+     Волна дедупа 1 (02.09.2026): явный фолбэк живёт в ОДНОМ месте —
+     GRM.Core.VehRoot; прочность и круиз делегируют ему; HUD остаётся
+     самодостаточным (клиент может жить без core-секции?). Контракт:
+     1) фолбэк опознаёт транспорт явно (jeep/airboat), а не любое сиденье;
+     2) ни одна из копий не возвращает стул по умолчанию. ]]
+local coreSrc = body("lua/autorun/sh_01_grm_core.lua")
+ok(coreSrc:find("prop_vehicle_jeep", 1, true) ~= nil,
+   "GRM.Core.VehRoot: фолбэк опознаёт транспорт явно, а не считает им любое сиденье")
+ok(coreSrc:find("    return ent\nend", 1, true) == nil,
+   "GRM.Core.VehRoot: фолбэк не возвращает стул по умолчанию")
 for label, path in pairs({
     ["приборник"] = "lua/autorun/client/cl_grm_vehicle_hud.lua",
-    ["прочность"] = "lua/autorun/sh_grm_vehicle_health.lua",
-    ["круиз-контроль"] = "lua/autorun/sh_grm_cruise.lua",
 }) do
     local src = body(path)
     ok(src:find("prop_vehicle_jeep", 1, true) ~= nil,
        label .. ": фолбэк опознаёт транспорт явно, а не считает им любое сиденье")
     ok(src:find("    return ent\nend", 1, true) == nil or src:find("or ent", 1, true) ~= nil,
        label .. ": фолбэк больше не возвращает стул по умолчанию")
+end
+for label, path in pairs({
+    ["прочность"] = "lua/autorun/sh_grm_vehicle_health.lua",
+    ["круиз-контроль"] = "lua/autorun/sh_grm_cruise.lua",
+}) do
+    local src = body(path)
+    ok(src:find("GRM.Core.VehRoot", 1, true) ~= nil,
+       label .. ": корень берётся из общего GRM.Core.VehRoot (копия вырезана)")
+    ok(src:find("prop_vehicle_jeep", 1, true) == nil,
+       label .. ": локального клона фолбэка больше нет")
 end
 
 print("\n=== 6. ПОТРЕБИТЕЛИ ПЕРЕЖИВАЮТ nil ===")

@@ -131,20 +131,9 @@ if SERVER then
 
     AM.Load()
 
-    local function buildFactionsPayload()
-        local out = {}
-        for factionName, f in pairs(Factions or {}) do
-            if istable(f) then
-                out[factionName] = {
-                    Roles = istable(f.Roles) and f.Roles or {},
-                    Departments = istable(f.Departments) and f.Departments or {},
-                    Leader = f.Leader,
-                    LeaderRoleName = f.LeaderRoleName or "Лидер",
-                }
-            end
-        end
-        return out
-    end
+    -- Сборщик снимка фракций — общий для CCTV- и телефонного редакторов
+    -- доступа (волна дедупа 1): GRM.Core.FactionAccessSnapshot.
+    local buildFactionsPayload = GRM.Core.FactionAccessSnapshot
 
     local function sendResult(ply, ok, msg)
         if not IsValid(ply) then return end
