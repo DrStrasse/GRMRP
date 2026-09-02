@@ -4,10 +4,15 @@
     GRMAPI.finish() → флаг загрузки снят → хук готовности.
 ]]
 
-DeriveGamemode("sandbox")
+-- Движок НЕ подгружает shared.lua сам: каждый вход включает его явно
+-- (wiki «Gamemode Creation»). DeriveGamemode живёт в shared.lua.
+AddCSLuaFile("cl_init.lua")
+AddCSLuaFile("shared.lua")
+AddCSLuaFile("grm_api.lua")
+include("shared.lua")
+
 DEFINE_BASECLASS("gamemode_sandbox")
 
-GRMRP = GRMRP or {}
 GRMRP.GM = GM
 
 hook.Run("GRMRPStartedLoading")

@@ -3,6 +3,7 @@
     каналов/констант до первого пакета).
 ]]
 
+include("shared.lua") -- namespace/net-константы/GRMAPI; движок shared сам не грузит
 DEFINE_BASECLASS("gamemode_sandbox")
 
 hook.Run("GRMRPStartedLoadingClient")

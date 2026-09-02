@@ -6,9 +6,12 @@
     все переопределения идут через self.BaseClass с честным fallback.
 ]]
 
-AddCSLuaFile("shared.lua")
-AddCSLuaFile("cl_init.lua")
-AddCSLuaFile("grm_api.lua")
+-- Единственный правильный дом для DeriveGamemode — shared.lua: оба входа
+-- (init/cl_init) включают shared сами (движок shared.lua НЕ подгружает —
+-- см. GMod wiki «Gamemode Creation»), поэтому на рантайме вызов происходит
+-- ровно один раз. Инцидент 03.09.2026: без include("shared.lua") в cl_init
+-- клиент падал на nil GRMRP и откатывался на base (player_sandbox бэктрейс).
+DeriveGamemode("sandbox")
 
 include("grm_api.lua")
 

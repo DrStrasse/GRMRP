@@ -1,5 +1,19 @@
 # CHANGELOG — история изменений
 
+## 2026-09-03 (вечер) — GRMRP: фиксы канона входа по клиентскому смоуку (владелец)
+
+Консоль живого GMod: `cl_init.lua:21 attempt to index global 'GRMRP'` →
+«Couldn't Load Init Script» → base-fallback «unknown player class
+player_sandbox». Причины: движок НЕ подгружает shared.lua gamemode'а —
+init/cl_init обязаны включать его сами (AddCSLuaFile trio в init);
+DeriveGamemode("sandbox") переехал в shared (иначе клиент не наследует
+sandbox, отсюда player_sandbox); реестр каналов чата пересажен из sv в sh-ядро
+(клиентские чипы/цвета читали пустой реестр). Манифест приведён к wiki-форме:
+корневой блок `"grmrp"`, добавлены menusystem/category. В WIKI — §7.3.1
+(включая разбор НЕ наших ошибок из лога: advmat GetTool nil под hook-обёрткой
+ULib и ULX xgui table.Empty(nil) — баги сторонних клиентских аддонов, режим их
+не вызывает). гейты: синтаксис ×9, симы 43/43 + 28/28, стиль чистый.
+
 ## 2026-09-03 — волна-3 финал (EasyChat) + игровой режим GRMRP: каркас и чат (фаза I)
 
 **Уточнение владельца.** «Зависимость от LUA» = ULib/ULX: режим обязан быть

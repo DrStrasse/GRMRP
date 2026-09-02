@@ -100,6 +100,34 @@ function GRMRPChat.GetChannel(id)
     return GRMRPChat.Channels[tostring(id)]
 end
 
+-- Каналы режима — ОБЩАЯ декларация (не sv!): клиент строит по этому же
+-- реестру чипы ввода и цвета ленты; сервер — маршрутизацию. Дальность ic
+-- перебивается cvar'ом на сервере при разборе (sv-обвязка).
+GRMRPChat.RegisterChannel("ic", {
+    title = "Крик", scope = "range", cmd = "w",
+    color = { r = 235, g = 235, b = 235 }
+})
+GRMRPChat.RegisterChannel("dead", {
+    title = "Мертвечина", scope = "range", range = 400, onlyDead = true,
+    color = { r = 240, g = 90, b = 90 }
+})
+GRMRPChat.RegisterChannel("ooc", {
+    title = "OOC", scope = "world", cmd = "ooc",
+    color = { r = 120, g = 210, b = 255 }
+})
+GRMRPChat.RegisterChannel("me", {
+    title = "Отыгровка", scope = "range", cmd = "me",
+    color = { r = 255, g = 185, b = 63 }
+})
+GRMRPChat.RegisterChannel("advert", {
+    title = "Объявление", scope = "world", cmd = "advert", cooldown = 60,
+    color = { r = 190, g = 120, b = 255 }
+})
+GRMRPChat.RegisterChannel("pm", {
+    title = "Личное", scope = "pm", cmd = "pm",
+    color = { r = 64, g = 222, b = 147 }
+})
+
 -- Разбор строки PlayerSay: "/cmd text" → канал+тело; без слэша — defChan.
 -- Возвращает (channelID, body, extra) либо (nil, причина).
 function GRMRPChat.ParseSay(text, defChan)

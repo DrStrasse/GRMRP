@@ -1,4 +1,4 @@
-"gamemode"
+"grmrp"
 {
 	"title"		"GRM:RP"
 	"base"		"sandbox"
@@ -6,4 +6,6 @@
 	"author"	"DrStrasse"
 	"authorurl"	"https://github.com/DrStrasse/GRMRP"
 	"license"	"See repository LICENSE"
+	"menusystem"	"1"
+	"category"	"rp"
 }
