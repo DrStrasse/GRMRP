@@ -61,7 +61,12 @@ local function sendSystem(ply, text)
 end
 GRMRPChat.SendSystem = sendSystem
 
-local function deliver(chan, author, body, extra, lineOverride, includeAuthor)
+-- forcedTargets (вечер-15): явно заданный круг слушателей от вызывающей
+-- системы (GRM.RPBroadcast с targets) — для событий с чужой геометрией
+-- слышимости (предъявление «только цели», представление «в радиусе модуля»).
+-- Радиусные правила канала при этом НЕ применяются (осознанно, не в обход:
+-- тот же deliver, та же лента/санитайз — дублирующего пути нет).
+local function deliver(chan, author, body, extra, lineOverride, includeAuthor, forcedTargets)
     local now = CurTime()
     local players = player.GetAll()
 
@@ -71,6 +76,8 @@ local function deliver(chan, author, body, extra, lineOverride, includeAuthor)
         target, err = GRMRPChat.ResolvePmTarget(extra and extra.target or "", players, author)
         if not target then return err end
         targets = { target }
+    elseif forcedTargets then
+        targets = forcedTargets
     else
         targets, err = GRMRPChat.ResolveAudience(chan, author, players,
             function(a, b) return a:GetPos():DistToSqr(b:GetPos()) end,
@@ -129,8 +136,12 @@ function GRMRPChat.RPAction(kind, ply, body, chanId, opts)
         -- проваливались в пустоту: получатель видел «* ...» только если
         -- строка шла через чужие каналы (старый RPChat/EasyChat), т.е.
         -- либо дубль, либо ничего. Стенд sim_chat_sv_routing закрывает дыру.
+        local forced
+        if opts and istable(opts.targets) and #opts.targets > 0 then
+            forced = opts.targets
+        end
         return deliver(chan, ply, body, nil, def.fmt(authorName, body, nil),
-            opts and opts.echoAuthor == true)
+            opts and opts.echoAuthor == true, forced)
     end
 
     if kind == "do" then

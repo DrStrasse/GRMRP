@@ -183,6 +183,36 @@ if m then
     T2("range=400 отсекает дальнего сильнее cvar", not hasC)
 end
 
+-- принудительная аудитория (вечер-15: nameplate/шина, bypass канала по design)
+reset()
+err = GRMRPChat.RPAction("me", A, "предъявляет вам документ", nil,
+    { echoAuthor = false, rpName = "Маска", range = 400, targets = { B } })
+m = lastMsg()
+T2("targets: доставлено ровно одному", m ~= nil and #m.targets == 1 and m.targets[1] == B,
+    m and #m.targets)
+T2("targets+echo off: автора нет в списке", m ~= nil and (function()
+    for _, p in ipairs(m.targets) do if p == A then return false end end
+    return true end)())
+T2("targets: fmt с rpName легенды", m and m.parts[3] == "* Маска предъявляет вам документ",
+    m and m.parts[3])
+reset()
+GRMRPChat.RPAction("me", A, "представляется окружающим", nil,
+    { echoAuthor = true, rpName = "Ann", range = 120, targets = { B, C } })
+m = lastMsg()
+T2("targets: явный список НЕ режется range (C на 900 прошёл)", m ~= nil and (function()
+    local has = {}
+    for _, p in ipairs(m.targets) do has[p] = true end
+    return has[B] and has[C] and has[A] end)(), m and #m.targets)
+reset()
+GRMRPChat.RPAction("me", A, "пустышка", nil,
+    { echoAuthor = false, rpName = "Ann", range = 400, targets = { A } })
+m = lastMsg()
+T2("targets=сам автор + echo off: дубля нет (фильтр deliver)",
+    m == nil or #m.targets == 0 or (function()
+        local n = 0
+        for _, p in ipairs(m.targets) do if p == A then n = n + 1 end end
+        return n == 1 end)())
+
 -- ============ 2. /do → /it контекст ============
 reset()
 GRMRPChat.ProcessLine(A, "/do мяч катится", "ic")

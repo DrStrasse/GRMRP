@@ -351,9 +351,14 @@ if SERVER then
         local name = masked and ply:GetNWString("MaskName", "") or rpName(ply)
         if name == "" then name = rpName(ply) end
 
+        -- Вечер-15: отыгровка — через ЕДИНУЮ шину (своя лента/каналы/
+        -- лестница), аудиторию считаем сами (она нужна и для NP.Learn).
+        -- echoAuthor=false: авторская строка ниже — своя формулировка.
+        local nearby = nearPlayers(ply, radius)
+        GRM.RPBroadcast(ply, "представляется окружающим.",
+            { targets = nearby, radius = radius, echoAuthor = false, rpName = name })
         local heard = 0
-        for _, other in ipairs(nearPlayers(ply, radius)) do
-            other:ChatPrint("* " .. name .. " представляется окружающим.")
+        for _, other in ipairs(nearby) do
             -- Под легендой знакомство НЕ записывается: люди запомнили не того.
             if not masked then NP.Learn(other, ply, "introduce") end
             heard = heard + 1
@@ -377,7 +382,10 @@ if SERVER then
         local name = masked and ply:GetNWString("MaskName", "") or rpName(ply)
         local cid = (GRM.Registry and GRM.Registry.CID) and GRM.Registry.CID(ply) or ""
 
-        target:ChatPrint("* " .. name .. " предъявляет вам документ.")
+        -- Вечер-15: «предъявляет вам» видит ТОЛЬКО адресат (было: прямой
+        -- ChatPrint мимо своей ленты) — шина, target-режим, без echo.
+        GRM.RPBroadcast(ply, "предъявляет вам документ.",
+            { targets = { target }, echoAuthor = false, rpName = name })
         if masked then
             target:ChatPrint("[Документ] " .. name .. " (документ прикрытия)")
         else

@@ -734,14 +734,10 @@ if SERVER then
     -------------------------------------------------------------------
     local function meAction(actor, text)
         if not IsValid(actor) then return end
-        local radius = 355
-        local name = actor:GetNWString("GRM_RPName", actor:Nick())
-        local pos = actor:GetPos()
-        for _, ply in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
-            if IsValid(ply) and ply:GetPos():DistToSqr(pos) <= radius * radius then
-                ply:ChatPrint("* " .. name .. " " .. text)
-            end
-        end
+        -- Вечер-15: ручной радиус-цикл с ChatPrint (= второй владелец
+        -- доставки) вырезан; единственная точка — шина GRM.RPBroadcast
+        -- (свой радиус 355 сохраняем; RP-имя берёт шина из NW GRM_RPName).
+        return GRM.RPBroadcast(actor, text, 355)
     end
 
     -------------------------------------------------------------------

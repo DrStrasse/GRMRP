@@ -405,11 +405,10 @@ if SERVER then
                 :format(rpName(target), target:GetNWBool("GRM_911_Stable") and "стабилизирован" or "критическое",
                     target:GetNWInt("GRM_Bleed",0), target:GetNWInt("GRM_Pain",0),
                     math.max(0,target:GetNWInt("GRM_911_DeathAt",os.time())-os.time())))
-            for _,p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
-                if IsValid(p) and p:GetPos():DistToSqr(tpos)<=355*355 then
-                    p:ChatPrint("* "..rpName(ply).." осматривает пострадавшего.")
-                end
-            end
+            -- Вечер-15: отыгровка осмотра — через шину (тот же радиус 355),
+            -- не ручным ChatPrint-циклом (правило: «* …» живёт только в
+            -- GRM.RPBroadcast → свой чат; OWNER_REPORTS §4).
+            GRM.RPBroadcast(ply, "осматривает пострадавшего.", 355)
         elseif act=="call" then
             if (ply._grm911CallAt or 0)>CurTime() then ply:ChatPrint("[911] Вызов уже отправлен, подождите.") return end
             ply._grm911CallAt=CurTime()+10

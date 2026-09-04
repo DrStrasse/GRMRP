@@ -5,11 +5,13 @@
     мёртвая ветка EasyChat (чат вырезан по указанию владельца), а на сервере
     с режимным чатом строки шли МИМО ленты режима. Теперь точка входа одна:
 
-      1) живой владелец чата (GRMRPChat режима или GRMChat-порт песочницы,
-         если не подавлен) — доставка через его RPAction("me") с echo автора,
-         RP-именем и радиусом события;
-      2) нет владельца — старая net-шина GRM_RPChat_Msg (если грузилась);
-      3) и нет её — ChatPrint по радиусу.
+      1) живой владелец чата (GRMRPChat — он же библиотека lua/grm_chat,
+         он же алиас GRMChat в смешанных установках) — доставка через его
+         RPAction("me") с echo автора, RP-именем, радиусом/явной аудиторией;
+      2) владельца нет (слайс-установка без чата) — ChatPrint по аудитории/
+         радиусу. ПРЕЖНЯЯ ветка «старая net-шина GRM_RPChat_Msg» ВЫРЕЗАНА
+         вечером-15: это привязка к легаси-модулю, а не «своя система»
+         (приказ раунда 18–19).
 
     Правила подключения модулей (записаны в OWNER_REPORTS.md): новый код НЕ
     выбирает канал сам — только GRM.RPBroadcast.
@@ -32,14 +34,49 @@ if not SERVER then return end
 -- его пропускает и уходит на GRMRPChat (или фолбэк GRM_RPChat_Msg).
 local CHAT_OWNERS = { "GRMRPChat", "GRMChat" }
 
---- meText — текст действия без ведущей «* » (сама шина добавит формат);
---- radius — юниты (по умолчанию 400, как у бланков веч.-8…12).
+--- meText — текст действия без ведущей «* » (шина сама добавит формат).
+--- Третьим аргументом — ЦЕЛЕБАРИУС (вечер-15, автоотыгровки документов):
+---   nil | number        — радиус в юнитах (400 по умолчанию, бланки веч.-8…12);
+---   Player              — строгий адресат («предъявляет вам…» видит только он);
+---   table {radius=n, targets={...}, echoAuthor=bool} — аудиторию считает сам
+---     модуль (у неё свои побочные эффекты: Learn/счётчик услышавших), а шина
+---     доставляет; echoAuthor=false — авторскую строку модуль печатает сам.
 --- Возвращает строку-ошибку владельца (или nil), как RPAction.
-function GRM.RPBroadcast(ply, meText, radius)
+local function asTargets(t)
+    if t == nil then return nil end
+    if isplayer(t) then return { t } end
+    if istable(t) then
+        if isnumber(t.radius) or t.targets ~= nil then
+            local list = t.targets
+            if isplayer(list) then list = { list } end
+            if istable(list) and #list > 0 then return list end
+            return nil
+        end
+        if #t > 0 then return t end -- просто массив слушателей
+    end
+    return nil
+end
+
+function GRM.RPBroadcast(ply, meText, targeting)
     if not IsValid(ply) or not ply:IsPlayer() then return end
     meText = string.Trim(tostring(meText or ""))
     if meText == "" then return end
-    radius = math.Clamp(tonumber(radius) or 400, 64, 4096)
+    local radius, targets, echoAuthor = 400, nil, true
+    local rpName = GRM.GetRPName(ply)
+    if isnumber(targeting) then
+        radius = math.Clamp(targeting, 64, 4096)
+    elseif isplayer(targeting) then
+        targets = { targeting }
+    elseif istable(targeting) then
+        radius = math.Clamp(tonumber(targeting.radius) or 400, 64, 4096)
+        targets = asTargets(targeting.targets) or asTargets(targeting)
+        echoAuthor = targeting.echoAuthor ~= false
+        -- «под легендой» отыгровка идёт_mask-name'ом (nameplate), не настоящим
+        -- RP-именем: имя — часть сюжета, позволяет передать его модулю.
+        if isstring(targeting.rpName) and targeting.rpName ~= "" then
+            rpName = targeting.rpName
+        end
+    end
 
     for i = 1, #CHAT_OWNERS do
         local owner = rawget(_G, CHAT_OWNERS[i])
@@ -49,34 +86,29 @@ function GRM.RPBroadcast(ply, meText, radius)
             local body = isfunction(owner.Sanitize)
                 and owner.Sanitize(meText, owner.HARD_MAX) or meText
             return owner.RPAction("me", ply, body, nil, {
-                echoAuthor = true, -- серверное событие: автору шлём (у него нет
-                                   -- локального эха клиентского ввода)
-                rpName = GRM.GetRPName(ply),
+                echoAuthor = echoAuthor, -- серверное событие: автору шлём (у него
+                                         -- нет локального эха клиентского ввода)
+                rpName = rpName,
                 range = radius,
+                targets = targets,
             })
         end
     end
 
-    -- Владельца нет: старая net-шина (её приёмник переживает подавление
-    -- хуков — net.Receive не снимается) либо прямой ChatPrint.
-    local full = "* " .. GRM.GetRPName(ply) .. " " .. meText
-    local useNet = util and util.NetworkStringToID
-        and util.NetworkStringToID("GRM_RPChat_Msg") ~= 0
+    -- Владельца нет: только движковый ChatPrint по аудитории/радиусу.
+    local full = "* " .. rpName .. " " .. meText
+    if targets then
+        for i = 1, #targets do
+            if IsValid(targets[i]) then targets[i]:ChatPrint(full) end
+        end
+        if echoAuthor then ply:ChatPrint(full) end
+        return
+    end
     local origin = ply:GetPos()
-    local targets = (GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()
-    for _, p in ipairs(targets) do
+    local pool = (GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()
+    for _, p in ipairs(pool) do
         if IsValid(p) and p:GetPos():DistToSqr(origin) <= radius * radius then
-            if useNet then
-                net.Start("GRM_RPChat_Msg")
-                    net.WriteUInt(2, 8)
-                    net.WriteBool(true)
-                    net.WriteUInt(200, 8) net.WriteUInt(160, 8) net.WriteUInt(255, 8)
-                    net.WriteBool(false)
-                    net.WriteString(full)
-                net.Send(p)
-            else
-                p:ChatPrint(full)
-            end
+            p:ChatPrint(full)
         end
     end
 end

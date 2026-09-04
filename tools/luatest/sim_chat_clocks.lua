@@ -58,14 +58,14 @@ for _, path in ipairs(FILES.inp) do
     local s = read(path)
     check(path .. ": /chatdiag перехвачен до отправки",
         s:find('"/chatdiag"', 1, true) ~= nil and s:find("GRMRPChat.Diagnose()", 1, true) ~= nil)
-    check(path .. ": баннер вечер-14", s:find("сборка вечер-14 (03.09)", 1, true) ~= nil)
+    check(path .. ": баннер вечер-15", s:find("сборка вечер-15 (04.09)", 1, true) ~= nil)
 end
 for _, path in ipairs(FILES.hud) do
     local s = read(path)
     check(path .. ": Diagnose пишет в ленту",
         s:find("function GRMRPChat.Diagnose", 1, true) ~= nil
         and s:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
-    check(path .. ": Diagnose — вечер-14", s:find("чат вечер-14 (03.09)", 1, true) ~= nil)
+    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-15 (04.09)", 1, true) ~= nil)
 end
 
 print("\n=== 5. РАЗМЕРЫ ЛЕНТЫ (веч.-10) ===")
@@ -176,8 +176,8 @@ do
             return ci:find("GM.__chatOwnsStartChat = true", 1, true) ~= nil
                 and ci:find("SuppressForeignChat", 1, true) ~= nil
         end)())
-    check("шина GRM.RPBroadcast существует (единая для модулей)",
-        read("lua/autorun/sh_grm_rpbridge.lua"):find("function GRM.RPBroadcast(ply, meText, radius)", 1, true) ~= nil)
+    check("шина GRM.RPBroadcast существует (единая для модулей, веч.-15 targeting)",
+        read("lua/autorun/sh_grm_rpbridge.lua"):find("function GRM.RPBroadcast(ply, meText, targeting)", 1, true) ~= nil)
     check("шина: список владельцев",
         read("lua/autorun/sh_grm_rpbridge.lua"):find('CHAT_OWNERS = { "GRMRPChat", "GRMChat" }', 1, true) ~= nil)
     check("документы: вызов шины вместо трёх веток; EasyChat-вызовов нет",
@@ -193,6 +193,36 @@ do
         and read("lua/autorun/sh_01_grm_core.lua"):find("chatRegister(HANDLERS)", 1, true) ~= nil)
     check("Diagnose: строка про чужих владельцев есть",
         read(FILES.hud[1]):find("чужие владельцы чата:", 1, true) ~= nil)
+    -- вечер-15: ни одна автоотыгровка не минует шину; старая net-легаси мертва
+    local br = read("lua/autorun/sh_grm_rpbridge.lua")
+    check("шина: привязка к GRM_RPChat_Msg ВЫРЕЗАНА (net-легаси мертва)",
+        br:find('net.Start("GRM_RPChat_Msg")', 1, true) == nil)
+    check("шина: адресность (Player/список/таблица) реализована",
+        br:find("asTargets", 1, true) ~= nil and br:find("isplayer", 1, true) ~= nil)
+    check("шина: rpName легенды пробрасывается",
+        br:find("targeting.rpName", 1, true) ~= nil)
+    check("sv: deliver умеет forcedTargets (явная аудитория)",
+        sv:find("forcedTargets", 1, true) ~= nil and sv:find("opts and istable(opts.targets)", 1, true) ~= nil)
+    check("nameplate: представление/предъявление — через шину, не ChatPrint-циклом",
+        (function()
+            local np = read("lua/autorun/sh_grm_nameplate.lua")
+            return np:find('GRM.RPBroadcast(ply, "представляется окружающим."', 1, true) ~= nil
+                and np:find('GRM.RPBroadcast(ply, "предъявляет вам документ."', 1, true) ~= nil
+                and np:find('other:ChatPrint("* "', 1, true) == nil
+                and np:find('target:ChatPrint("* "', 1, true) == nil
+        end)())
+    check("pcboard: meAction = шина (ручной радиус-цикл вырезан)",
+        (function()
+            local pb = read("lua/autorun/sh_grm_pcboard.lua")
+            return pb:find("return GRM.RPBroadcast(actor, text, 355)", 1, true) ~= nil
+                and pb:find('ply:ChatPrint("* "', 1, true) == nil
+        end)())
+    check("911: осмотр — шина",
+        (function()
+            local n9 = read("lua/autorun/sh_grm_911.lua")
+            return n9:find('GRM.RPBroadcast(ply, "осматривает пострадавшего.", 355)', 1, true) ~= nil
+                and n9:find('p:ChatPrint("* "', 1, true) == nil
+        end)())
 end
 
 print("\n=== 9. АРХИТЕКТУРА БИБЛИОТЕКИ (веч.-14, по образцу EasyChat) ===")
