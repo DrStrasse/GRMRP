@@ -71,8 +71,8 @@ ok(fixes:find("if IsValid(p) and p._grmCurfewMenuOpen then sendCurfewState(p) en
     "открытые меню обновляются push-ом, без опроса по таймеру")
 ok(fixes:find("local handleCurfewChat", 1, true) ~= nil and fixes:find("handleCurfewChat = function", 1, true) ~= nil,
     "единый обработчик чат-команды с форвард-декларацией (иначе падал как глобал)")
-ok(fixes:find('hook.Add("PlayerSayTransform", "FactionsExt_CurfewCommands"', 1, true) ~= nil,
-    "команда работает и через EasyChat (PlayerSayTransform)")
+ok(fixes:find('hook.Add("PlayerSay", "FactionsExt_CurfewCommands"', 1, true) ~= nil,
+    "команда работает через боевой PlayerSay + реестр библиотеки (веч.-18)")
 ok(fixes:find('string.sub(rawTrim, 1, 13) == "/комчас"', 1, true) ~= nil, "русский алиас /комчас")
 ok(fixes:find("if num and num > 0 and num <= 120 then duration = num * 60", 1, true) ~= nil,
     "/kom_hour 15 = 15 минут, старый формат в секундах сохранён")
@@ -123,26 +123,26 @@ _G.Factions, _G.FactionsData = {}, {}
 local loaded, loadErr = stub.loadModule("lua/autorun/sh_faction_fixes.lua")
 ok(loaded, "модуль фракций поднялся в моке", loadErr)
 
-local transform = (stub.hooks["PlayerSayTransform"] or {})["FactionsExt_CurfewCommands"]
+local transform = (stub.hooks["PlayerSay"] or {})["FactionsExt_CurfewCommands"]
 local playerSay = (stub.hooks["PlayerSay"] or {})["FactionsExt_Commands"]
-ok(isfunction(transform), "хук PlayerSayTransform для ком.часа зарегистрирован")
+ok(isfunction(transform), "владелец ком.часа зарегистрирован (боевой PlayerSay)")
 ok(isfunction(playerSay), "хук PlayerSay зарегистрирован")
 
 if isfunction(transform) and isfunction(playerSay) then
     local ply = stub.makeEntity({ class = "player", isPlayer = true })
     local cases = { "/kom_hour", "/комчас", "/kom_hour off", "/kom_hour 15", "!noclip", "привет" }
     local allOK, firstErr = true, nil
+    local rET, rES
     for _, text in ipairs(cases) do
-        local pack = { text }
-        local okT, errT = pcall(transform, ply, pack)
-        local okS, errS = pcall(playerSay, ply, text)
+        local okT, errT = pcall(function() rET = transform(ply, text) end)
+        local okS, errS = pcall(function() rES = playerSay(ply, text) end)
         if not okT or not okS then allOK = false firstErr = firstErr or tostring(errT or errS) end
     end
     ok(allOK, "ни одна форма команды и ни одно постороннее сообщение не падают", firstErr)
 
-    local pack = { "/kom_hour" }
-    pcall(transform, ply, pack)
-    ok(pack.SkipPlayerSay == true and pack[1] == "", "команда ком.часа проглатывается чатом")
+    local retC
+    pcall(function() retC = transform(ply, "/kom_hour") end)
+    ok(retC == "", 'команда ком.часа съедена (return "")')
 
     local other = { "!noclip" }
     pcall(transform, ply, other)

@@ -2091,3 +2091,10 @@ end)
 print("[GRM Incass] CLIENT: модуль Код 126 v" .. I.Version .. " загружен")
 
 end -- if SERVER / CLIENT
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/incass", "/incass_deliver", "/incass_delivery", "/incass_end", "/incass_off", "/инкасс", "/инкасс_офф", "/инкасс_стоп", "/сдать" })
+end

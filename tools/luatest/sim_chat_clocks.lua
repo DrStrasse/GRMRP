@@ -55,19 +55,32 @@ for _, path in ipairs(FILES.hud) do
         s:find("GRMRPChat_FeedPos", 1, true) ~= nil)
 end
 
+print("\n=== 3b. СТАРЫЙ СЛОЙ PlayerSayTransform ВЫРЕЗАН (веч.-18) ===")
+do
+    check("библиотека: клиентская цепочка GRMRPChat_ClientCommand в OnEnter",
+        read("lua/grm_chat/cl_input.lua"):find('hook.Run("GRMRPChat_ClientCommand", LocalPlayer(), v) == true', 1, true) ~= nil
+        and read("gamemodes/grmrp/gamemode/lib/grm_chat/cl_input.lua"):find('hook.Run("GRMRPChat_ClientCommand", LocalPlayer(), v) == true', 1, true) ~= nil)
+    check("ядро: единый регистратор GRM.Chat.RegisterExternalCommands",
+        read("lua/autorun/sh_01_grm_core.lua"):find("function GRM.Chat.RegisterExternalCommands", 1, true) ~= nil)
+    -- hook.Remove(...) на старый слой — РАЗРЕШЁН: это защита чужих/старых
+    -- установок (zz_grm_navmap_off). Запрещены только ДРАЙВЕРЫ слоя:
+    local out = io.popen('grep -rlE \'hook\\.(Add|Run)\\("PlayerSayTransform"\' lua/ gamemodes/grmrp/gamemode --include=*.lua || true'):read("*a")
+    check("ни hook.Add, ни hook.Run на PlayerSayTransform в дереве", out == "", out)
+end
+
 print("\n=== 4. ОТТИСК СБОРКИ + /chatdiag ===")
 for _, path in ipairs(FILES.inp) do
     local s = read(path)
     check(path .. ": /chatdiag перехвачен до отправки",
         s:find('"/chatdiag"', 1, true) ~= nil and s:find("GRMRPChat.Diagnose()", 1, true) ~= nil)
-    check(path .. ": баннер вечер-15", s:find("сборка вечер-17 (04.09)", 1, true) ~= nil)
+    check(path .. ": баннер вечер-15", s:find("сборка вечер-18 (04.09)", 1, true) ~= nil)
 end
 for _, path in ipairs(FILES.hud) do
     local s = read(path)
     check(path .. ": Diagnose пишет в ленту",
         s:find("function GRMRPChat.Diagnose", 1, true) ~= nil
         and s:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
-    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-17 (04.09)", 1, true) ~= nil)
+    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-18 (04.09)", 1, true) ~= nil)
 end
 
 print("\n=== 5. РАЗМЕРЫ ЛЕНТЫ (веч.-10) ===")

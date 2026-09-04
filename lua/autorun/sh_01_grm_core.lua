@@ -122,6 +122,36 @@ function GRM.Chat.DispatchFactory(tag, HANDLERS, reply)
     end
 end
 
+-- Вечер-18: модулям, пересадившим команды с мёртвого EasyChat-входа
+-- PlayerSayTransform на боевой контракт, регистрировать СВОИ имена здесь —
+-- иначе библиотека съест их как «неизвестную команду» (режим) или чужая
+-- лента напечатает raw-say (песочница). Retry повторяет контракт
+-- chatRegister: библиотека могла загрузиться позже модуля.
+function GRM.Chat.RegisterExternalCommands(cmds)
+    local function attempt()
+        for _, nsName in ipairs({ "GRMRPChat", "GRMChat" }) do
+            local ns = rawget(_G, nsName)
+            if istable(ns) and isfunction(ns.RegisterExternalChatCommand) then
+                for _, c in ipairs(cmds) do
+                    pcall(ns.RegisterExternalChatCommand, tostring(c))
+                end
+                return true
+            end
+        end
+        return false
+    end
+    if attempt() then return true end
+    if not (timer and isfunction(timer.Simple)) then return false end
+    local tries = 40
+    local function retry()
+        if attempt() then return end
+        tries = tries - 1
+        if tries > 0 then timer.Simple(0.6, retry) end
+    end
+    timer.Simple(0.6, retry)
+    return false
+end
+
 function GRM.CharKey(value)
     if IsValid(value) and value.IsPlayer and value:IsPlayer() then
         local identity = GRM.Identity

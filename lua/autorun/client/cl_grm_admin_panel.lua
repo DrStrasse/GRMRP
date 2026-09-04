@@ -1550,7 +1550,9 @@ end)
 
 concommand.Add("grm_admin_panel", function() AD.OpenPanel() end)
 
-hook.Add("PlayerSayTransform", "GRM_AdminPanel_Chat", function(ply, pack)
+hook.Add("GRMRPChat_ClientCommand", "GRM_AdminPanel_Chat", function(ply, text)
+    if ply ~= LocalPlayer() then return end
+    local pack = { tostring(text or ""), SkipPlayerSay = false }
     if not istable(pack) or not isstring(pack[1]) then return end
     local low = string.lower(string.Trim(pack[1]))
     if low == "/admin" or low == "/админ" or low == "/grm_admin" or low == "/grm_admin_panel" then
@@ -1558,6 +1560,8 @@ hook.Add("PlayerSayTransform", "GRM_AdminPanel_Chat", function(ply, pack)
         pack[1] = ""
         pack.SkipPlayerSay = true
     end
+
+    if pack.SkipPlayerSay == true then return true end
 end)
 
 print("[GRM Admin Panel] v1.0.0 loaded")

@@ -461,7 +461,7 @@ ok(ld:GetParticipantCount() == 0, "участники сброшены")
 
 -- ══════════════ 5. /bag_unload: чат-хуки + выгрузка на землю/отмывщику ══════════════
 local custSrc = assert(io.open("lua/autorun/sh_grm_customization.lua", "rb")):read("*a")
-ok(custSrc:find('PlayerSayTransform", "GRM_LootBag_UnloadTransform', 1, true) ~= nil, "bag_unload: PlayerSayTransform (EasyChat)")
+ok(custSrc:find('hook.Add("PlayerSay", "GRM_LootBag_UnloadSay"', 1, true) ~= nil, "bag_unload: живой владелец PlayerSay (веч.-18: EasyChat-дубль срезан)")
 ok(custSrc:find('SpawnCashAt(pos, cur, nil)', 1, true) ~= nil, "bag_unload: выгрузка на землю (паллеты/пачка)")
 ok(custSrc:find('FindNearestLaunderer(ply, 400)', 1, true) ~= nil, "bag_unload: сначала отмывщик рядом")
 ok(E.FindNearestLaunderer ~= nil, "economy: FindNearestLaunderer есть")
@@ -470,7 +470,7 @@ ok(ecoSrc:find('FindNearestLaunderer', 1, true) ~= nil and ecoSrc:find('ents.Fin
 
 -- ══════════════ 6. /permremove: PlayerSayTransform + устойчивый поиск ══════════════
 local permSrc = assert(io.open("lua/autorun/sh_grm_perm_entities.lua", "rb")):read("*a")
-ok(permSrc:find('PlayerSayTransform", "GRM_PermEntities_ChatTransform', 1, true) ~= nil, "perm: PlayerSayTransform для /permadd /permremove (EasyChat)")
+ok(permSrc:find('hook.Add("PlayerSay", "GRM_PermEntities_ChatTransform"', 1, true) ~= nil, "perm: боевой PlayerSay для /permadd /permremove (реестр библиотеки)")
 ok(permSrc:find('bestRec, bestDist = nil, math.huge', 1, true) ~= nil, "perm: removePerm ищет ближайшую запись по классу (устойчиво)")
 
 -- ══════════════ 6b. Меню: FactionList + config_full + поза + R-удаление (находка 179g) ══════════════

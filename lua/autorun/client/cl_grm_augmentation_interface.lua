@@ -107,7 +107,11 @@ function UI.Open()
 end
 concommand.Add("grm_augmentations",UI.Open)
 concommand.Add("grm_augments",UI.Open)
-hook.Add("PlayerSayTransform","GRM_AugmentationUI_Command",function(ply,pack) local text=istable(pack) and (pack.text or pack[1]) or pack; if ply==LocalPlayer() and string.lower(string.Trim(tostring(text or "")))=="/augmentations" then UI.Open(); return true end end)
+hook.Add("GRMRPChat_ClientCommand", "GRM_AugmentationUI_Command", function(ply, text)
+    local pack = { tostring(text or ""), SkipPlayerSay = false }
+        local text=istable(pack) and (pack.text or pack[1]) or pack; if ply==LocalPlayer() and string.lower(string.Trim(tostring(text or "")))=="/augmentations" then UI.Open(); return true end
+    if pack.SkipPlayerSay == true then return true end
+end)
 print("[GRM AugmentationUI] loaded")
 
 hook.Add("OnPlayerChat", "GRM_AugmentationUI_OnChat", function(ply, text)

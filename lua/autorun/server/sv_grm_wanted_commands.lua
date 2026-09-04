@@ -369,12 +369,15 @@ CMD.Dispatch = dispatch
 
 -- Тот же двойной хук, что и в ядре розыска: PlayerSayTransform гасит
 -- сообщение до чата, PlayerSay остаётся фолбэком.
-hook.Add("PlayerSayTransform", "GRM_WantedCmd_Transform", function(ply, pack)
-    if not istable(pack) or not isstring(pack[1]) then return end
-    if dispatch(ply, pack[1]) then
-        pack[1] = ""
-        pack.SkipPlayerSay = true
-    end
+hook.Add("PlayerSay", "GRM_WantedCmd_Transform", function(ply, text, teamSays)
+    local pack = { tostring(text or ""), SkipPlayerSay = false }
+        if not istable(pack) or not isstring(pack[1]) then return end
+        if dispatch(ply, pack[1]) then
+            pack[1] = ""
+            pack.SkipPlayerSay = true
+        end
+
+    if pack.SkipPlayerSay == true then return "" end
 end)
 
 hook.Add("PlayerSay", "GRM_WantedCmd_Fallback", function(ply, text)
@@ -398,3 +401,10 @@ con("grm_fines_of",     CMD.FinesOf)
 con("grm_my_fines",     function(ply) CMD.MyFines(ply) end)
 
 print("[GRM Wanted Commands] v" .. CMD.Version .. " загружен")
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/fine_cancel", "/fine_issue", "/fine_pay", "/fines_of", "/my_fines", "/wanted_info", "/wanted_list", "/wanted_set", "/мои_штрафы", "/оплатить_штраф", "/розыск_уровень" })
+end

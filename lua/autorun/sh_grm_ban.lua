@@ -1591,3 +1591,10 @@ if CLIENT then
 
     print("[GRM Server Ban] client v" .. SB.Version .. " loaded")
 end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/911", "/db", "/dep", "/depb", "/fr", "/frb", "/frooc", "/gnews", "/pcboard" })
+end

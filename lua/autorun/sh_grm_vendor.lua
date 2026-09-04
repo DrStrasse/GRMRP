@@ -522,12 +522,15 @@ if SERVER then
     concommand.Add("grm_vendor_unsave",function(p,_,args) command(p,"remove",args[1]) end)
     concommand.Add("grm_vendor_save_all",function(p) command(p,"save_all") end)
     concommand.Add("grm_vendor_load",function(p) command(p,"load") end)
-    hook.Add("PlayerSayTransform","GRM_Vendor_PersistenceCommands",function(ply,pack)
-        if not istable(pack) or not isstring(pack[1]) then return end
-        local text=string.Trim(pack[1]); local name,argument=text:match("^(%S+)%s*(.-)$")
-        local map={['/vendor_save']='save',['/vendor_unsave']='remove',['/vendor_save_all']='save_all',['/vendor_load']='load',['/vendor_list']='list'}
-        local cmd=map[string.lower(name or "")]; if not cmd then return end
-        command(ply,cmd,argument); pack[1]=""; pack.SkipPlayerSay=true
+    hook.Add("PlayerSay", "GRM_Vendor_PersistenceCommands", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) or not isstring(pack[1]) then return end
+            local text=string.Trim(pack[1]); local name,argument=text:match("^(%S+)%s*(.-)$")
+            local map={['/vendor_save']='save',['/vendor_unsave']='remove',['/vendor_save_all']='save_all',['/vendor_load']='load',['/vendor_list']='list'}
+            local cmd=map[string.lower(name or "")]; if not cmd then return end
+            command(ply,cmd,argument); pack[1]=""; pack.SkipPlayerSay=true
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
     grmBootStart("GRM_Vendor_PersistenceLoad","normal",function() timer.Simple(1.4,function() migrateLegacyPerm(); V.LoadMapVendors() end) end)
     hook.Add("PostCleanupMap","GRM_Vendor_PersistenceCleanup",function() timer.Simple(0.8,function() V.LoadMapVendors() end) end)

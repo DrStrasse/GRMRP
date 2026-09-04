@@ -1007,12 +1007,15 @@ if SERVER then
     local dispatch = GRM.Chat.DispatchFactory("[GRM SpecService]", HANDLERS, reply)
     SS.Dispatch = dispatch
 
-    hook.Add("PlayerSayTransform", "GRM_SS_Transform", function(ply, pack)
-        if not istable(pack) or not isstring(pack[1]) then return end
-        if dispatch(ply, pack[1]) then
-            pack[1] = ""
-            pack.SkipPlayerSay = true
-        end
+    hook.Add("PlayerSay", "GRM_SS_Transform", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) or not isstring(pack[1]) then return end
+            if dispatch(ply, pack[1]) then
+                pack[1] = ""
+                pack.SkipPlayerSay = true
+            end
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
 
     hook.Add("PlayerSay", "GRM_SS_Fallback", function(ply, text)

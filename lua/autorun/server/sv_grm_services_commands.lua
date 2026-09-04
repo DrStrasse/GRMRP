@@ -392,7 +392,8 @@ local function handleChat(ply, text)
     return ""
 end
 
-hook.Add("PlayerSayTransform", "GRM_Services_Commands", function(pack)
+hook.Add("PlayerSay", "GRM_Services_Commands", function(pack, text, teamSays)
+    local pack = { tostring(text or ""), SkipPlayerSay = false }
     if not istable(pack) then return end
     local res = handleChat(pack.ply or pack.Player, pack.text or pack.Text)
     if res ~= nil then
@@ -400,6 +401,8 @@ hook.Add("PlayerSayTransform", "GRM_Services_Commands", function(pack)
         pack.text = ""
         return ""
     end
+
+    if pack.SkipPlayerSay == true then return "" end
 end)
 
 hook.Add("PlayerSay", "GRM_Services_Commands", function(ply, text)

@@ -1239,16 +1239,27 @@ if CLIENT then
 
     concommand.Add("grm_bodygroups_admin", function() BG.Request() end)
 
-    hook.Add("PlayerSayTransform", "GRM_BGRules_Cmd", function(_, datapack)
+    hook.Add("PlayerSay", "GRM_BGRules_Cmd", function(_, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
         if not istable(datapack) then return end
         local msg = datapack[1]
         if not isstring(msg) then return end
         local cmd = string.lower(string.Trim(msg))
         if cmd == "/bodygroups_admin" or cmd == "!bodygroups_admin" or cmd == "/бодигруппы" then
-            BG.Request()
-            datapack[1] = ""
-            datapack.SkipPlayerSay = true
-            return false
+        BG.Request()
+        datapack[1] = ""
+        datapack.SkipPlayerSay = true
+        return false
         end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/bodygroups_admin", "/бодигруппы" })
 end

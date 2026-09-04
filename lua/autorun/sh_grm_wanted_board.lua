@@ -225,12 +225,15 @@ if SERVER then
     end
     B.ChatCommand = boardCommand
 
-    hook.Add("PlayerSayTransform", "GRM_WantedBoard_Transform", function(ply, pack)
-        if not istable(pack) or not isstring(pack[1]) then return end
-        if boardCommand(ply, pack[1]) then
-            pack[1] = ""
-            pack.SkipPlayerSay = true
-        end
+    hook.Add("PlayerSay", "GRM_WantedBoard_Transform", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) or not isstring(pack[1]) then return end
+            if boardCommand(ply, pack[1]) then
+                pack[1] = ""
+                pack.SkipPlayerSay = true
+            end
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
 
     hook.Add("PlayerSay", "GRM_WantedBoard_Fallback", function(ply, text)
@@ -588,4 +591,11 @@ if GRM.Modules and GRM.Modules.Register then
         Depends = { "access" },
         Status = function() return "доска розыска и ориентировки" end,
     })
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/board", "/wanted_board", "/лист", "/листрозыска" })
 end

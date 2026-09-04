@@ -1,9 +1,4 @@
 {
-    "_grm_meta": {
-        "revision": 4,
-        "version": 2,
-        "savedAt": 1788510951
-    },
     "76561198000000012": {
         "slots": [
             {
@@ -19,12 +14,17 @@
                 "count": 1
             },
             {
+                "id": "radio_modulator",
+                "count": 1,
                 "data": {
                     "on": true
-                },
-                "id": "radio_modulator",
-                "count": 1
+                }
             }
         ]
+    },
+    "_grm_meta": {
+        "version": 2,
+        "savedAt": 1788512827,
+        "revision": 4
     }
 }

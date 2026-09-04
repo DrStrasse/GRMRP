@@ -65,8 +65,8 @@ ok(has(np, "Под легендой знакомство НЕ записывае
 ok(has(np, '"/представиться"') and has(np, '"/паспорт"') and has(np, '"/знакомые"'),
     "русские команды на месте")
 ok(has(np, 'hook.Add("PlayerSay", "GRM_Nameplate_Chat"')
-    and has(np, 'hook.Add("PlayerSayTransform", "GRM_Nameplate_ChatEC"'),
-    "команды работают и в штатном чате, и в EasyChat")
+    and has(np, 'hook.Add("PlayerSay", "GRM_Nameplate_ChatEC"'),
+    "команды работают и в штатном чате, и через реестр библиотеки (веч.-18)")
 
 print("\n=== 4. ОСОБЫЕ ПРИМЕТЫ ===")
 ok(has(np, "function NP.Marks") and has(np, "function NP.SetMarks"), "приметы — отдельное поле, не описание")

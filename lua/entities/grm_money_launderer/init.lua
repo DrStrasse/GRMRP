@@ -891,26 +891,32 @@ local function heistStopCmd(ply)
 end
 concommand.Add("grm_heist_force", function(ply) heistForceCmd(ply) end)
 concommand.Add("grm_heist_stop", function(ply) heistStopCmd(ply) end)
-hook.Add("PlayerSayTransform", "GRM_Heist_ForceTransform", function(ply, datapack)
-    if not istable(datapack) or not isstring(datapack[1]) then return end
-    local t = string.lower(string.Trim(datapack[1]))
-    if t == "/heist_force" then heistForceCmd(ply) datapack[1] = "" datapack.SkipPlayerSay = true
-    elseif t == "/heist_stop" then heistStopCmd(ply) datapack[1] = "" datapack.SkipPlayerSay = true end
+hook.Add("PlayerSay", "GRM_Heist_ForceTransform", function(ply, text, teamSays)
+    local datapack = { tostring(text or ""), SkipPlayerSay = false }
+        if not istable(datapack) or not isstring(datapack[1]) then return end
+        local t = string.lower(string.Trim(datapack[1]))
+        if t == "/heist_force" then heistForceCmd(ply) datapack[1] = "" datapack.SkipPlayerSay = true
+        elseif t == "/heist_stop" then heistStopCmd(ply) datapack[1] = "" datapack.SkipPlayerSay = true end
+
+    if datapack.SkipPlayerSay == true then return "" end
 end)
-hook.Add("PlayerSayTransform", "GRM_Heist_TargetTransform", function(ply, datapack)
-    if not istable(datapack) then return end
-    local text = datapack[1]
-    if not isstring(text) then return end
-    local t = string.lower(string.Trim(text))
-    if t == "/heist_target" then
-        heistTargetCmd(ply)
-        datapack.SkipPlayerSay = true
-        datapack[1] = ""
-    elseif t == "/heist_target_clear" then
-        heistTargetClearCmd(ply)
-        datapack.SkipPlayerSay = true
-        datapack[1] = ""
-    end
+hook.Add("PlayerSay", "GRM_Heist_TargetTransform", function(ply, text, teamSays)
+    local datapack = { tostring(text or ""), SkipPlayerSay = false }
+        if not istable(datapack) then return end
+        local text = datapack[1]
+        if not isstring(text) then return end
+        local t = string.lower(string.Trim(text))
+        if t == "/heist_target" then
+            heistTargetCmd(ply)
+            datapack.SkipPlayerSay = true
+            datapack[1] = ""
+        elseif t == "/heist_target_clear" then
+            heistTargetClearCmd(ply)
+            datapack.SkipPlayerSay = true
+            datapack[1] = ""
+        end
+
+    if datapack.SkipPlayerSay == true then return "" end
 end)
 
 -- ══ ПЕРМ (конфиг переживает рестарт) ═══════════════════════
@@ -948,3 +954,11 @@ end
 loadCooldown()
 
 print("[GRM] Money Launderer entity loaded (находка 179e)")
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/heist_force", "/heist_stop", "/heist_target", "/heist_target_clear" })
+end

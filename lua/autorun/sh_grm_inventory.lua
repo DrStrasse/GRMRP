@@ -1530,3 +1530,10 @@ if CLIENT then
 
     print("[GRM] Inventory v1.7.0 — клиент загружен")
 end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/drop", "/dropweapon", "/inv", "/inventory", "/store" })
+end

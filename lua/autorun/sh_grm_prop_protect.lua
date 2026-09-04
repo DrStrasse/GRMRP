@@ -647,3 +647,10 @@ hook.Add("HUDPaint", "GRM_PropProtect_OwnerHUD", function()
 end
 
 print("[GRM PropProtect] v" .. PP.Version .. " loaded")
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/cleanupoffline", "/cleanupprops", "/prop_admin", "/propprotect", "/очиститьофлайн", "/очиститьпропы", "/проппротект" })
+end

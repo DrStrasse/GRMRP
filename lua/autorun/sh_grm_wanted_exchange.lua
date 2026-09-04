@@ -643,12 +643,15 @@ X.Handlers = HANDLERS
 local dispatch = GRM.Chat.DispatchFactory("[GRM Exchange]", HANDLERS, reply)
 X.Dispatch = dispatch
 
-hook.Add("PlayerSayTransform", "GRM_Exchange_Transform", function(ply, pack)
-    if not istable(pack) or not isstring(pack[1]) then return end
-    if dispatch(ply, pack[1]) then
-        pack[1] = ""
-        pack.SkipPlayerSay = true
-    end
+hook.Add("PlayerSay", "GRM_Exchange_Transform", function(ply, text, teamSays)
+    local pack = { tostring(text or ""), SkipPlayerSay = false }
+        if not istable(pack) or not isstring(pack[1]) then return end
+        if dispatch(ply, pack[1]) then
+            pack[1] = ""
+            pack.SkipPlayerSay = true
+        end
+
+    if pack.SkipPlayerSay == true then return "" end
 end)
 
 hook.Add("PlayerSay", "GRM_Exchange_Fallback", function(ply, text)

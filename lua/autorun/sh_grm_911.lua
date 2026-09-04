@@ -438,7 +438,11 @@ if SERVER then
         if low=="/forensics" or low=="/осмотр" then examine(ply) return true end
         return false
     end
-    hook.Add("PlayerSayTransform","GRM_911_Transform",function(ply,data) if istable(data) and isstring(data[1]) and chat(ply,data[1]) then data[1]="" data.SkipPlayerSay=true end end)
+    hook.Add("PlayerSay", "GRM_911_Transform", function(ply, text, teamSays)
+        local data = { tostring(text or ""), SkipPlayerSay = false }
+            if istable(data) and isstring(data[1]) and chat(ply,data[1]) then data[1]="" data.SkipPlayerSay=true end
+        if data.SkipPlayerSay == true then return "" end
+    end)
     hook.Add("PlayerSay","GRM_911_Chat",function(ply,text) if chat(ply,text) then return "" end end)
     timer.Create("GRM_911_Autosave",60,0,function() saveAll("авто") end); hook.Add("ShutDown","GRM_911_Save",function() saveAll("shutdown") end)
 else
@@ -577,3 +581,10 @@ else
 end
 
 print("[GRM 911] v"..EM.Version.." loaded")
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/911", "/911_admin", "/911_calls", "/911_cases", "/aid", "/forensics", "/вызовы", "/дела911", "/осмотр", "/помощь" })
+end

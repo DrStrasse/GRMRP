@@ -215,10 +215,6 @@ if SERVER then
         if CHAT[t] then coords(ply) return "" end
     end
     hook.Add("PlayerSay", "GRM_Measure_Chat", function(ply, text) return chat(ply, text) end)
-    hook.Add("PlayerSayTransform", "GRM_Measure_ChatT", function(ply, datapack)
-        local t = datapack and datapack.message or ""
-        if chat(ply, t) == "" and datapack then datapack.message = "" end
-    end)
 end
 
 if CLIENT then

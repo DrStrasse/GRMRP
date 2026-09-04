@@ -302,14 +302,14 @@ if CLIENT then
     end
 
     -- команда /rpdesc (контракт проекта — PlayerSayTransform)
-    hook.Add("PlayerSayTransform", TAG, function(ply, datapack)
+    -- Вечер-18: свой клиентский контракт вместо мёртвого EasyChat-transform:
+    -- владелец окна снимает строку возвратом true (см. OnEnter, cl_input).
+    hook.Add("GRMRPChat_ClientCommand", TAG, function(ply, text)
         if ply ~= LocalPlayer() then return end
-        local msg = datapack and datapack[1]
-        if not msg then return end
-        local lower = string.lower(msg)
+        local lower = string.lower(tostring(text or ""))
         if lower == "/rpdesc" or lower == "!rpdesc" then
             RD.OpenEditor()
-            datapack[1] = ""
+            return true
         end
     end)
     concommand.Add("grm_rpdesc", RD.OpenEditor)

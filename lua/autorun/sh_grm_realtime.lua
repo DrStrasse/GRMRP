@@ -114,13 +114,21 @@ if SERVER then
         local s = string.lower(string.Trim(tostring(text or "")))
         if s == "/time" or s == "/время" then tell(p) return "" end
     end)
-    hook.Add("PlayerSayTransform", "GRM_RealTime_EasyChat", function(p, text, pack)
-        pack = istable(text) and text or pack
-        local raw = istable(text) and text[1] or text
-        local s = string.lower(string.Trim(tostring(raw or "")))
+    hook.Add("PlayerSay", "GRM_RealTime_Chat", function(p, text, teamSays)
+        -- Вечер-18: прежний двойной вход (PlayerSayTransform+PlayerSay) сведён
+        -- к одному живому владельцу боевого контракта.
+        local s = string.lower(string.Trim(tostring(text or "")))
         if s ~= "/time" and s ~= "/время" then return end
         tell(p)
-        if istable(pack) then pack.SkipPlayerSay = true pack[1] = "" end
+        return ""
     end)
     print("[GRM Time] real clock v" .. T.Version .. " loaded, UTC offset " .. T.Offset() .. " min, sync " .. T.SyncInterval .. "s")
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/time", "/время" })
 end

@@ -510,16 +510,19 @@ if SERVER then
         ply:PrintMessage(HUD_PRINTTALK, "[" .. label .. "] Удалён (и из персистента).")
     end
 
-    hook.Add("PlayerSayTransform", "GRM_BC_TransformCmds", function(ply, datapack)
-        if not istable(datapack) then return end
-        local msg = datapack[1]
-        if not isstring(msg) then return end
-        -- EasyChat-дружественно: обрабатываем команды ПЕРЕД PlayerSay,
-        -- чтобы их никто не проглотил по цепочке хуков
-        if BC.HandleChat and BC.HandleChat(ply, msg) then
-            datapack[1] = ""
-            datapack.SkipPlayerSay = true
-        end
+    hook.Add("PlayerSay", "GRM_BC_TransformCmds", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) then return end
+            local msg = datapack[1]
+            if not isstring(msg) then return end
+            -- EasyChat-дружественно: обрабатываем команды ПЕРЕД PlayerSay,
+            -- чтобы их никто не проглотил по цепочке хуков
+            if BC.HandleChat and BC.HandleChat(ply, msg) then
+                datapack[1] = ""
+                datapack.SkipPlayerSay = true
+            end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     hook.Add("PlayerSay", "GRM_BC_AdminCmds", function(ply, text)
@@ -890,4 +893,11 @@ if CLIENT then
     end)
 
     print("[GRM Broadcast] Клиент v" .. BC.Version .. " загружен")
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/alert", "/alertall" })
 end

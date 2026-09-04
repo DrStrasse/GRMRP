@@ -2707,14 +2707,17 @@ if CLIENT then
     end
     concommand.Add("grm_character", CH.OpenMenu)
 
-    hook.Add("PlayerSayTransform", "GRM_Char_ChatCl", function(ply, text)
-        if ply ~= LocalPlayer() then return end
-        local msg = string.lower(string.Trim(text and (istable(text) and text[1] or text) or ""))
-        if msg == "/char" or msg == "/chars" or msg == "!char" then
-            CH.OpenMenu()
-            if istable(text) then text[1] = "" end
-            return true
-        end
+    hook.Add("GRMRPChat_ClientCommand", "GRM_Char_ChatCl", function(ply, text)
+        local text = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() then return end
+            local msg = string.lower(string.Trim(text and (istable(text) and text[1] or text) or ""))
+            if msg == "/char" or msg == "/chars" or msg == "!char" then
+                CH.OpenMenu()
+                if istable(text) then text[1] = "" end
+                return true
+            end
+
+        if text.SkipPlayerSay == true then return true end
     end)
 
     local function clientCharacterPending()
@@ -2778,4 +2781,11 @@ if CLIENT then
     end)
 
     print("[GRM Char] Ядро персонажей v" .. CH.Version .. " загружено (клиент)")
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/name" })
 end

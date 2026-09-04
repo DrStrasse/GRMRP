@@ -247,14 +247,17 @@ if SERVER then
     end
     concommand.Add("grm_comp_access", openCmd)
 
-    hook.Add("PlayerSayTransform", "GRM_CompAccess_Chat", function(ply, pack)
-        if not istable(pack) or not isstring(pack[1]) then return end
-        local low = string.lower(string.Trim(pack[1]))
-        if low == "/comp_access" or low == "/pc_access" or low == "/пк_доступ" or low == "/компьютеры" then
-            openCmd(ply)
-            pack[1] = ""
-            pack.SkipPlayerSay = true
-        end
+    hook.Add("PlayerSay", "GRM_CompAccess_Chat", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) or not isstring(pack[1]) then return end
+            local low = string.lower(string.Trim(pack[1]))
+            if low == "/comp_access" or low == "/pc_access" or low == "/пк_доступ" or low == "/компьютеры" then
+                openCmd(ply)
+                pack[1] = ""
+                pack.SkipPlayerSay = true
+            end
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
 end
 
@@ -405,14 +408,17 @@ if CLIENT then
     end
     concommand.Add("grm_comp_access", A.OpenMenu)
 
-    hook.Add("PlayerSayTransform", "GRM_CompAccess_ChatCl", function(ply, pack)
-        if ply ~= LocalPlayer() or not istable(pack) then return end
-        local low = string.lower(string.Trim(tostring(pack[1] or "")))
-        if low == "/comp_access" or low == "/pc_access" or low == "/пк_доступ" or low == "/компьютеры" then
-            A.OpenMenu()
-            pack[1] = ""
-            pack.SkipPlayerSay = true
-        end
+    hook.Add("GRMRPChat_ClientCommand", "GRM_CompAccess_ChatCl", function(ply, text)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() or not istable(pack) then return end
+            local low = string.lower(string.Trim(tostring(pack[1] or "")))
+            if low == "/comp_access" or low == "/pc_access" or low == "/пк_доступ" or low == "/компьютеры" then
+                A.OpenMenu()
+                pack[1] = ""
+                pack.SkipPlayerSay = true
+            end
+
+        if pack.SkipPlayerSay == true then return true end
     end)
 
     hook.Add("GRM_FactionsAdmin_BuildTabs", "GRM_CompAccess_Tab", function(sheet)
@@ -442,3 +448,11 @@ if GRM.Access and GRM.Access.Register then
 end
 
 print("[GRM CompAccess] v" .. A.Version .. " loaded (" .. (SERVER and "Server" or "Client") .. ")")
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/comp_access", "/pc_access", "/компьютеры", "/пк_доступ" })
+end

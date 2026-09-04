@@ -130,9 +130,19 @@ if SERVER then
         if low=="/leaders" or low=="/лидеры" then R.PrintLeaders(ply) return true end
         return false
     end
-    hook.Add("PlayerSayTransform","GRM_Roster_Transform",function(ply,data)
-        if istable(data) and isstring(data[1]) and handle(ply,data[1]) then data[1]="" data.SkipPlayerSay=true end
+    hook.Add("PlayerSay", "GRM_Roster_Transform", function(ply, text, teamSays)
+        local data = { tostring(text or ""), SkipPlayerSay = false }
+            if istable(data) and isstring(data[1]) and handle(ply,data[1]) then data[1]="" data.SkipPlayerSay=true end
+
+        if data.SkipPlayerSay == true then return "" end
     end)
     hook.Add("PlayerSay","GRM_Roster_Chat",function(ply,text) if handle(ply,text) then return""end end)
     timer.Create("GRM_Roster_LiveSync",10,0,function() if isfunction(broadcastFactionData) then broadcastFactionData() end end)
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/leaders", "/members", "/лидеры", "/состав" })
 end

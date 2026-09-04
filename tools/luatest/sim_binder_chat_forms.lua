@@ -72,8 +72,8 @@ ok(binder:find('["/binder"] = true', 1, true) ~= nil
     "все три команды: /binder, /autobinder, /rpbinder")
 ok(binder:find('concommand.Add("grm_binder"', 1, true) ~= nil, "консольная команда")
 ok(binder:find('hook.Add("PlayerSay", "GRM_Binder_Chat"', 1, true) ~= nil
-    and binder:find('hook.Add("PlayerSayTransform", "GRM_Binder_ChatEC"', 1, true) ~= nil,
-    "команда ловится на сервере (и в EasyChat) — в общий чат не улетает")
+    and binder:find('hook.Add("PlayerSay", "GRM_Binder_ChatEC"', 1, true) ~= nil,
+    "команда ловится на сервере (боевой PlayerSay + реестр) — в общий чат не улетает")
 ok(binder:find("EasyChat.SendGlobalMessage", 1, true) == nil,
     "EasyChat вырезан и из биндера (указание владельца; вечер-12)")
 ok(binder:find("ns.SendText(part)", 1, true) ~= nil,

@@ -440,6 +440,22 @@ local function build()
         pp:SetText("")
         if IsValid(preview) then preview:SetText("") end
         if #v == 0 then closeInput() return end
+        -- Свой контракт (вечер-18, указание «привязки к старым модулям
+        -- вырезать»): строку снимает владелец-модуль хуком
+        -- GRMRPChat_ClientCommand (return true = съедено, на сервер не идёт;
+        -- как прежний EasyChat-transform — на ЛЮБУЮ строку: и /doc_admin,
+        -- и «магические» имена без слэша).
+        -- Прежний вход EasyChat «PlayerSayTransform» мёртв с 03.09 — ветки
+        -- на него по всему дереву вырезаны этим же вечером.
+        if hook and hook.Run
+            and hook.Run("GRMRPChat_ClientCommand", LocalPlayer(), v) == true then
+            table.insert(history, v)
+            if #history > 50 then table.remove(history, 1) end
+            histIdx = 0
+            GRMRPChat._inpDirty = true
+            closeInput()
+            return
+        end
         if v:sub(1, 1) ~= "/" and selChan ~= "ic" then
             local chan = chanNow()
             if chan and chan.cmd then v = "/" .. chan.cmd .. " " .. v end
@@ -499,7 +515,7 @@ function GRMRPChat.OpenInput()
     end
     if not GRMRPChat._bannered and GRMRPChat.AddSystem then
         GRMRPChat._bannered = true
-        GRMRPChat.AddSystem("чат GRM · сборка вечер-17 (04.09) · /chatdiag · библиотека едина (дублей чата нет) · память ввода — переживает рестарт")
+        GRMRPChat.AddSystem("чат GRM · сборка вечер-18 (04.09) · /chatdiag · библиотека едина (дублей чата нет) · память ввода — переживает рестарт")
     end
     if not IsValid(frame) then build() end
     frame:Show()

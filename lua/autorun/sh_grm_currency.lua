@@ -742,14 +742,17 @@ if SERVER then
         return false
     end
 
-    hook.Add("PlayerSayTransform", "GRM_Currency_MoneyDropCmd", function(ply, datapack)
-        if not istable(datapack) then return end
-        local msg = datapack[1]
-        if not isstring(msg) then return end
-        if handleMoneyCmd(ply, msg) then
-            datapack[1] = ""
-            datapack.SkipPlayerSay = true
-        end
+    hook.Add("PlayerSay", "GRM_Currency_MoneyDropCmd", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) then return end
+            local msg = datapack[1]
+            if not isstring(msg) then return end
+            if handleMoneyCmd(ply, msg) then
+                datapack[1] = ""
+                datapack.SkipPlayerSay = true
+            end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     hook.Add("PlayerSay", "GRM_Currency_MoneyDropFallback", function(ply, text)
@@ -936,4 +939,11 @@ if CLIENT then
     end)
 
     print("[GRM Currency] client loaded")
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/dbcheck" })
 end

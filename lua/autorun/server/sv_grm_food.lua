@@ -845,3 +845,10 @@ concommand.Add("grm_food_set", function(ply, _, args)
 end)
 
 print("[GRM Food] Сервер загружен. Сущности зарегистрированы через scripted_ents.Register.")
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/grm_vending_clear", "/grm_vending_load", "/grm_vending_save", "/grmclearvending", "/grmloadvending", "/grmsavevending" })
+end

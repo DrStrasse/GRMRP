@@ -71,3 +71,10 @@ hook.Add("PlayerSay", "GRM_Wardrobe_Cmds", function(ply, text)
 end)
 
 print("[GRM Wardrobe] Команды спавна/удаления загружены")
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/wardrobe_add", "/wardrobe_remove" })
+end

@@ -450,10 +450,13 @@ else
     end
     concommand.Add("grm_minimap_admin", function() if IsValid(LocalPlayer()) and LocalPlayer():IsSuperAdmin() then net.Start("GRM_Minimap_Open") net.SendToServer() end end)
     concommand.Add("grm_gps", openGPS)
-    hook.Add("PlayerSayTransform", "GRM_Minimap_GPSCommand", function(ply, pack)
-        if ply ~= LocalPlayer() then return end
-        local text = string.lower(string.Trim(pack and pack[1] or ""))
-        if text == "/gps" then pack[1] = "" openGPS() return true end
+    hook.Add("GRMRPChat_ClientCommand", "GRM_Minimap_GPSCommand", function(ply, text)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() then return end
+            local text = string.lower(string.Trim(pack and pack[1] or ""))
+            if text == "/gps" then pack[1] = "" openGPS() return true end
+
+        if pack.SkipPlayerSay == true then return true end
     end)
 
     -- Кружок на экране всегда: в кадре — на точке мира, за кадром — на краю экрана.
@@ -627,4 +630,11 @@ if GRM.Modules and GRM.Modules.Register then
         Depends = {},
         Status = function() local d = GRM.Minimap.Data or {} return ("точек на карте: %d"):format(#(d.points or {})) end,
     })
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/grm_minimap_admin" })
 end

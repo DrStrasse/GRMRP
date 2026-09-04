@@ -89,7 +89,7 @@ ok(has(buyerS, "GRM.Mining.PushBuyer"), "скупщик только откры�
 ok(has(buyerS, "self:NextThink(CurTime() + 0.25)"), "Think NPC больше не крутится 50 раз в секунду")
 ok(has(buyerSh, "ENT.AdminOnly = true"), "скупщика из спавн-меню ставит только администрация")
 ok(has(admin, "!mineclean"), "добавлена уборка валяющейся руды")
-ok(has(admin, 'hook.Add("PlayerSayTransform", "GRM_OreAdminCmdsEC"'), "команды работают и в EasyChat")
+ok(has(admin, 'hook.Add("PlayerSay", "GRM_OreAdminCmdsEC"'), "команды — боевая цепочка PlayerSay + реестр")
 
 print(("\nMINING UI: %d/%d, провалов: %d"):format(total - fails, total, fails))
 if fails > 0 then os.exit(1) end

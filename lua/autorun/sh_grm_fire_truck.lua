@@ -566,12 +566,15 @@ if SERVER then
     hook.Add("PlayerSay", "GRM_FireTruck_Chat", function(ply, text)
         if handleChat(ply, text) then return "" end
     end)
-    hook.Add("PlayerSayTransform", "GRM_FireTruck_ChatT", function(ply, datapack)
-        if not istable(datapack) or not isstring(datapack[1]) then return end
-        if handleChat(ply, datapack[1]) then
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-        end
+    hook.Add("PlayerSay", "GRM_FireTruck_ChatT", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) or not isstring(datapack[1]) then return end
+            if handleChat(ply, datapack[1]) then
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+            end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     concommand.Add("grm_fire_trucks", openTrucks)
@@ -1007,4 +1010,11 @@ if CLIENT then
     end)
 
     print("[GRM Fire] Truck client loaded")
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/feuer", "/feuer_off", "/fire_trucks", "/firetruck", "/firetruck_admin", "/firetruck_off", "/hose", "/пм", "/пожарка", "/пожарка_стоп", "/пожарныйрукав", "/рукав", "/ствол" })
 end

@@ -149,14 +149,17 @@ if SERVER then
             return ""
         end
     end)
-    hook.Add("PlayerSayTransform", "GRM_FireSpots_ChatT", function(ply, datapack)
-        if not istable(datapack) or type(datapack[1]) ~= "string" then return end
-        local t = string.lower(string.Trim(datapack[1]))
-        if t == "/fire_spots" or t == "!fire_spots" or t == "/очаги" or t == "/пожары_очаги" then
-            open(ply)
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-        end
+    hook.Add("PlayerSay", "GRM_FireSpots_ChatT", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) or type(datapack[1]) ~= "string" then return end
+            local t = string.lower(string.Trim(datapack[1]))
+            if t == "/fire_spots" or t == "!fire_spots" or t == "/очаги" or t == "/пожары_очаги" then
+                open(ply)
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+            end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     print("[GRM Fire] Spots admin loaded")
@@ -288,4 +291,12 @@ if CLIENT then
     concommand.Add("grm_fire_spots", function()
         net.Start(NET_REQ) net.SendToServer()
     end)
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/fire_spots", "/очаги", "/пожары_очаги" })
 end

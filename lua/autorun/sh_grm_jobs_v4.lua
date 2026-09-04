@@ -278,7 +278,11 @@ if SERVER then
  hook.Add("CanPlayerEnterVehicle","GRM_Garbage_BlockVehicle",function(p)if IsValid(p:GetNWEntity("GRM_GarbageBox"))then notify(p,"Сначала загрузите коробку с мусором сзади машины клавишей G.",false)return false end end)
  hook.Add("PlayerDeath","GRM_Garbage_RemoveCarry",function(p)local b=p:GetNWEntity("GRM_GarbageBox");if IsValid(b)then b:Remove()end end);hook.Add("PlayerDisconnected","GRM_Garbage_RemoveCarryLeave",function(p)local b=p:GetNWEntity("GRM_GarbageBox");if IsValid(b)then b:Remove()end end)
  local function chat(p,text)local s=string.lower(string.Trim(text or""));if s=="/calltaxi"or s=="/вызватьтакси"then local ok,msg=JB.CallTaxi(p,"chat");if not ok then notify(p,msg,false)end return true elseif s=="/canceltaxi"then local ok,msg=JB.CancelTaxi(p,"chat");if not ok then notify(p,msg,false)end return true end end
- hook.Add("PlayerSay","GRM_JobsV4_Chat",function(p,t)if chat(p,t)then return""end end);hook.Add("PlayerSayTransform","GRM_JobsV4_EasyChat",function(p,pack)if istable(pack)and chat(p,pack[1])then pack[1]="";pack.SkipPlayerSay=true end end)
+ hook.Add("PlayerSay","GRM_JobsV4_Chat",function(p,t)if chat(p,t)then return""end end);hook.Add("PlayerSay", "GRM_JobsV4_EasyChat", function(p, text, teamSays)
+                                                                                           local pack = { tostring(text or ""), SkipPlayerSay = false }
+                                                                                               if istable(pack)and chat(p,pack[1])then pack[1]="";pack.SkipPlayerSay=true end
+                                                                                           if pack.SkipPlayerSay == true then return "" end
+                                                                                       end)
  local function registerPerm()if GRM.Perm and GRM.Perm.RegisterClass then GRM.Perm.RegisterClass("grm_garbage_bin",true)end;if GRM.PermData and GRM.PermData.AddExtract then GRM.PermData.AddExtract("grm_garbage_bin",function(e)return{binName=e:GetBinName()}end);GRM.PermData.AddApply("grm_garbage_bin",function(e,d)e:SetBinName(tostring(d.binName or"Мусорный контейнер"))end)end end;timer.Simple(1,registerPerm);timer.Simple(4,registerPerm)
  function JB.SaveGarbageBins(ply)
   if not(IsValid(ply)and ply:IsSuperAdmin())then return false,"только суперадмин"end;registerPerm();if not(GRM.Perm and GRM.Perm.Add)then return false,"perm-модуль не загружен"end
@@ -308,3 +312,10 @@ if CLIENT then
  end)
 end
 print("[GRM Jobs v4] physical garbage + live taxi loaded")
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/calltaxi", "/canceltaxi", "/grm_persistence", "/вызватьтакси" })
+end

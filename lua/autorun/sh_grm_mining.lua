@@ -451,9 +451,12 @@ if SERVER then
         return false
     end
     hook.Add("PlayerSay", "GRM_Mining_Chat", function(ply, text) if chat(ply, text) then return "" end end)
-    hook.Add("PlayerSayTransform", "GRM_Mining_ChatEC", function(ply, pack)
-        if not (istable(pack) and isstring(pack[1])) then return end
-        if chat(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+    hook.Add("PlayerSay", "GRM_Mining_ChatEC", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not (istable(pack) and isstring(pack[1])) then return end
+            if chat(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
 
     list.Set("SpawnableEntities", "grm_ore_node", {
@@ -509,4 +512,11 @@ if CLIENT then
     end)
 
     print("[GRM Mining] client v" .. M.Version .. " loaded")
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/mine_price", "/mine_prices", "/mine_tool", "/бур", "/цены_руды" })
 end

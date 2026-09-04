@@ -241,12 +241,22 @@ else
         if down and not f2Down and IsValid(LocalPlayer()) and LocalPlayer():IsAdmin() then RunConsoleCommand("grm_tickets") end
         f2Down = down
     end)
-    hook.Add("PlayerSayTransform", "GRM_Tickets_ClientCommands", function(ply, data)
-        if ply ~= LocalPlayer() then return end
-        local msg = string.lower(string.Trim(data and data[1] or ""))
-        if msg == "/ticket" then openCreate(); data[1] = "" return true end
-        local rid = string.match(msg, "^/ticket_rate%s+(%d+)$")
-        if rid then openRating(rid); data[1] = "" return true end
-        if msg == "/tickets" then RunConsoleCommand("grm_tickets"); data[1] = "" return true end
+    hook.Add("GRMRPChat_ClientCommand", "GRM_Tickets_ClientCommands", function(ply, text)
+        local data = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() then return end
+            local msg = string.lower(string.Trim(data and data[1] or ""))
+            if msg == "/ticket" then openCreate(); data[1] = "" return true end
+            local rid = string.match(msg, "^/ticket_rate%s+(%d+)$")
+            if rid then openRating(rid); data[1] = "" return true end
+            if msg == "/tickets" then RunConsoleCommand("grm_tickets"); data[1] = "" return true end
+
+        if data.SkipPlayerSay == true then return true end
     end)
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/ticket", "/ticket_rate", "/tickets" })
 end

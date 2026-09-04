@@ -2781,9 +2781,12 @@ if SERVER then
     hook.Add("PlayerSay", "GRM_Plates_Chat", function(ply, text)
         if chatCommand(ply, text) then return "" end
     end)
-    hook.Add("PlayerSayTransform", "GRM_Plates_ChatT", function(ply, pack)
-        if not istable(pack) or not isstring(pack[1]) then return end
-        if chatCommand(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+    hook.Add("PlayerSay", "GRM_Plates_ChatT", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) or not isstring(pack[1]) then return end
+            if chatCommand(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
 
     concommand.Add("grm_plates", function(ply) PL.Open(ply) end)
@@ -3763,13 +3766,16 @@ if CLIENT then
         if IsValid(plate) then openEditor(plate) end
     end)
 
-    hook.Add("PlayerSayTransform", "GRM_Plates_EditorChat", function(ply, pack)
-        if not (istable(pack) and isstring(pack[1])) or ply ~= LocalPlayer() then return end
-        local low = string.lower(string.Trim(pack[1]))
-        if low == "/номер_ред" or low == "/номерред" or low == "/plate_edit" then
-            pack[1] = "" pack.SkipPlayerSay = true
-            RunConsoleCommand("grm_plate_edit")
-        end
+    hook.Add("GRMRPChat_ClientCommand", "GRM_Plates_EditorChat", function(ply, text)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not (istable(pack) and isstring(pack[1])) or ply ~= LocalPlayer() then return end
+            local low = string.lower(string.Trim(pack[1]))
+            if low == "/номер_ред" or low == "/номерред" or low == "/plate_edit" then
+                pack[1] = "" pack.SkipPlayerSay = true
+                RunConsoleCommand("grm_plate_edit")
+            end
+
+        if pack.SkipPlayerSay == true then return true end
     end)
 
     -- клик правой кнопкой по 3D2D-плашке над знаком — открыть редактор
@@ -3860,3 +3866,10 @@ if CLIENT then
 end
 
 print("[GRM Plates] v" .. PL.Version .. " loaded (" .. (SERVER and "Server" or "Client") .. ")")
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/plate_edit", "/plate_status", "/plateoff", "/plateon", "/номер_ред", "/номер_статус", "/номерприкрепить", "/номерред", "/прикрепить", "/снятьномер" })
+end

@@ -659,16 +659,19 @@ if SERVER then
 
     concommand.Add("grm_accessories_off", function(ply, _, args) runRemoveCommand(ply, args[1] or "all") end)
     concommand.Add("grm_accessory_remove", function(ply, _, args) runRemoveCommand(ply, args[1] or "all") end)
-    hook.Add("PlayerSayTransform", "GRM_Customization_RemoveCommand", function(ply, pack)
-        if not istable(pack) or not isstring(pack[1]) then return end
-        local text = string.Trim(pack[1])
-        local command, argument = string.match(text, "^(%S+)%s*(.-)$")
-        command = string.lower(command or "")
-        if command ~= "/accessories_off" and command ~= "!accessories_off"
-            and command ~= "/acc_remove" and command ~= "!acc_remove"
-            and command ~= "/снятьаксессуары" and command ~= "!снятьаксессуары" then return end
-        runRemoveCommand(ply, argument ~= "" and argument or "all")
-        pack[1] = ""; pack.SkipPlayerSay = true
+    hook.Add("PlayerSay", "GRM_Customization_RemoveCommand", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) or not isstring(pack[1]) then return end
+            local text = string.Trim(pack[1])
+            local command, argument = string.match(text, "^(%S+)%s*(.-)$")
+            command = string.lower(command or "")
+            if command ~= "/accessories_off" and command ~= "!accessories_off"
+                and command ~= "/acc_remove" and command ~= "!acc_remove"
+                and command ~= "/снятьаксессуары" and command ~= "!снятьаксессуары" then return end
+            runRemoveCommand(ply, argument ~= "" and argument or "all")
+            pack[1] = ""; pack.SkipPlayerSay = true
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
 
     local function adminOpen(ply)
@@ -676,11 +679,14 @@ if SERVER then
         net.Start("GRM_Custom_AdminOpen") net.WriteTable(C.Catalog) net.Send(ply)
     end
     concommand.Add("grm_accessories_admin", adminOpen)
-    hook.Add("PlayerSayTransform", "GRM_Customization_AdminCommand", function(ply, pack)
-        if not istable(pack) or not isstring(pack[1]) then return end
-        local cmd = string.lower(string.Trim(pack[1]))
-        if cmd ~= "/grm_accessories_admin" and cmd ~= "!grm_accessories_admin" then return end
-        adminOpen(ply); pack[1] = ""; pack.SkipPlayerSay = true
+    hook.Add("PlayerSay", "GRM_Customization_AdminCommand", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) or not isstring(pack[1]) then return end
+            local cmd = string.lower(string.Trim(pack[1]))
+            if cmd ~= "/grm_accessories_admin" and cmd ~= "!grm_accessories_admin" then return end
+            adminOpen(ply); pack[1] = ""; pack.SkipPlayerSay = true
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
 
     net.Receive("GRM_Custom_AdminOp", function(_, ply)
@@ -805,20 +811,7 @@ if SERVER then
     end)
 
     -- Находка 179e: /bag_unload в чате (EasyChat перехватывает PlayerSay)
-    local function bagUnloadChat(ply, datapack)
-        if not istable(datapack) then return end
-        local text = datapack[1]
-        if not isstring(text) then return end
-        if string.lower(string.Trim(text)) ~= "/bag_unload" then return end
-        if not IsValid(ply) then return end
-        local _, err = C.LootBagUnload(ply)
-        if err ~= nil and err ~= "" and GRM.Notify then
-            GRM.Notify(ply, err, 255, 190, 90)
-        end
-        datapack.SkipPlayerSay = true
-        datapack[1] = ""
-    end
-    hook.Add("PlayerSayTransform", "GRM_LootBag_UnloadTransform", bagUnloadChat)
+
     hook.Add("PlayerSay", "GRM_LootBag_UnloadSay", function(ply, text)
         if not isstring(text) then return end
         if string.lower(string.Trim(text)) ~= "/bag_unload" then return end
@@ -840,4 +833,12 @@ if SERVER then
     print("[GRM Customization] server v" .. C.Version .. " loaded")
 else
     -- Клиентская часть находится в autorun/client/cl_grm_customization.lua.
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/acc_remove", "/accessories_off", "/grm_accessories_admin", "/снятьаксессуары" })
 end

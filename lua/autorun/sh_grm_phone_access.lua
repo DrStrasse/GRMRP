@@ -492,14 +492,17 @@ if CLIENT then
 
     concommand.Add("grm_phone_access", AM.OpenMenu)
 
-    hook.Add("PlayerSayTransform", "GRM_PhoneAccess_ChatCommand", function(ply, datapack)
-        if ply ~= LocalPlayer() then return end
-        local msg = string.lower(string.Trim(datapack[1] or ""))
-        if msg == "/phone_access" or msg == "!phone_access" or msg == "/phoneaccess" or msg == "!phoneaccess" then
-            AM.OpenMenu()
-            datapack[1] = ""
-            return
-        end
+    hook.Add("GRMRPChat_ClientCommand", "GRM_PhoneAccess_ChatCommand", function(ply, text)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() then return end
+            local msg = string.lower(string.Trim(datapack[1] or ""))
+            if msg == "/phone_access" or msg == "!phone_access" or msg == "/phoneaccess" or msg == "!phoneaccess" then
+                AM.OpenMenu()
+                datapack[1] = ""
+                return
+            end
+
+        if datapack.SkipPlayerSay == true then return true end
     end)
 
     -- Интеграция с меню фракций: добавляем вкладку, если OpenAdminMenu уже есть.

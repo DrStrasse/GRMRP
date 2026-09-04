@@ -2169,3 +2169,10 @@ if GRM.Modules and GRM.Modules.Register then
         Status = function() local n = 0 for _ in pairs(GRM.Mobile.Numbers or {}) do n = n + 1 end return ("номеров выдано: %d"):format(n) end,
     })
 end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/mobile", "/phone", "/телефон" })
+end

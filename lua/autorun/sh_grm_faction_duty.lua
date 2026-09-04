@@ -615,7 +615,11 @@ if SERVER then
         else ply:ChatPrint("[Служба] " .. fac .. ": " .. (FD.IsOnDuty(ply) and "НА СЛУЖБЕ" or "ВНЕ СЛУЖБЫ") .. ". Смена статуса — у служебного NPC.") end
         return true
     end
-    hook.Add("PlayerSayTransform", "GRM_Duty_Transform", function(ply, data) if istable(data) and isstring(data[1]) and statusChat(ply, data[1]) then data[1] = "" data.SkipPlayerSay = true end end)
+    hook.Add("PlayerSay", "GRM_Duty_Transform", function(ply, text, teamSays)
+        local data = { tostring(text or ""), SkipPlayerSay = false }
+            if istable(data) and isstring(data[1]) and statusChat(ply, data[1]) then data[1] = "" data.SkipPlayerSay = true end
+        if data.SkipPlayerSay == true then return "" end
+    end)
     hook.Add("PlayerSay", "GRM_Duty_Chat", function(ply, text) if statusChat(ply, text) then return "" end end)
 else
     net.Receive(NET_TOOL_DATA,function()local names=net.ReadTable()or{};FD.ToolFactions=names;if GRM.QMenu then GRM.QMenu.FactionNames=names;if IsValid(GRM.QMenu._frame)and isfunction(GRM.QMenu._rebuild)then timer.Simple(0,GRM.QMenu._rebuild)end end;hook.Run("GRM_DutyToolFactionsUpdated",names)end)
@@ -665,3 +669,10 @@ else
 end
 
 print("[GRM Duty] v" .. FD.Version .. " loaded")
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/duty", "/stations_", "/служба" })
+end

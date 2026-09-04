@@ -869,9 +869,21 @@ if SERVER then
   if #records>0 then saveDealers(records);print("[GRM VehicleDealer] migrated legacy dealers: "..#records)end
  end
  local function nearestDealer(ply,max)local best,dist=nil,(max or 400)^2;for _,d in ipairs(ents.FindByClass("sent_vehicle_dealer"))do local dd=ply:GetPos():DistToSqr(d:GetPos());if dd<dist then best,dist=d,dd end end;return best end
- hook.Add("PlayerSayTransform","GRM_VD_GarageCommand",function(ply,pack)if not istable(pack)or not isstring(pack[1])then return end;local c=string.lower(string.Trim(pack[1]));if c~="/garage"and c~="!garage"and c~="/гараж"then return end;local d=nearestDealer(ply,450);if IsValid(d)then VD.Push(ply,d)elseif GRM.Notify then GRM.Notify(ply,"Подойдите к дилеру транспорта",255,160,90)end;pack[1]="";pack.SkipPlayerSay=true end)
+ hook.Add("PlayerSay", "GRM_VD_GarageCommand", function(ply, text, teamSays)
+     local pack = { tostring(text or ""), SkipPlayerSay = false }
+         if not istable(pack)or not isstring(pack[1])then return end;local c=string.lower(string.Trim(pack[1]));if c~="/garage"and c~="!garage"and c~="/гараж"then return end;local d=nearestDealer(ply,450);if IsValid(d)then VD.Push(ply,d)elseif GRM.Notify then GRM.Notify(ply,"Подойдите к дилеру транспорта",255,160,90)end;pack[1]="";pack.SkipPlayerSay=true
+     if pack.SkipPlayerSay == true then return "" end
+ end)
  concommand.Add("grm_garage",function(ply)local d=IsValid(ply)and nearestDealer(ply,450);if IsValid(d)then VD.Push(ply,d)end end)
  grmBootStart("GRM_VD_Load","normal",function()timer.Simple(1.5,function()migrateLegacyDealers();VD.LoadDealers()end)end);hook.Add("PostCleanupMap","GRM_VD_Cleanup",function()timer.Simple(.8,VD.LoadDealers)end)
  function VD.SaveAll()local a,b=VD.SaveAllDealers();local c=saveGarage();return a and c,b end;function VD.LoadAll()loadGarage();return VD.LoadDealers()end
  print("[GRM VehicleDealer] server v"..VD.Version.." loaded")
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/garage", "/гараж" })
 end

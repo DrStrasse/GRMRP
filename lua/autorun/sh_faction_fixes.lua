@@ -1561,18 +1561,24 @@ if SERVER then
     -- "attempt to call global 'handleCurfewChat' (a nil value)".
     local handleCurfewChat
 
-    hook.Add("PlayerSayTransform", "FactionsExt_CurfewCommands", function(ply, datapack)
-        if not istable(datapack) or not isstring(datapack[1]) then return end
-        if not handleCurfewChat(ply, datapack[1]) then return end
-        datapack[1] = ""
-        datapack.SkipPlayerSay = true
+    hook.Add("PlayerSay", "FactionsExt_CurfewCommands", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) or not isstring(datapack[1]) then return end
+            if not handleCurfewChat(ply, datapack[1]) then return end
+            datapack[1] = ""
+            datapack.SkipPlayerSay = true
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
-    hook.Add("PlayerSayTransform", "FactionsExt_MaskCommands", function(ply, datapack)
-        if not istable(datapack) or not isstring(datapack[1]) then return end
-        if not handleMaskChatCommand(ply, datapack[1]) then return end
-        datapack[1] = ""
-        datapack.SkipPlayerSay = true
+    hook.Add("PlayerSay", "FactionsExt_MaskCommands", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) or not isstring(datapack[1]) then return end
+            if not handleMaskChatCommand(ply, datapack[1]) then return end
+            datapack[1] = ""
+            datapack.SkipPlayerSay = true
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     -- Комендантский час доступен и через PlayerSay, и через PlayerSayTransform
@@ -3593,35 +3599,38 @@ if CLIENT then
         end
     end)
 
-    hook.Add("PlayerSayTransform", "FactionsExt_ClientCommands", function(ply, datapack)
-        if ply ~= LocalPlayer() then return end
-        local msg = datapack[1]
-        if not msg then return end
-        local lower = safeLower(trim(msg))
+    hook.Add("GRMRPChat_ClientCommand", "FactionsExt_ClientCommands", function(ply, text)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() then return end
+            local msg = datapack[1]
+            if not msg then return end
+            local lower = safeLower(trim(msg))
 
-        if lower == "/model" then
-            openModelSelection()
-            datapack[1] = ""
-            return
-        end
+            if lower == "/model" then
+                openModelSelection()
+                datapack[1] = ""
+                return
+            end
 
-        if lower == "/mask_admin" or lower == "!mask_admin" or lower == "/maskcfg" or lower == "!maskcfg" then
-            openMaskAdminMenu()
-            datapack[1] = ""
-            return
-        end
+            if lower == "/mask_admin" or lower == "!mask_admin" or lower == "/maskcfg" or lower == "!maskcfg" then
+                openMaskAdminMenu()
+                datapack[1] = ""
+                return
+            end
 
-        if lower == "/models_admin" then
-            if LocalPlayer():IsSuperAdmin() then openAdminModelsMenu() end
-            datapack[1] = ""
-            return
-        end
+            if lower == "/models_admin" then
+                if LocalPlayer():IsSuperAdmin() then openAdminModelsMenu() end
+                datapack[1] = ""
+                return
+            end
 
-        if lower == "/weapons_admin" then
-            if LocalPlayer():IsSuperAdmin() then openWeaponsAdminMenu() end
-            datapack[1] = ""
-            return
-        end
+            if lower == "/weapons_admin" then
+                if LocalPlayer():IsSuperAdmin() then openWeaponsAdminMenu() end
+                datapack[1] = ""
+                return
+            end
+
+        if datapack.SkipPlayerSay == true then return true end
     end)
 
     concommand.Add("models_admin", function() if LocalPlayer():IsSuperAdmin() then openAdminModelsMenu() end end)
@@ -3660,22 +3669,25 @@ if CLIENT then
         )
     end)
 
-    hook.Add("PlayerSayTransform", "FactionsExt_GNews_PlayerCommand", function(ply, datapack)
-        if ply ~= LocalPlayer() then return end
-        local msg = datapack[1]
-        if not msg then return end
-        local lower = safeLower(msg)
+    hook.Add("GRMRPChat_ClientCommand", "FactionsExt_GNews_PlayerCommand", function(ply, text)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() then return end
+            local msg = datapack[1]
+            if not msg then return end
+            local lower = safeLower(msg)
 
-        if string.find(lower, "^/gnews%s+") == 1 then
-            local text = trim(string.sub(msg, 7))
-            if text ~= "" then
-                net.Start("GNews_Send")
-                    net.WriteString(text)
-                net.SendToServer()
+            if string.find(lower, "^/gnews%s+") == 1 then
+                local text = trim(string.sub(msg, 7))
+                if text ~= "" then
+                    net.Start("GNews_Send")
+                        net.WriteString(text)
+                    net.SendToServer()
+                end
+                datapack[1] = ""
+                return
             end
-            datapack[1] = ""
-            return
-        end
+
+        if datapack.SkipPlayerSay == true then return true end
     end)
 
     timer.Simple(1, function()
@@ -3684,4 +3696,11 @@ if CLIENT then
     end)
 
     print("[Factions Extended] Client loaded: fixed UI/model-browser/mask-v2")
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/gnews", "/maskdesc" })
 end

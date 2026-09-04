@@ -197,15 +197,26 @@ if SERVER then
         net.SendToServer()
     end
     concommand.Add("grm_alarm_notify", function(ply) openNotifyMenu(ply) end)
-    hook.Add("PlayerSayTransform", "GRM_AlarmNotify_Chat", function(ply, datapack)
-        if not istable(datapack) then return end
-        local text = datapack[1]
-        if not isstring(text) then return end
-        if string.lower(string.Trim(text)) ~= "/grm_alarm_notify" then return end
-        openNotifyMenu(ply)
-        datapack.SkipPlayerSay = true
-        datapack[1] = ""
+    hook.Add("PlayerSay", "GRM_AlarmNotify_Chat", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) then return end
+            local text = datapack[1]
+            if not isstring(text) then return end
+            if string.lower(string.Trim(text)) ~= "/grm_alarm_notify" then return end
+            openNotifyMenu(ply)
+            datapack.SkipPlayerSay = true
+            datapack[1] = ""
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 end
 
 print("[GRM Alarm] Integration loaded (находка 179h): взломы кейпадов/сканеров/дверей → журнал + оповещение фракций")
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/grm_alarm_notify" })
+end

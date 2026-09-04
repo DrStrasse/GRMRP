@@ -974,9 +974,12 @@ if SERVER then
     hook.Add("PlayerSay", "GRM_PCBoard_Chat", function(ply, text)
         if command(ply, text) then return "" end
     end)
-    hook.Add("PlayerSayTransform", "GRM_PCBoard_ChatEC", function(ply, pack)
-        if not (istable(pack) and isstring(pack[1])) then return end
-        if command(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+    hook.Add("PlayerSay", "GRM_PCBoard_ChatEC", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not (istable(pack) and isstring(pack[1])) then return end
+            if command(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
 
     concommand.Add("grm_pcboard", function(ply, _, args)
@@ -1072,4 +1075,11 @@ if CLIENT then
         hook.Run("GRM_PCBoardCard", card)
     end)
     print("[GRM PCBoard] client v" .. PB.Version .. " loaded")
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/pcboard", "/пробить" })
 end

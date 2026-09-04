@@ -465,3 +465,10 @@ if CLIENT then
     hook.Add("GRM_FactionsAdmin_BuildTabs", "GRM_FireAccess_Tab", installTab)
     print("[GRM Fire] Access client loaded")
 end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/fire_access", "/grm_fire_notify" })
+end

@@ -303,17 +303,20 @@ if SERVER then
         end
     end)
 
-    hook.Add("PlayerSayTransform", "GRM_VehHP_Chat", function(ply, pack)
-        if not istable(pack) then return end
-        local t = string.lower(string.Trim(pack[1] or ""))
-        if t ~= "/repair" and t ~= "/починить" and t ~= "/ремонт" then return end
-        local tr = ply:GetEyeTrace()
-        local ent = IsValid(tr.Entity) and root(tr.Entity)
-        if ply:InVehicle() then ent = root(ply:GetVehicle()) end
-        local ok, msg = H.TryRepair(ply, ent)
-        if GRM.Notify then GRM.Notify(ply, msg, ok and 120 or 255, ok and 210 or 140, 90) end
-        pack[1] = ""
-        pack.SkipPlayerSay = true
+    hook.Add("PlayerSay", "GRM_VehHP_Chat", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) then return end
+            local t = string.lower(string.Trim(pack[1] or ""))
+            if t ~= "/repair" and t ~= "/починить" and t ~= "/ремонт" then return end
+            local tr = ply:GetEyeTrace()
+            local ent = IsValid(tr.Entity) and root(tr.Entity)
+            if ply:InVehicle() then ent = root(ply:GetVehicle()) end
+            local ok, msg = H.TryRepair(ply, ent)
+            if GRM.Notify then GRM.Notify(ply, msg, ok and 120 or 255, ok and 210 or 140, 90) end
+            pack[1] = ""
+            pack.SkipPlayerSay = true
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
     hook.Add("PlayerSay", "GRM_VehHP_ChatRaw", function(ply, text)
         local t = string.lower(string.Trim(tostring(text or "")))
@@ -338,4 +341,12 @@ if SERVER then
 
     H.Load()
     print("[GRM VehHP] server v" .. H.Version)
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/repair", "/починить", "/ремонт" })
 end

@@ -406,3 +406,10 @@ function P.AttachTab(tabs)
 end
 
 print("[GRM Photo] v" .. P.Version .. " client")
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/photo", "/альбом", "/фото" })
+end

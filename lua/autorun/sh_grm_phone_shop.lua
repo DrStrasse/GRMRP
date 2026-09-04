@@ -1265,16 +1265,26 @@ else
         net.SendToServer()
     end)
 
-    hook.Add("PlayerSayTransform", "GRM_PhoneShop_ClientChat", function(ply, data)
-        if ply ~= LocalPlayer() then return end
-        local cmd = string.lower(string.Trim(data[1] or ""))
-        if cmd == "/phoneshop_admin" or cmd == "!phoneshop_admin" then
-            net.Start(NET_ADMIN_OPEN)
-            net.SendToServer()
-            data[1] = ""
-            return
-        end
+    hook.Add("GRMRPChat_ClientCommand", "GRM_PhoneShop_ClientChat", function(ply, text)
+        local data = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() then return end
+            local cmd = string.lower(string.Trim(data[1] or ""))
+            if cmd == "/phoneshop_admin" or cmd == "!phoneshop_admin" then
+                net.Start(NET_ADMIN_OPEN)
+                net.SendToServer()
+                data[1] = ""
+                return
+            end
+
+        if data.SkipPlayerSay == true then return true end
     end)
 
     print("[GRM Phone Shop] Client loaded v2")
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/phone_remove", "/phoneshop", "/phoneshop_admin", "/removephone", "/teleshop" })
 end

@@ -2498,9 +2498,12 @@ if SERVER then
         end
     end
 
-    hook.Add("PlayerSayTransform", "GRM_Doors_Commands", function(p, pack)
-        if not istable(pack) or not isstring(pack[1]) then return end
-        if chatCommand(p, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+    hook.Add("PlayerSay", "GRM_Doors_Commands", function(p, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) or not isstring(pack[1]) then return end
+            if chatCommand(p, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
     hook.Add("PlayerSay", "GRM_Doors_Chat", function(p, t)
         if chatCommand(p, t) then return "" end
@@ -2664,4 +2667,11 @@ if SERVER and GRM.Modules and GRM.Modules.Register then
             return ("дверей в реестре: %d"):format(n)
         end,
     })
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/door", "/door_audit", "/door_rebuild", "/lock", "/unlock", "/unwarrant", "/warrant", "/warrants", "/аудит_дверей", "/пересборка_дверей" })
 end

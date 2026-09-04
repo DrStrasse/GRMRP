@@ -306,8 +306,11 @@ if SERVER then
         if low == "/taxi" or low == "/такси" then openTaxi(ply) return true end
         return false
     end
-    hook.Add("PlayerSayTransform", "GRM_JobsV3_Transform", function(ply, data)
-        if istable(data) and isstring(data[1]) and chat(ply, data[1]) then data[1] = "" data.SkipPlayerSay = true end
+    hook.Add("PlayerSay", "GRM_JobsV3_Transform", function(ply, text, teamSays)
+        local data = { tostring(text or ""), SkipPlayerSay = false }
+            if istable(data) and isstring(data[1]) and chat(ply, data[1]) then data[1] = "" data.SkipPlayerSay = true end
+
+        if data.SkipPlayerSay == true then return "" end
     end)
     hook.Add("PlayerSay", "GRM_JobsV3_Chat", function(ply, text) if chat(ply, text) then return "" end end)
     concommand.Add("grm_jobs_admin", openAdmin)
@@ -372,4 +375,11 @@ else
         local l=vgui.Create("DLabel",f) l:SetPos(18,130) l:SetSize(520,48) l:SetText("Разрешённый транспорт: "..(#vehicles>0 and table.concat(vehicles,", ") or "любой автомобиль")) l:SetWrap(true) l:SetTextColor(C.muted)
         local b=vgui.Create("DButton",f) b:SetPos(18,198) b:SetSize(520,40) b:SetText("УСТАНОВИТЬ ТАКСУ") b:SetTextColor(color_white) b.Paint=function(_,w,h) draw.RoundedBox(5,0,0,w,h,C.green) end b.DoClick=function() net.Start(NET_TAXI_SET) net.WriteUInt(math.floor(s:GetValue()),20) net.SendToServer() f:Close() end
     end)
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/jobadmin", "/jobs_admin", "/points_", "/taxi", "/такси" })
 end

@@ -42,8 +42,7 @@ local function elide(text, font, maxWidth)
     if maxWidth <= 0 then return "" end
     surface.SetFont(font)
     if (surface.GetTextSize(text) or 0) <= maxWidth then return text end
-    local cut = text
-    while #cut > 1 do
+local cut = text    while #cut > 1 do
         -- шаг по UTF-8, иначе кириллица рвётся пополам и превращается в кракозябры
         local last = #cut
         while last > 1 and bit.band(string.byte(cut, last), 0xC0) == 0x80 do last = last - 1 end

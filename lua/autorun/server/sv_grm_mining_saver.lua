@@ -313,3 +313,10 @@ concommand.Add("grm_loadentities", function(ply)
 end)
 
 print("[GRM Saver] Loaded. Persistent ore buyer enabled for map: " .. game.GetMap())
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/loadentities", "/saveentities" })
+end

@@ -184,7 +184,19 @@ net.Receive(OPEN,function(_,p)W.OpenMenu(p)end)
 net.Receive(ACT,function(_,p)local a=net.ReadTable()or{};local action=tostring(a.action or"");if action=="refresh"then W.OpenMenu(p)return end;if action=="get"then if not W.CanView(p)then return end;local sid=key(a.sid);local r=W.Records[sid];net.Start(DETAIL)net.WriteTable(r and{sid=sid,name=r.name,level=r.level,reasons=r.reasons,updated=r.updated}or{})net.Send(p)return end;if not W.CanEdit(p)then return end
  local ok,res;if action=="add_charge"then ok,res=W.AddCharge(p,a.sid,a.article,a.text,a.level)elseif action=="add_custom"then ok,res=W.AddCustomCharge(p,a.sid,{id="custom",code=a.code,title=a.title,type=a.type,text=a.text,fine=a.fine,level=a.level,manual=true})elseif action=="set_level"then ok,res=W.SetLevel(p,a.sid,a.level,a.text)elseif action=="clear"then ok,res=W.Clear(p,a.sid,a.text)elseif action=="remove_reason"then ok,res=W.RemoveReason(p,a.sid,a.index)elseif action=="save_catalog"and p:IsSuperAdmin()then local clean={}for i,row in pairs(a.catalog or{})do local n=normalizeArticle(row,i);if n then clean[#clean+1]=n end end;if #clean>0 then W.Catalog=clean;ok=W.SaveCatalog();res="Каталог сохранён"else ok=false;res="Каталог пуст"end end;notify(p,ok,tostring(ok and(res=="Каталог сохранён"and res or"Операция выполнена")or res),ok and 100 or 255,ok and 220 or 100,120);W.OpenMenu(p)end)
 local function chatCommand(p,text)local args=string.Explode(" ",string.Trim(text or""));local c=string.lower(args[1]or"");if c=="/wanted"or c=="!wanted"or c=="/розыск"then W.OpenMenu(p)return true elseif c=="/wanted_clear"then local t=findPlayer(args[2])or args[2];if t then W.Clear(p,key(t),"Команда")end;return true elseif c=="/wanted_custom"then local t=findPlayer(args[2]);local level=tonumber(args[3]);local title=table.concat(args," ",4);if IsValid(t)and level and title~=""then local ok,e=W.AddCustomCharge(p,key(t),{code="РУЧНАЯ",title=title,level=level,manual=true});notify(p,ok,tostring(e))else notify(p,"/wanted_custom <игрок> <уровень> <статья>",255,180,80)end;return true end end
-hook.Add("PlayerSayTransform","GRM_Wanted_Commands",function(p,pack)if not istable(pack)or not isstring(pack[1])then return end;if chatCommand(p,pack[1])then pack[1]="";pack.SkipPlayerSay=true end end);hook.Add("PlayerSay","GRM_Wanted_Fallback",function(p,t)if chatCommand(p,t)then return""end end)
+hook.Add("PlayerSay", "GRM_Wanted_Commands", function(p, text, teamSays)
+    -- Вечер-18: прежний EasyChat-вход (PlayerSayTransform) вырезан — боевой
+    -- контракт: consume через return "" (цепочка PlayerSay + реестр библиотеки).
+    if chatCommand(p, text) then return "" end
+end);hook.Add("PlayerSay","GRM_Wanted_Fallback",function(p,t)if chatCommand(p,t)then return""end end)
 hook.Add("PlayerInitialSpawn","GRM_Wanted_Join",function(p)timer.Simple(2,function()if IsValid(p)then local r=W.Records[key(p)];if r then r.name=p:Nick()end;push(p)end end)end)
 concommand.Add("grm_wanted",function(p)if IsValid(p)then W.OpenMenu(p)end end);concommand.Add("grm_wanted_save",function(p)if not IsValid(p)or p:IsSuperAdmin()then W.Save()end end)
-W.LoadCatalog();W.Load();print("[GRM Wanted] server v2.0 loaded records="..table.Count(W.Records))
+W.LoadCatalog();W.Load();
+-- Вечер-18: команда разбирается внутри парсера модуля — регистрируем её
+-- множество в едином внешнем словаре библиотеки (иначе на режиме она стала бы
+-- «неизвестной» до цепочки PlayerSay).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/wanted", "/wanted_clear", "/wanted_custom", "/розыск" })
+end
+
+print("[GRM Wanted] server v2.0 loaded records="..table.Count(W.Records))

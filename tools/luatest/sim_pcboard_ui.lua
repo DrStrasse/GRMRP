@@ -69,7 +69,7 @@ ok(not has(core, "net.Broadcast()"), "в модуле нет широковещ�
 print("\n=== 4. КОМАНДЫ ===")
 ok(has(core, 'cmd ~= "/pcboard"') and has(core, '"/пробить"'), "команда и русский псевдоним")
 ok(has(core, 'hook.Add("PlayerSay", "GRM_PCBoard_Chat"')
-    and has(core, 'hook.Add("PlayerSayTransform", "GRM_PCBoard_ChatEC"'),
+    and has(core, 'hook.Add("PlayerSay", "GRM_PCBoard_ChatEC"'),
     "команда работает и в штатном чате, и в EasyChat")
 ok(has(core, 'sub == "журнал"') and has(core, 'sub == "я"') and has(core, 'sub == "авто"'),
     "подкоманды: журнал, я, авто")

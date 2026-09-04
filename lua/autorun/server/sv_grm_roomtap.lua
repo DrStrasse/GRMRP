@@ -577,8 +577,7 @@ hook.Add("PlayerSay", "GRM_RoomTap_TextRecording", function(ply, text)
     local ck = (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(ply)) or (ply.SteamID64 and ply:SteamID64()) or ""
     local hasJudgeWarrant = (not isJudge) or (GRM.Doors and GRM.Doors.HasWarrant and GRM.Doors.HasWarrant(ck, "wiretap_judge"))
 
-    local recordText = text
-    if isJudge and not hasJudgeWarrant then
+local recordText = text    if isJudge and not hasJudgeWarrant then
         recordText = "[Защищено судебным иммунитетом: требуется ордер надзора Верховного суда]"
     end
 
@@ -1321,3 +1320,10 @@ timer.Create("GRM_RoomTap_AutoSave", 60, 0, function()
 end)
 
 print("[GRM RoomTap] Server loaded")
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/roomtap_access", "/roomtap_remove", "/roomtap_requests", "/roomtapshop", "/rtshop" })
+end

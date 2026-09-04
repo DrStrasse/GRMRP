@@ -167,9 +167,12 @@ if SERVER then
         return true
     end
 
-    hook.Add("PlayerSayTransform", "GRM_Cruise_Chat", function(ply, pack)
-        if not istable(pack) then return end
-        if chatCmd(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+    hook.Add("PlayerSay", "GRM_Cruise_Chat", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) then return end
+            if chatCmd(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
     hook.Add("PlayerSay", "GRM_Cruise_ChatRaw", function(ply, text)
         if chatCmd(ply, text) then return "" end
@@ -214,4 +217,11 @@ if CLIENT then
         draw.SimpleTextOutlined(mode .. "  " .. cap .. " км/ч", "DermaDefault", ScrW() / 2, ScrH() - 132,
             CRUISE_TEXT, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 1, CRUISE_OUTLINE)
     end)
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/autopilot", "/cruise" })
 end

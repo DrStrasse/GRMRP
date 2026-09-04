@@ -539,10 +539,13 @@ if SERVER then
         if handleLogChat(ply, low) then return "" end
     end)
     -- поддержка EasyChat PlayerSayTransform
-    hook.Add("PlayerSayTransform", "GRM_Fire_LogChatTr", function(ply, pack)
-        if not istable(pack) then return end
-        local txt = tostring(pack[1] or "")
-        if handleLogChat(ply, txt) then pack[1] = "" pack.SkipPlayerSay = true end
+    hook.Add("PlayerSay", "GRM_Fire_LogChatTr", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack) then return end
+            local txt = tostring(pack[1] or "")
+            if handleLogChat(ply, txt) then pack[1] = "" pack.SkipPlayerSay = true end
+
+        if pack.SkipPlayerSay == true then return "" end
     end)
 
     concommand.Add("grm_fire_log", function(ply)
@@ -629,4 +632,11 @@ if CLIENT then
     concommand.Add("grm_fire_log", function()
         net.Start("GRM_FireLog_Req") net.SendToServer()
     end)
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/fire_log", "/firelog", "/журнал_пожаров", "/журналпожаров", "/пожары_лог" })
 end

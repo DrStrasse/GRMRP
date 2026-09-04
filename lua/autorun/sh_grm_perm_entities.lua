@@ -1266,24 +1266,27 @@ if SERVER then
 
     -- Находка 179e: EasyChat ставит SkipPlayerSay для команд → PlayerSay не
     -- вызывается. Дублируем обработку через PlayerSayTransform (как /factions).
-    hook.Add("PlayerSayTransform", "GRM_PermEntities_ChatTransform", function(ply, datapack)
-        if not istable(datapack) then return end
-        local text = datapack[1]
-        if not isstring(text) then return end
-        local t = string.lower(string.Trim(text))
-        if t ~= "/permadd" and t ~= "/permremove" and t ~= "/permlist" and t ~= "/permload" then return end
-        if not IsValid(ply) or not ply:IsSuperAdmin() then
-            tell(ply, "Только суперадмин.", 255, 100, 100)
+    hook.Add("PlayerSay", "GRM_PermEntities_ChatTransform", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) then return end
+            local text = datapack[1]
+            if not isstring(text) then return end
+            local t = string.lower(string.Trim(text))
+            if t ~= "/permadd" and t ~= "/permremove" and t ~= "/permlist" and t ~= "/permload" then return end
+            if not IsValid(ply) or not ply:IsSuperAdmin() then
+                tell(ply, "Только суперадмин.", 255, 100, 100)
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if t == "/permadd" then addPerm(ply)
+            elseif t == "/permremove" then removePerm(ply)
+            elseif t == "/permload" then loadPerm(ply)
+            else listPerm(ply) end
             datapack.SkipPlayerSay = true
             datapack[1] = ""
-            return
-        end
-        if t == "/permadd" then addPerm(ply)
-        elseif t == "/permremove" then removePerm(ply)
-        elseif t == "/permload" then loadPerm(ply)
-        else listPerm(ply) end
-        datapack.SkipPlayerSay = true
-        datapack[1] = ""
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     hook.Add("PlayerSay", "GRM_PermEntities_Chat", function(ply, text)
@@ -1369,12 +1372,15 @@ if SERVER then
         return false
     end
 
-    hook.Add("PlayerSayTransform", "GRM_PermEntities_ChatArgs", function(ply, datapack)
-        if not istable(datapack) or not isstring(datapack[1]) then return end
-        if handleArgCmd(ply, datapack[1]) then
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-        end
+    hook.Add("PlayerSay", "GRM_PermEntities_ChatArgs", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) or not isstring(datapack[1]) then return end
+            if handleArgCmd(ply, datapack[1]) then
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+            end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     hook.Add("PlayerSay", "GRM_PermEntities_ChatArgs", function(ply, text)
@@ -1456,4 +1462,12 @@ if SERVER then
 
     print(("[GRM Perm] Perm Entities v%s загружен (путь: %s, база: data/%s)")
         :format(PERM_VER, tostring(debug.getinfo(1, "S").short_src), PERM_FILE))
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/permadd", "/permlist", "/permload", "/permremove" })
 end

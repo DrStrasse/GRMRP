@@ -2318,7 +2318,9 @@ hook.Add("GRM_FAccDataUpdated", "GRM_FactionUnified_AccessRefresh", function()
     end
 end)
 
-hook.Add("PlayerSayTransform", "GRM_FactionUnified_ChatCommand", function(ply, datapack)
+hook.Add("GRMRPChat_ClientCommand", "GRM_FactionUnified_ChatCommand", function(ply, text)
+    if ply ~= LocalPlayer() then return end
+    local datapack = { tostring(text or ""), SkipPlayerSay = false }
     if not istable(datapack) then return end
     local text = datapack[1]
     if not isstring(text) then return end
@@ -2326,6 +2328,8 @@ hook.Add("PlayerSayTransform", "GRM_FactionUnified_ChatCommand", function(ply, d
     if lower == "/fmenu" or lower == "/фракция" or lower == "/состав" or lower == "/factions" then
         if CLIENT then UI.Open() end
     end
+
+    if datapack.SkipPlayerSay == true then return true end
 end)
 
 print("[GRM Factions Unified UI] v" .. UI.Version .. " fully initialized with all 12 management domains")

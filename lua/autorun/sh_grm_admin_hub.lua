@@ -90,14 +90,14 @@ if SERVER then
         -- Повторяем реальный контракт EasyChat, но без `say`: сначала
         -- PlayerSayTransform, затем PlayerSay только если команда не была
         -- поглощена transform-хуком. Поэтому кнопки и ручной ввод идентичны.
-        local pack = { command, false, false }
-        local transformed = hook.Run("PlayerSayTransform", ply, pack, false, false)
-        if transformed == false then
+        -- Вечер-18: свой контракт (привязка к EasyChat вырезана): команда
+        -- идёт по боевой цепочке PlayerSay — модульные хуки и реестр внешних
+        -- команд библиотеки. Кнопки и ручной ввод идентичны.
+        local ret = hook.Run("PlayerSay", ply, command, false, false)
+        if ret == false then
             sendLaunchResult(ply, false, "Команда отклонена обработчиком")
             return
         end
-        local consumed = pack.SkipPlayerSay == true or not isstring(pack[1]) or string.Trim(pack[1]) == ""
-        if not consumed then hook.Run("PlayerSay", ply, pack[1], false, false) end
         sendLaunchResult(ply, true, "Запущено: " .. command)
     end)
 
@@ -475,31 +475,37 @@ if SERVER then
     end
     concommand.Add("grm_admin", function(ply) openHub(ply) end)
 
-    hook.Add("PlayerSayTransform", "GRM_Hub_TransformCmds", function(ply, datapack)
-        if not istable(datapack) then return end
-        local msg = datapack[1]
-        if not isstring(msg) then return end
-        local low = string.lower(string.Trim(msg))
-        if low == "/grm_admin" or low == "/admin" or low == "/админ" then
-            if openHub(ply) then
-                datapack[1] = ""
-                datapack.SkipPlayerSay = true
+    hook.Add("PlayerSay", "GRM_Hub_TransformCmds", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) then return end
+            local msg = datapack[1]
+            if not isstring(msg) then return end
+            local low = string.lower(string.Trim(msg))
+            if low == "/grm_admin" or low == "/admin" or low == "/админ" then
+                if openHub(ply) then
+                    datapack[1] = ""
+                    datapack.SkipPlayerSay = true
+                end
             end
-        end
-    end)
-    hook.Add("PlayerSayTransform", "GRM_Hub_ChatCmds", function(ply, datapack)
-        if not istable(datapack) then return end
-        local text = datapack[1]
-        if not isstring(text) then return end
 
-        local low = string.lower(string.Trim(text))
-        if low == "/grm_admin" or low == "/admin" or low == "/админ" then
-            if openHub(ply) then
-                datapack.SkipPlayerSay = true
-                datapack[1] = ""
-                return
+        if datapack.SkipPlayerSay == true then return "" end
+    end)
+    hook.Add("PlayerSay", "GRM_Hub_ChatCmds", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) then return end
+            local text = datapack[1]
+            if not isstring(text) then return end
+
+            local low = string.lower(string.Trim(text))
+            if low == "/grm_admin" or low == "/admin" or low == "/админ" then
+                if openHub(ply) then
+                    datapack.SkipPlayerSay = true
+                    datapack[1] = ""
+                    return
+                end
             end
-        end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     print("[GRM Hub] Единая админ-панель v" .. HB.Version .. " загружена (Код 79): /grm_admin")
@@ -978,11 +984,10 @@ if CLIENT then
 
         -- Сначала даём клиентским PlayerSayTransform-командам открыть их
         -- локальные окна (/models_admin, /weapons_admin, /mask_admin и т.п.).
-        local pack = { command, false, false }
-        local result = hook.Run("PlayerSayTransform", LocalPlayer(), pack, false, false)
-        local consumed = result == false or pack.SkipPlayerSay == true
-            or not isstring(pack[1]) or string.Trim(pack[1]) == ""
-        if consumed then
+        -- Вечер-18: локальные окна (/models_admin, /weapons_admin, /mask_admin…)
+        -- — через клиентскую цепочку библиотеки GRMRPChat_ClientCommand:
+        -- тот же контракт, что у OnEnter библиотечного ввода (cl_input).
+        if hook.Run("GRMRPChat_ClientCommand", LocalPlayer(), command) == true then
             chat.AddText(C.acc, "[Хаб] ", C.green, "Открыто: ", C.text, command)
             surface.PlaySound("buttons/button14.wav")
             return
@@ -1234,4 +1239,12 @@ if CLIENT then
     HB.Launch = launchAdminCommand
 
     print("[GRM Hub] Клиент единой админ-панели v" .. HB.Version .. " загружен")
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/admin", "/grm_admin", "/админ" })
 end

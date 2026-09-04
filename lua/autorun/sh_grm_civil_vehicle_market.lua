@@ -315,3 +315,10 @@ if CLIENT then
  net.Receive(CV.Net.SYNC,function()state=net.ReadTable()or state;if IsValid(CV.Frame)then open()end end)
  net.Receive(CV.Net.OPEN,open)
 end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/transport_market" })
+end

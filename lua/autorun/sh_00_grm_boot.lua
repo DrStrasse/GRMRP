@@ -368,8 +368,11 @@ function B.OnChat(cmds, id)
             if taskID then B.Ensure(taskID, "команда " .. first) end
         end
         hook.Add("PlayerSay", "GRM_Boot_ChatTrigger", function(ply, text) check(ply, text) end)
-        hook.Add("PlayerSayTransform", "GRM_Boot_ChatTriggerEC", function(ply, pack)
-            if istable(pack) and isstring(pack[1]) then check(ply, pack[1]) end
+        hook.Add("PlayerSay", "GRM_Boot_ChatTriggerEC", function(ply, text, teamSays)
+            local pack = { tostring(text or ""), SkipPlayerSay = false }
+                if istable(pack) and isstring(pack[1]) then check(ply, pack[1]) end
+
+            if pack.SkipPlayerSay == true then return "" end
         end)
     end
     return true

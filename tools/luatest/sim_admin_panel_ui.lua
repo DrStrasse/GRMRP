@@ -158,5 +158,82 @@ do
     GRMRPChat = nil
 end
 
+print("\n=== 5. RUNTIME: клиентская цепочка OnEnter (веч.-18) ===")
+-- ИСПОЛНЯЕМ НАСТОЯЩИЙ текст entry.OnEnter из cl_input (вырезка из исходника):
+-- слэш-строка, снятая владельцем через GRMRPChat_ClientCommand, НЕ должна
+-- уйти на сервер; обычная — должна.
+do
+    local src = read("lua/grm_chat/cl_input.lua")
+    local a = src:find("entry.OnEnter = function(pp)", 1, true)
+    assert(a, "OnEnter не найден")
+    -- границы тела: до парного 'end' на отступе 4
+    local b = a
+    while true do
+        b = src:find("\n    end\n", b + 1)
+        if not b then error("конец OnEnter не найден") end
+        local after = src:sub(b + 8, b + 8)
+        if after == "" or after == "\n" or src:sub(b + 1, b + 6) == "    end\n" then break end
+    end
+    local block = src:sub(a, b + 7)
+    local sent, closed = nil, 0
+    local consumers = {}
+    local env = {
+        string = string, table = table, type = type, ipairs = ipairs,
+        IsValid = function(x) return x ~= nil end,
+        GRMRPChat = { _inpDirty = false },
+        hook = { Run = function(name, _, line)
+            local f = consumers[name]
+            if f then return f(line) end
+            return nil
+        end },
+        LocalPlayer = function() return { __lp = true } end,
+        closeInput = function() closed = closed + 1 end,
+        send = function(v) sent = v end,
+        selChan = "ic",
+        chanNow = function() return nil end,
+        math = math,
+    }
+    setmetatable(env, { __index = _G })
+    -- собираем функцию из исходного куска
+    local chunk = loadstring("return function(entry, history, preview) "
+        .. block:gsub("entry%.OnEnter", "entry.OnEnter")
+        .. " return entry end")
+    assert(chunk, "кусок OnEnter не компилируется")
+    env.string = setmetatable({ Trim = function(x)
+        return (tostring(x or ""):gsub("^%s*(.-)%s*$", "%1"))
+    end }, { __index = string })
+    setfenv(chunk, env)
+    local make = chunk()
+    local entryv = nil
+    local entry = setmetatable({}, { __newindex = function(t, k, v)
+        rawset(t, k, v)
+        if k == "OnEnter" then entryv = v end
+    end, __index = function(t, k)
+        if k == "GetValue" then return function() return rawget(t, "__val") or "" end end
+        if k == "SetText" then return function() end end
+        return nil
+    end })
+    local hist = {}
+    local fn = make(entry, hist, nil)
+    fn.__val = "/grm_persistence"
+    consumers["GRMRPChat_ClientCommand"] = function(line)
+        return line == "/grm_persistence" and true or nil
+    end
+    local okp, errp = pcall(entry.OnEnter, entry)
+    check("cl-цепочка: OnEnter исполняется без ошибок", okp, errp)
+    check("cl-цепочка: снятая строка НЕ ушла на сервер", sent == nil, tostring(sent))
+    check("cl-цепочка: ввод закрыт после снятия", closed == 1, closed)
+    check("cl-цепочка: история по общим правилам (1 запись)", #hist == 1, #hist)
+    sent, closed = nil, 0
+    fn.__val = "обычный текст"
+    local okr, errr = pcall(entry.OnEnter, entry)
+    check("cl-цепочка: обычный текст уходит send()", okr and sent == "обычный текст", tostring(sent) .. " " .. tostring(errr))
+    check("cl-цепочка: chужой слэш (не снят) — тоже send()", (function()
+        sent, closed = nil, 0
+        fn.__val = "/nope_local"
+        entry.OnEnter(entry)
+        return sent == "/nope_local" end)(), tostring(sent))
+end
+
 print(("\nADMIN PANEL UI: %d/%d, провалов: %d"):format(total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

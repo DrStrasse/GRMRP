@@ -292,3 +292,10 @@ hook.Add("PlayerSay", "GRM_VendingBiz_Chat", function(ply, text)
 end)
 
 print("[GRM VendingBiz] loaded")
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/vending_buy", "/автомат" })
+end

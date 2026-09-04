@@ -996,15 +996,18 @@ hook.Add("Think", "GRM_F4_KeyPoll", function()
     F4.Toggle()
 end)
 
-hook.Add("PlayerSayTransform", "GRM_F4_Chat", function(ply, datapack)
-    if ply ~= LocalPlayer() then return end
-    local msg = datapack and datapack[1]
-    if not msg then return end
-    local low = string.lower(string.Trim(msg))
-    if low == "/menu" or low == "!menu" or low == "/f4" or low == "!f4" then
-        F4.Open()
-        datapack[1] = ""
-    end
+hook.Add("GRMRPChat_ClientCommand", "GRM_F4_Chat", function(ply, text)
+    local datapack = { tostring(text or ""), SkipPlayerSay = false }
+        if ply ~= LocalPlayer() then return end
+        local msg = datapack and datapack[1]
+        if not msg then return end
+        local low = string.lower(string.Trim(msg))
+        if low == "/menu" or low == "!menu" or low == "/f4" or low == "!f4" then
+            F4.Open()
+            datapack[1] = ""
+        end
+
+    if datapack.SkipPlayerSay == true then return true end
 end)
 
 print("[GRM F4] Игровое меню v" .. F4.Version .. " загружено")

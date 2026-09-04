@@ -1217,10 +1217,18 @@ if SERVER then
         ply:ChatPrint(done and ("[Квесты] Прохождение сброшено: "..questID.." у "..target:Nick())
             or ("[Квесты] "..tostring(why)))
     end)
-    hook.Add("PlayerSayTransform","GRM_Quest_AdminChat",function(ply,pack)if not istable(pack)then return end;local cmd=string.lower(trim(pack[1],64));if cmd=="/grm_quests_admin"or cmd=="!grm_quests_admin"then adminOpen(ply);pack[1]="";pack.SkipPlayerSay=true end end)
+    hook.Add("PlayerSay", "GRM_Quest_AdminChat", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack)then return end;local cmd=string.lower(trim(pack[1],64));if cmd=="/grm_quests_admin"or cmd=="!grm_quests_admin"then adminOpen(ply);pack[1]="";pack.SkipPlayerSay=true end
+        if pack.SkipPlayerSay == true then return "" end
+    end)
     local function openJournal(ply)if not IsValid(ply)then return end;sync(ply);net.Start("GRM_Quest_Journal")net.Send(ply)end
     concommand.Add("grm_quests",openJournal)
-    hook.Add("PlayerSayTransform","GRM_Quest_JournalChat",function(ply,pack)if not istable(pack)then return end;local cmd=string.lower(trim(pack[1],64));if cmd=="/quests"or cmd=="!quests"or cmd=="/квесты"then openJournal(ply);pack[1]="";pack.SkipPlayerSay=true end end)
+    hook.Add("PlayerSay", "GRM_Quest_JournalChat", function(ply, text, teamSays)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(pack)then return end;local cmd=string.lower(trim(pack[1],64));if cmd=="/quests"or cmd=="!quests"or cmd=="/квесты"then openJournal(ply);pack[1]="";pack.SkipPlayerSay=true end
+        if pack.SkipPlayerSay == true then return "" end
+    end)
     net.Receive("GRM_Quest_AdminOp",function(_,ply)
         if not IsValid(ply)or not ply:IsSuperAdmin()then return end;local op=net.ReadString()
         if op=="save"then local def,why=Q.NormalizeDefinition(net.ReadTable());if not def then notice(ply,false,why)return end
@@ -1394,4 +1402,12 @@ end
     -- Integrations: modules may also call GRM.Quests.Event directly.
     hook.Add("GRM_QuestEvent","GRM_Quest_GenericEvent",function(ply,eventName,target,amount,meta)Q.Event(ply,eventName,target,amount,meta)end)
     print("[GRM Quests] server v"..Q.Version.." loaded")
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/grm_quests_admin", "/quests", "/квесты" })
 end

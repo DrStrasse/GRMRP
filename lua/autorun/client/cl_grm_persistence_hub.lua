@@ -94,10 +94,13 @@ end
 concommand.Add("grm_persistence_admin", requestPersistenceMenu)
 concommand.Add("grm_persistence", requestPersistenceMenu)
 
-hook.Add("PlayerSayTransform", "GRM_Persistence_Command", function(ply, data)
-    if ply ~= LocalPlayer() then return end
-    local text = data and data[1] or ""
-    if string.lower(string.Trim(text)) == "/grm_persistence" then
-        open() data[1] = "" return true
-    end
+hook.Add("GRMRPChat_ClientCommand", "GRM_Persistence_Command", function(ply, text)
+    local data = { tostring(text or ""), SkipPlayerSay = false }
+        if ply ~= LocalPlayer() then return end
+        local text = data and data[1] or ""
+        if string.lower(string.Trim(text)) == "/grm_persistence" then
+            open() data[1] = "" return true
+        end
+
+    if data.SkipPlayerSay == true then return true end
 end)

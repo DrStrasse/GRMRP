@@ -2148,235 +2148,238 @@ if SERVER then
     end)
 
     -- Обработка чат-команд на сервере
-    hook.Add("PlayerSayTransform", "GRM_Doc_Commands", function(ply, datapack)
-        if not IsValid(ply) or not istable(datapack) then return end
-        local txt = datapack[1] or ""
-        local low = string.lower(string.Trim(txt))
+    hook.Add("PlayerSay", "GRM_Doc_Commands", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not IsValid(ply) or not istable(datapack) then return end
+            local txt = datapack[1] or ""
+            local low = string.lower(string.Trim(txt))
 
-        -- Полное удаление документов (EasyChat приходит сюда, а не в PlayerSay)
-        if low == "/doc_wipe" or string.sub(low, 1, 10) == "/doc_wipe "
-            or low == "/докстереть" or string.sub(low, 1, 12) == "/докстереть " then
-            local parts = string.Explode(" ", string.Trim(txt))
-            table.remove(parts, 1)
-            local account = false
-            for i = #parts, 1, -1 do
-                if string.lower(parts[i]) == "all" or string.lower(parts[i]) == "все" then
-                    account = true
-                    table.remove(parts, i)
+            -- Полное удаление документов (EasyChat приходит сюда, а не в PlayerSay)
+            if low == "/doc_wipe" or string.sub(low, 1, 10) == "/doc_wipe "
+                or low == "/докстереть" or string.sub(low, 1, 12) == "/докстереть " then
+                local parts = string.Explode(" ", string.Trim(txt))
+                table.remove(parts, 1)
+                local account = false
+                for i = #parts, 1, -1 do
+                    if string.lower(parts[i]) == "all" or string.lower(parts[i]) == "все" then
+                        account = true
+                        table.remove(parts, i)
+                    end
                 end
+                DOC.WipeCommand(ply, table.concat(parts, " "), account)
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
             end
-            DOC.WipeCommand(ply, table.concat(parts, " "), account)
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
 
-        -- Паспорт
-        if low == "/passport" or low == "/pass" or low == "/myid" or low == "/id" or low == "/mypasport" or low == "/паспорт" or low == "/пас" then
-            sendOwnDoc(ply, "passport")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low == "/showpassport" or low == "/showpass" or low == "/showid" or low == "/показатьпаспорт" or low == "/покпас" then
-            showDocToTarget(ply, "passport")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
+            -- Паспорт
+            if low == "/passport" or low == "/pass" or low == "/myid" or low == "/id" or low == "/mypasport" or low == "/паспорт" or low == "/пас" then
+                sendOwnDoc(ply, "passport")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low == "/showpassport" or low == "/showpass" or low == "/showid" or low == "/показатьпаспорт" or low == "/покпас" then
+                showDocToTarget(ply, "passport")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
 
-        -- Удостоверение
-        if low == "/badge" or low == "/mybadge" or low == "/udost" or low == "/myudost" or low == "/ксива" or low == "/удостоверение" or low == "/удост" then
-            sendOwnDoc(ply, "badge")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low == "/showbadge" or low == "/showudost" or low == "/показатьудостоверение" or low == "/показатьксиву" or low == "/покудост" then
-            showDocToTarget(ply, "badge")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
+            -- Удостоверение
+            if low == "/badge" or low == "/mybadge" or low == "/udost" or low == "/myudost" or low == "/ксива" or low == "/удостоверение" or low == "/удост" then
+                sendOwnDoc(ply, "badge")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low == "/showbadge" or low == "/showudost" or low == "/показатьудостоверение" or low == "/показатьксиву" or low == "/покудост" then
+                showDocToTarget(ply, "badge")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
 
-        -- Военный билет
-        if low == "/military" or low == "/militaryid" or low == "/milcard" or low == "/warcard" or low == "/vb" or low == "/военник" or low == "/военныйбилет" or low == "/вб" then
-            sendOwnDoc(ply, "military")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low == "/showmilitary" or low == "/showmilitaryid" or low == "/showmil" or low == "/showwarcard" or low == "/showvb" or low == "/показатьвоенник" or low == "/показатьвоенныйбилет" or low == "/поквб" then
-            showDocToTarget(ply, "military")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
+            -- Военный билет
+            if low == "/military" or low == "/militaryid" or low == "/milcard" or low == "/warcard" or low == "/vb" or low == "/военник" or low == "/военныйбилет" or low == "/вб" then
+                sendOwnDoc(ply, "military")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low == "/showmilitary" or low == "/showmilitaryid" or low == "/showmil" or low == "/showwarcard" or low == "/showvb" or low == "/показатьвоенник" or low == "/показатьвоенныйбилет" or low == "/поквб" then
+                showDocToTarget(ply, "military")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
 
-        -- Водительские права (Гражданские)
-        if low == "/civlicense" or low == "/civprava" or low == "/гражданскиеправа" or low == "/граждправа" then
-            sendOwnDoc(ply, "license", "civilian")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low == "/showcivlicense" or low == "/showcivprava" or low == "/показатьгражданскиеправа" or low == "/покграждправа" then
-            showDocToTarget(ply, "license", nil, "civilian")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
+            -- Водительские права (Гражданские)
+            if low == "/civlicense" or low == "/civprava" or low == "/гражданскиеправа" or low == "/граждправа" then
+                sendOwnDoc(ply, "license", "civilian")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low == "/showcivlicense" or low == "/showcivprava" or low == "/показатьгражданскиеправа" or low == "/покграждправа" then
+                showDocToTarget(ply, "license", nil, "civilian")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
 
-        -- Военные водительские права (ВАИ)
-        if low == "/millicense" or low == "/milprava" or low == "/mallicense" or low == "/военныеправа" or low == "/ваиправа" or low == "/вуваи" or low == "/увв" or low == "/военноеву" or low == "/прававаи" or low == "/военныеводправа" then
-            sendOwnDoc(ply, "milLicense", "military")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low == "/showmillicense" or low == "/showmilprava" or low == "/показатьваи" or low == "/показатьвоенныеправа" or low == "/покваи" or low == "/покувв" or low == "/показатьувв" or low == "/поквоенправа" then
-            showDocToTarget(ply, "milLicense", nil, "military")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
+            -- Военные водительские права (ВАИ)
+            if low == "/millicense" or low == "/milprava" or low == "/mallicense" or low == "/военныеправа" or low == "/ваиправа" or low == "/вуваи" or low == "/увв" or low == "/военноеву" or low == "/прававаи" or low == "/военныеводправа" then
+                sendOwnDoc(ply, "milLicense", "military")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low == "/showmillicense" or low == "/showmilprava" or low == "/показатьваи" or low == "/показатьвоенныеправа" or low == "/покваи" or low == "/покувв" or low == "/показатьувв" or low == "/поквоенправа" then
+                showDocToTarget(ply, "milLicense", nil, "military")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
 
-        -- Водительские права (Общая команда)
-        if low == "/license" or low == "/prava" or low == "/mylicense" or low == "/driverlicense" or low == "/права" or low == "/водправа" or low == "/водительское" or low == "/ву" then
-            sendOwnDoc(ply, "license")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low == "/showlicense" or low == "/showprava" or low == "/showdriverlicense" or low == "/показатьправа" or low == "/показатьводправа" or low == "/покправа" or low == "/покву" then
-            showDocToTarget(ply, "license")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
+            -- Водительские права (Общая команда)
+            if low == "/license" or low == "/prava" or low == "/mylicense" or low == "/driverlicense" or low == "/права" or low == "/водправа" or low == "/водительское" or low == "/ву" then
+                sendOwnDoc(ply, "license")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low == "/showlicense" or low == "/showprava" or low == "/showdriverlicense" or low == "/показатьправа" or low == "/показатьводправа" or low == "/покправа" or low == "/покву" then
+                showDocToTarget(ply, "license")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
 
-        -- Медкарта
-        if low == "/medcard" or low == "/mycard" or low == "/med" or low == "/медкарта" or low == "/мед" then
-            sendOwnDoc(ply, "medcard")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low == "/showmedcard" or low == "/showmed" or low == "/показатьмедкарту" or low == "/покмед" then
-            showDocToTarget(ply, "medcard")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
+            -- Медкарта
+            if low == "/medcard" or low == "/mycard" or low == "/med" or low == "/медкарта" or low == "/мед" then
+                sendOwnDoc(ply, "medcard")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low == "/showmedcard" or low == "/showmed" or low == "/показатьмедкарту" or low == "/покмед" then
+                showDocToTarget(ply, "medcard")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
 
-        -- Лицензии v2: баллы
-        if low == "/license_points" or low == "/points" or low == "/баллы" or low == "/моибаллы" then
-            local key = getCharKey(ply)
-            local pts, maxPts, status = DOC.GetLicensePoints(key)
-            if GRM.Notify then GRM.Notify(ply, "Баллы В/У: "..tostring(pts).."/"..tostring(maxPts).." | Статус: "..tostring(status or "Нет В/У"), 100, 200, 160) end
-            ply:ChatPrint("[Автоинспекция] Баллы: "..tostring(pts).."/"..tostring(maxPts).." | Статус: "..tostring(status or "Нет В/У"))
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low:find("^/license_check") or low:find("^/check_license") or low:find("^/проверить_права") then
-            -- формат: /license_check <часть ника/charKey>
-            local targetName = string.Trim(txt:sub(("/license_check"):len()+1))
-            if targetName=="" then targetName = string.Trim(txt:sub(("/check_license"):len()+1)) end
-            if targetName=="" then targetName = string.Trim(txt:sub(("/проверить_права"):len()+1)) end
-            if targetName=="" then
-                if GRM.Notify then GRM.Notify(ply, "Укажите ник/ключ для проверки: /license_check <ник>", 255,160,80) end
+            -- Лицензии v2: баллы
+            if low == "/license_points" or low == "/points" or low == "/баллы" or low == "/моибаллы" then
+                local key = getCharKey(ply)
+                local pts, maxPts, status = DOC.GetLicensePoints(key)
+                if GRM.Notify then GRM.Notify(ply, "Баллы В/У: "..tostring(pts).."/"..tostring(maxPts).." | Статус: "..tostring(status or "Нет В/У"), 100, 200, 160) end
+                ply:ChatPrint("[Автоинспекция] Баллы: "..tostring(pts).."/"..tostring(maxPts).." | Статус: "..tostring(status or "Нет В/У"))
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low:find("^/license_check") or low:find("^/check_license") or low:find("^/проверить_права") then
+                -- формат: /license_check <часть ника/charKey>
+                local targetName = string.Trim(txt:sub(("/license_check"):len()+1))
+                if targetName=="" then targetName = string.Trim(txt:sub(("/check_license"):len()+1)) end
+                if targetName=="" then targetName = string.Trim(txt:sub(("/проверить_права"):len()+1)) end
+                if targetName=="" then
+                    if GRM.Notify then GRM.Notify(ply, "Укажите ник/ключ для проверки: /license_check <ник>", 255,160,80) end
+                    datapack.SkipPlayerSay=true
+                    datapack[1]=""
+                    return
+                end
+                -- поиск по онлайн
+                local foundKey=nil
+                for _,p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
+                    if IsValid(p) and (p:Nick():lower():find(targetName:lower(),1,true) or (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(p)==targetName)) then
+                        foundKey = getCharKey(p)
+                        break
+                    end
+                end
+                if not foundKey then foundKey=targetName end
+                local pts,maxPts,status = DOC.GetLicensePoints(foundKey)
+                if GRM.Notify then GRM.Notify(ply, "Проверка В/У "..foundKey..": "..tostring(pts).."/"..tostring(maxPts).." | "..tostring(status or "Нет"), 100,200,160) end
                 datapack.SkipPlayerSay=true
                 datapack[1]=""
                 return
             end
-            -- поиск по онлайн
-            local foundKey=nil
-            for _,p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
-                if IsValid(p) and (p:Nick():lower():find(targetName:lower(),1,true) or (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(p)==targetName)) then
-                    foundKey = getCharKey(p)
-                    break
-                end
-            end
-            if not foundKey then foundKey=targetName end
-            local pts,maxPts,status = DOC.GetLicensePoints(foundKey)
-            if GRM.Notify then GRM.Notify(ply, "Проверка В/У "..foundKey..": "..tostring(pts).."/"..tostring(maxPts).." | "..tostring(status or "Нет"), 100,200,160) end
-            datapack.SkipPlayerSay=true
-            datapack[1]=""
-            return
-        end
 
-        -- Лицензия на оружие
-        if low == "/weaponlicense" or low == "/gunlicense" or low == "/wlicense" or low == "/оружие" or low == "/лицензиянаоружие" or low == "/ороружие" then
-            sendOwnDoc(ply, "weaponLicense")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low == "/showweaponlicense" or low == "/showgunlicense" or low == "/показатьоружие" or low == "/показатьлицензиюоружие" or low == "/покоружие" then
-            showDocToTarget(ply, "weaponLicense")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low:find("^/check_weapon") or low:find("^/проверить_оружие") then
-            local targetName = string.Trim(txt:sub(14))
-            if targetName == "" then targetName = string.Trim(txt:sub((("/проверить_оружие"):len()) + 1)) end
-            local foundKey = targetName
-            for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
-                if IsValid(p) and (p:Nick():lower():find(targetName:lower(), 1, true) or (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(p) == targetName)) then
-                    foundKey = getCharKey(p)
-                    break
+            -- Лицензия на оружие
+            if low == "/weaponlicense" or low == "/gunlicense" or low == "/wlicense" or low == "/оружие" or low == "/лицензиянаоружие" or low == "/ороружие" then
+                sendOwnDoc(ply, "weaponLicense")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low == "/showweaponlicense" or low == "/showgunlicense" or low == "/показатьоружие" or low == "/показатьлицензиюоружие" or low == "/покоружие" then
+                showDocToTarget(ply, "weaponLicense")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low:find("^/check_weapon") or low:find("^/проверить_оружие") then
+                local targetName = string.Trim(txt:sub(14))
+                if targetName == "" then targetName = string.Trim(txt:sub((("/проверить_оружие"):len()) + 1)) end
+                local foundKey = targetName
+                for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
+                    if IsValid(p) and (p:Nick():lower():find(targetName:lower(), 1, true) or (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(p) == targetName)) then
+                        foundKey = getCharKey(p)
+                        break
+                    end
                 end
+                local wOk, wSt = DOC.HasValidWeaponLicense(foundKey)
+                if GRM.Notify then GRM.Notify(ply, "Лицензия на оружие " .. foundKey .. ": " .. tostring(wOk and ("действительна (" .. tostring(wSt) .. ")") or wSt), wOk and Color(100, 200, 160) or Color(255, 140, 110)) end
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
             end
-            local wOk, wSt = DOC.HasValidWeaponLicense(foundKey)
-            if GRM.Notify then GRM.Notify(ply, "Лицензия на оружие " .. foundKey .. ": " .. tostring(wOk and ("действительна (" .. tostring(wSt) .. ")") or wSt), wOk and Color(100, 200, 160) or Color(255, 140, 110)) end
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
 
-        -- Лицензия на ведение бизнеса
-        if low == "/businesslicense" or low == "/bizlicense" or low == "/blicense" or low == "/бизнес" or low == "/лицензиябизнес" or low == "/орбизнес" then
-            sendOwnDoc(ply, "businessLicense")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low == "/showbusinesslicense" or low == "/showbizlicense" or low == "/показатьбизнес" or low == "/показатьлицензиюбизнес" or low == "/покбизнес" then
-            showDocToTarget(ply, "businessLicense")
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
-        if low:find("^/check_business") or low:find("^/проверить_бизнес") then
-            local targetName = string.Trim(txt:sub(15))
-            if targetName == "" then targetName = string.Trim(txt:sub((("/проверить_бизнес"):len()) + 1)) end
-            local foundKey = targetName
-            for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
-                if IsValid(p) and (p:Nick():lower():find(targetName:lower(), 1, true) or (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(p) == targetName)) then
-                    foundKey = getCharKey(p)
-                    break
+            -- Лицензия на ведение бизнеса
+            if low == "/businesslicense" or low == "/bizlicense" or low == "/blicense" or low == "/бизнес" or low == "/лицензиябизнес" or low == "/орбизнес" then
+                sendOwnDoc(ply, "businessLicense")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low == "/showbusinesslicense" or low == "/showbizlicense" or low == "/показатьбизнес" or low == "/показатьлицензиюбизнес" or low == "/покбизнес" then
+                showDocToTarget(ply, "businessLicense")
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
+            end
+            if low:find("^/check_business") or low:find("^/проверить_бизнес") then
+                local targetName = string.Trim(txt:sub(15))
+                if targetName == "" then targetName = string.Trim(txt:sub((("/проверить_бизнес"):len()) + 1)) end
+                local foundKey = targetName
+                for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
+                    if IsValid(p) and (p:Nick():lower():find(targetName:lower(), 1, true) or (GRM.Identity and GRM.Identity.CharacterKey and GRM.Identity.CharacterKey(p) == targetName)) then
+                        foundKey = getCharKey(p)
+                        break
+                    end
                 end
+                local bOk, bSt = DOC.HasValidBusinessLicense(foundKey)
+                if GRM.Notify then GRM.Notify(ply, "Лицензия на бизнес " .. foundKey .. ": " .. tostring(bOk and ("действительна (" .. tostring(bSt) .. ")") or bSt), bOk and Color(100, 200, 160) or Color(255, 140, 110)) end
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
             end
-            local bOk, bSt = DOC.HasValidBusinessLicense(foundKey)
-            if GRM.Notify then GRM.Notify(ply, "Лицензия на бизнес " .. foundKey .. ": " .. tostring(bOk and ("действительна (" .. tostring(bSt) .. ")") or bSt), bOk and Color(100, 200, 160) or Color(255, 140, 110)) end
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
 
-        -- Админка
-        if low == "/doc_admin" or low == "/doccfg" or low == "/docadmin" or low == "/документы" or low == "/докадмин" then
-            if ply:IsSuperAdmin() then
-                net.Start(NET_ADMIN_GET)
-                    net.WriteTable(DOC.Templates)
-                net.Send(ply)
+            -- Админка
+            if low == "/doc_admin" or low == "/doccfg" or low == "/docadmin" or low == "/документы" or low == "/докадмин" then
+                if ply:IsSuperAdmin() then
+                    net.Start(NET_ADMIN_GET)
+                        net.WriteTable(DOC.Templates)
+                    net.Send(ply)
+                end
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
             end
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     print("[GRM Documents] Core v" .. DOC.Version .. " (Server) loaded")
@@ -4185,15 +4188,26 @@ if CLIENT then
     concommand.Add("grm_doc_admin", function() DOC.RequestAdmin() end)
     concommand.Add("doc_admin", function() DOC.RequestAdmin() end)
 
-    hook.Add("PlayerSayTransform", "GRM_Doc_AdminClient", function(ply, pack)
-        if ply ~= LocalPlayer() or not istable(pack) then return end
-        local low = string.lower(string.Trim(tostring(pack[1] or "")))
-        if low == "/doc_admin" or low == "/doccfg" or low == "/docadmin" or low == "/документы" or low == "/докадмин" then
-            DOC.RequestAdmin()
-            pack[1] = ""
-            pack.SkipPlayerSay = true
-        end
+    hook.Add("GRMRPChat_ClientCommand", "GRM_Doc_AdminClient", function(ply, text)
+        local pack = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() or not istable(pack) then return end
+            local low = string.lower(string.Trim(tostring(pack[1] or "")))
+            if low == "/doc_admin" or low == "/doccfg" or low == "/docadmin" or low == "/документы" or low == "/докадмин" then
+                DOC.RequestAdmin()
+                pack[1] = ""
+                pack.SkipPlayerSay = true
+            end
+
+        if pack.SkipPlayerSay == true then return true end
     end)
 
     print("[GRM Documents] Core v" .. DOC.Version .. " (Client) loaded")
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/badge", "/bizlicense", "/blicense", "/businesslicense", "/check_license", "/civlicense", "/civprava", "/doc_admin", "/doc_wipe", "/docadmin", "/doccfg", "/driverlicense", "/gunlicense", "/id", "/license", "/license_check", "/license_points", "/mallicense", "/med", "/medcard", "/milcard", "/military", "/militaryid", "/millicense", "/milprava", "/mybadge", "/mycard", "/myid", "/mylicense", "/mypasport", "/myudost", "/pass", "/passport", "/points", "/prava", "/showbadge", "/showbizlicense", "/showbusinesslicense", "/showcivlicense", "/showcivprava", "/showdriverlicense", "/showgunlicense", "/showid", "/showlicense", "/showmed", "/showmedcard", "/showmil", "/showmilitary", "/showmilitaryid", "/showmillicense", "/showmilprava", "/showpass", "/showpassport", "/showprava", "/showudost", "/showvb", "/showwarcard", "/showweaponlicense", "/udost", "/vb", "/warcard", "/weaponlicense", "/wlicense", "/баллы", "/бизнес", "/ваиправа", "/вб", "/водительское", "/водправа", "/военник", "/военноеву", "/военныеводправа", "/военныеправа", "/военныйбилет", "/ву", "/вуваи", "/гражданскиеправа", "/граждправа", "/докадмин", "/докстереть", "/документы", "/ксива", "/лицензиябизнес", "/лицензиянаоружие", "/мед", "/медкарта", "/моибаллы", "/орбизнес", "/ороружие", "/оружие", "/пас", "/паспорт", "/показатьбизнес", "/показатьваи", "/показатьводправа", "/показатьвоенник", "/показатьвоенныеправа", "/показатьвоенныйбилет", "/показатьгражданскиеправа", "/показатьксиву", "/показатьлицензиюбизнес", "/показатьлицензиюоружие", "/показатьмедкарту", "/показатьоружие", "/показатьпаспорт", "/показатьправа", "/показатьувв", "/показатьудостоверение", "/покбизнес", "/покваи", "/поквб", "/поквоенправа", "/покву", "/покграждправа", "/покмед", "/покоружие", "/покпас", "/покправа", "/покувв", "/покудост", "/права", "/прававаи", "/проверить_бизнес", "/проверить_оружие", "/проверить_права", "/увв", "/удост", "/удостоверение" })
 end

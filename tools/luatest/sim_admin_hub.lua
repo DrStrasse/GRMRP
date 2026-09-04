@@ -143,15 +143,14 @@ H.seq = { "server" }
 H.netrecv["GRM_HUB_Get"](0, User)
 ok(netCount("GRM_HUB_Data") == 0, "не-админ НЕ получает данные вкладок")
 
--- чат-команда /grm_admin (PlayerSayTransform)
-local sayHooks = H.hooks["PlayerSayTransform"]
+-- чат-команда /grm_admin (веч.-18: боевой PlayerSay + реестр библиотеки)
+local sayHooks = H.hooks["PlayerSay"]
 local processed = false
 for _, fn in pairs(sayHooks or {}) do
-  local pack = { "/grm_admin" }
-  local r = fn(Admin, pack)
-  if r == true or pack.SkipPlayerSay == true then processed = true end
+  local r = fn(Admin, "/grm_admin")
+  if r == "" or r == true then processed = true end
 end
-ok(processed, "чат-команда /grm_admin обрабатывается (PlayerSayTransform)")
+ok(processed, "чат-команда /grm_admin обрабатывается (PlayerSay + реестр)")
 
 -- ══════════════ 2. ЕДИНОЕ МЕНЮ СОХРАНЕНИЙ ══════════════
 -- мок модулей с флагами вызова (имена методов — как их зовёт хаб)

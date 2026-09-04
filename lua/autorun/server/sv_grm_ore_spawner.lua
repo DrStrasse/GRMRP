@@ -299,3 +299,10 @@ end
 
     print("[GRM Ore Spawner] Загружен (без проверки валидности). Интервал: " .. SPAWN_INTERVAL .. "с, минимум " .. MIN_ORE_COUNT .. " узлов.")
 end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/grm_orespawns_" })
+end

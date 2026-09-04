@@ -24,7 +24,7 @@ ok(GRM.Property.IsInside(r,{x=50,y=50,z=50})and not GRM.Property.IsInside(r,{x=1
 local function read(p)local f=assert(io.open(p,"rb"));local s=f:read("*a");f:close();return s end
 local prop=read("lua/autorun/sh_grm_property.lua");local doors=read("lua/autorun/sh_grm_doors.lua")
 ok(prop:find("GRM.Persistence.SaveJSON",1,true)and prop:find("GRM_DoorAccessOverride",1,true),"safe persistence and door integration")
-ok(prop:find("PlayerSayTransform",1,true)and prop:find("istable(t)and t[1]",1,true),"EasyChat datapack commands")
+ok(prop:find('hook.Add("PlayerSay","GRM_Property_Chat"',1,true) and prop:find("RegisterExternalCommands",1,true),"команды — боевой PlayerSay + реестр библиотеки (веч.-18)")
 ok(prop:find("wanted.civil.edit",1,true)and prop:find("property_warrant",1,true),"warrant entry")
 ok(prop:find("GRM_PropertyBreach",1,true)and prop:find("cameraIDs",1,true),"alarm and CCTV metadata integration")
 ok(doors:find("actor.propertyHas",1,true)and doors:find("GRM_DoorAccessOverride",1,true),"Doors Core property adapter")

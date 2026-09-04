@@ -944,21 +944,24 @@ end
 concommand.Add("models_admin", function() tryOpen("models") end)
 concommand.Add("weapons_admin", function() tryOpen("weapons") end)
 
-hook.Add("PlayerSayTransform", "GRM_LoadoutAdmin_Chat", function(ply, datapack)
-    if ply ~= LocalPlayer() or not istable(datapack) then return end
-    local msg = string.Trim(string.lower(tostring(datapack[1] or "")))
-    if msg == "/models_admin" or msg == "!models_admin" then
-        tryOpen("models")
-        datapack[1] = ""
-        datapack.SkipPlayerSay = true
-        return
-    end
-    if msg == "/weapons_admin" or msg == "!weapons_admin" then
-        tryOpen("weapons")
-        datapack[1] = ""
-        datapack.SkipPlayerSay = true
-        return
-    end
+hook.Add("GRMRPChat_ClientCommand", "GRM_LoadoutAdmin_Chat", function(ply, text)
+    local datapack = { tostring(text or ""), SkipPlayerSay = false }
+        if ply ~= LocalPlayer() or not istable(datapack) then return end
+        local msg = string.Trim(string.lower(tostring(datapack[1] or "")))
+        if msg == "/models_admin" or msg == "!models_admin" then
+            tryOpen("models")
+            datapack[1] = ""
+            datapack.SkipPlayerSay = true
+            return
+        end
+        if msg == "/weapons_admin" or msg == "!weapons_admin" then
+            tryOpen("weapons")
+            datapack[1] = ""
+            datapack.SkipPlayerSay = true
+            return
+        end
+
+    if datapack.SkipPlayerSay == true then return true end
 end)
 
 print("[GRM Loadout Admin] v" .. LA.Version .. ": одежда и вооружение по структуре фракции")

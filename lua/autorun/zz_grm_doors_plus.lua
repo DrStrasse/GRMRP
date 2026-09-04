@@ -166,3 +166,10 @@ if CLIENT then
         surface.SetDrawColor(230, 90, 60) surface.DrawRect(x, y, w * pct, h)
     end)
 end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/door_guest", "/door_kick", "/выбить" })
+end

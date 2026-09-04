@@ -1996,35 +1996,38 @@ if SERVER then
     -- ВАЖНО: регистрируем в PlayerSayTransform потому что EasyChat
     -- устанавливает SkipPlayerSay=true для команд и PlayerSay не вызывается!
     -- ============================================================
-    hook.Add("PlayerSayTransform", "Factions_ChatCommand", function(ply, datapack)
-        if not istable(datapack) then return end
-        local text = datapack[1]
-        if not isstring(text) then return end
+    hook.Add("PlayerSay", "Factions_ChatCommand", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) then return end
+            local text = datapack[1]
+            if not isstring(text) then return end
 
-        local lower = string.lower(string.Trim(text))
-        if lower == "/factions" then
-            if ply:IsSuperAdmin() then
-                net.Start(NET_OPEN_ADMIN)
-                net.Send(ply)
-            else
-                local leaderFaction = getFactionOfLeader(ply)
-                if leaderFaction then
-                    net.Start(NET_OPEN_LEADER)
+            local lower = string.lower(string.Trim(text))
+            if lower == "/factions" then
+                if ply:IsSuperAdmin() then
+                    net.Start(NET_OPEN_ADMIN)
                     net.Send(ply)
                 else
-                    local econAccess = GRM.Economy and GRM.Economy.CanManageEconomy and GRM.Economy.CanManageEconomy(ply) == true
-                    if econAccess then
-                        net.Start(NET_OPEN_ADMIN)
+                    local leaderFaction = getFactionOfLeader(ply)
+                    if leaderFaction then
+                        net.Start(NET_OPEN_LEADER)
                         net.Send(ply)
                     else
-                        ply:PrintMessage(HUD_PRINTTALK, "[Фракции] У вас нет прав для использования этой команды.")
+                        local econAccess = GRM.Economy and GRM.Economy.CanManageEconomy and GRM.Economy.CanManageEconomy(ply) == true
+                        if econAccess then
+                            net.Start(NET_OPEN_ADMIN)
+                            net.Send(ply)
+                        else
+                            ply:PrintMessage(HUD_PRINTTALK, "[Фракции] У вас нет прав для использования этой команды.")
+                        end
                     end
                 end
+                datapack.SkipPlayerSay = true
+                datapack[1] = ""
+                return
             end
-            datapack.SkipPlayerSay = true
-            datapack[1] = ""
-            return
-        end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     -- ============================================================
@@ -4227,61 +4230,65 @@ if CLIENT then
     -- ============================================================
     -- КОМАНДЫ ЧАТА (клиентские)
     -- ============================================================
-    hook.Add("PlayerSayTransform", "Factions_PlayerCommands", function(ply, datapack, is_team, is_local)
-        if ply ~= LocalPlayer() then return end
-        local msg = datapack[1]
-        if not msg then return end
-        local lower = msg:lower()
+    hook.Add("GRMRPChat_ClientCommand", "Factions_PlayerCommands", function(ply, text)
+    local datapack = { tostring(text or ""), SkipPlayerSay = false }
+    if ply ~= LocalPlayer() then return end
+    local msg = datapack[1]
+    if not msg then return end
+    local lower = msg:lower()
 
-        if lower:find("^/fjoin") == 1 then
-            local factionName = msg:sub(7):Trim()
-            net.Start(NET_JOIN) net.WriteString(factionName) net.SendToServer()
-            datapack[1] = "" return
-        end
-        if lower:find("^/fdecline%s+") == 1 then
-            local factionName = msg:sub(10):Trim()
-            if factionName == "" then datapack[1] = "" return end
-            net.Start(NET_DECLINE) net.WriteString(factionName) net.SendToServer()
-            datapack[1] = "" return
-        end
-        if lower:find("^/fleave%s*") == 1 then
-            net.Start(NET_LEAVE) net.SendToServer()
-            datapack[1] = "" return
-        end
-        if lower:find("^/fr%s+") == 1 then
-            local text = msg:sub(4)
-            if text == "" then datapack[1] = "" return end
-            net.Start(NET_RADIO) net.WriteString(text) net.SendToServer()
-            datapack[1] = "" return
-        end
-        -- /frb, /frooc — рация фракции нон-РП (OOC).
-        if lower:find("^/frb%s+") == 1 or lower:find("^/frooc%s+") == 1 then
-            local cut = lower:find("^/frb%s+") == 1 and 5 or 7
-            local text = msg:sub(cut):Trim()
-            if text == "" then datapack[1] = "" return end
-            net.Start(NET_RADIOB) net.WriteString(text) net.SendToServer()
-            datapack[1] = "" return
-        end
-        if lower:find("^/dep%s+") == 1 or lower:find("^/d%s+") == 1 then
-            local offset = (lower:find("^/dep%s+") == 1) and 6 or 3
-            local text = msg:sub(offset):Trim()
-            if text == "" then datapack[1] = "" return end
-            net.Start(NET_DEP) net.WriteString(text) net.SendToServer()
-            datapack[1] = "" return
-        end
-        if lower:find("^/depb%s+") == 1 then
-            local text = msg:sub(7):Trim()
-            if text == "" then datapack[1] = "" return end
-            net.Start(NET_DEPB) net.WriteString(text) net.SendToServer()
-            datapack[1] = "" return
-        end
-        if lower:find("^/db%s+") == 1 then
-            local text = msg:sub(4):Trim()
-            if text == "" then datapack[1] = "" return end
-            net.Start(NET_DEPB) net.WriteString(text) net.SendToServer()
-            datapack[1] = "" return
-        end
-    end)
+    if lower:find("^/fjoin") == 1 then
+        local factionName = msg:sub(7):Trim()
+        net.Start(NET_JOIN) net.WriteString(factionName) net.SendToServer()
+        datapack[1] = "" return
+    end
+    if lower:find("^/fdecline%s+") == 1 then
+        local factionName = msg:sub(10):Trim()
+        if factionName == "" then datapack[1] = "" return end
+        net.Start(NET_DECLINE) net.WriteString(factionName) net.SendToServer()
+        datapack[1] = "" return
+    end
+    if lower:find("^/fleave%s*") == 1 then
+        net.Start(NET_LEAVE) net.SendToServer()
+        datapack[1] = "" return
+    end
+    if lower:find("^/fr%s+") == 1 then
+        local text = msg:sub(4)
+        if text == "" then datapack[1] = "" return end
+        net.Start(NET_RADIO) net.WriteString(text) net.SendToServer()
+        datapack[1] = "" return
+    end
+    -- /frb, /frooc — рация фракции нон-РП (OOC).
+    if lower:find("^/frb%s+") == 1 or lower:find("^/frooc%s+") == 1 then
+        local cut = lower:find("^/frb%s+") == 1 and 5 or 7
+        local text = msg:sub(cut):Trim()
+        if text == "" then datapack[1] = "" return end
+        net.Start(NET_RADIOB) net.WriteString(text) net.SendToServer()
+        datapack[1] = "" return
+    end
+    if lower:find("^/dep%s+") == 1 or lower:find("^/d%s+") == 1 then
+        local offset = (lower:find("^/dep%s+") == 1) and 6 or 3
+        local text = msg:sub(offset):Trim()
+        if text == "" then datapack[1] = "" return end
+        net.Start(NET_DEP) net.WriteString(text) net.SendToServer()
+        datapack[1] = "" return
+    end
+    if lower:find("^/depb%s+") == 1 then
+        local text = msg:sub(7):Trim()
+        if text == "" then datapack[1] = "" return end
+        net.Start(NET_DEPB) net.WriteString(text) net.SendToServer()
+        datapack[1] = "" return
+    end
+    if lower:find("^/db%s+") == 1 then
+        local text = msg:sub(4):Trim()
+        if text == "" then datapack[1] = "" return end
+        net.Start(NET_DEPB) net.WriteString(text) net.SendToServer()
+        datapack[1] = "" return
+    end
+
+    if datapack.SkipPlayerSay == true or datapack[1] == "" then return true end
+
+end)
 
     -- ============================================================
     -- КОНСОЛЬНЫЕ КОМАНДЫ
@@ -4394,4 +4401,12 @@ if CLIENT then
     end)
 
     print("[Factions] Клиентская часть загружена (v3.2 dual names + /factions)")
+end
+
+-- Вечер-18: команды пересажены с мёртвого входа EasyChat (PlayerSayTransform)
+-- на боевой контракт библиотеки GRMRPChat — имена в едином внешнем реестре,
+-- иначе чат съел бы их как «неизвестные» и по цепочке PlayerSay вызвал бы
+-- обработчики этого файла.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/factions" })
 end

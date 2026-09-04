@@ -1182,8 +1182,7 @@ if SERVER then
         for _, lp in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
             if RN.FreqOf(lp) == f then
                 local ok = (lp == ply)
-                local body = text
-                if not ok and myPos and IsValid(lp) and lp.GetPos then
+local body = text                if not ok and myPos and IsValid(lp) and lp.GetPos then
                     if RN.RadioPairOK(ply, lp) then
                         ok = true
                         -- оба в сети — текст чистый на любой дистанции;
@@ -1257,14 +1256,17 @@ if SERVER then
         ply:PrintMessage(HUD_PRINTTALK, "[" .. label .. "] Удалён (и из персистента).")
     end
 
-    hook.Add("PlayerSayTransform", "GRM_RN_TransformCmds", function(ply, datapack)
-        if not istable(datapack) then return end
-        local msg = datapack[1]
-        if not isstring(msg) then return end
-        if RN.HandleChat and RN.HandleChat(ply, msg) then
-            datapack[1] = ""
-            datapack.SkipPlayerSay = true
-        end
+    hook.Add("PlayerSay", "GRM_RN_TransformCmds", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) then return end
+            local msg = datapack[1]
+            if not isstring(msg) then return end
+            if RN.HandleChat and RN.HandleChat(ply, msg) then
+                datapack[1] = ""
+                datapack.SkipPlayerSay = true
+            end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     hook.Add("PlayerSay", "GRM_RN_Cmds", function(ply, text)
@@ -1731,4 +1733,11 @@ local NET_ID = Color(150, 210, 255)
     end)
 
     print("[GRM RadioNet] Клиент v" .. RN.Version .. " загружен")
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/antenna_add", "/antenna_remove", "/consol", "/rack_add", "/rack_remove", "/rstation_add", "/rstation_remove" })
 end

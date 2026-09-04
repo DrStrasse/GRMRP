@@ -113,9 +113,12 @@ end
 hook.Add("PlayerSay", "GRM_OreAdminCmds", function(ply, text)
     if handle(ply, text) then return "" end
 end)
-hook.Add("PlayerSayTransform", "GRM_OreAdminCmdsEC", function(ply, pack)
-    if not (istable(pack) and isstring(pack[1])) then return end
-    if handle(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+hook.Add("PlayerSay", "GRM_OreAdminCmdsEC", function(ply, text, teamSays)
+    local pack = { tostring(text or ""), SkipPlayerSay = false }
+        if not (istable(pack) and isstring(pack[1])) then return end
+        if handle(ply, pack[1]) then pack[1] = "" pack.SkipPlayerSay = true end
+
+    if pack.SkipPlayerSay == true then return "" end
 end)
 
 print("[GRM Ore Admin] v2.0.0 — команды администрации шахты загружены")

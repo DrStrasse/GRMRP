@@ -1802,9 +1802,12 @@ if CLIENT then
         return true
     end
 
-    hook.Add("PlayerSayTransform", "SpawnAdminCommand", function(ply, datapack)
-        if ply ~= LocalPlayer() then return end
-        if handleCommand(datapack and datapack[1]) then datapack[1] = "" end
+    hook.Add("GRMRPChat_ClientCommand", "SpawnAdminCommand", function(ply, text)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if ply ~= LocalPlayer() then return end
+            if handleCommand(datapack and datapack[1]) then datapack[1] = "" end
+
+        if datapack.SkipPlayerSay == true then return true end
     end)
 
     concommand.Add("grm_spawnmenu", function()
@@ -1827,4 +1830,11 @@ if GRM.Modules and GRM.Modules.Register then
         Depends = { "access" },
         Status = function() return "дерево точек: организация → отдел → подотдел → должность" end,
     })
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/spawnmenu", "/точкиспавна" })
 end

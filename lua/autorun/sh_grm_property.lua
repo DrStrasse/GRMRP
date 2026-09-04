@@ -246,7 +246,7 @@ if SERVER then
  local function propertyBreach(actor,door)local r=P.GetByDoor(door);if not r then return end;if r.alarmNetwork~=""and GRM.Alarm and GRM.Alarm.Log then GRM.Alarm.Log(r.alarmNetwork,"breach","Взлом объекта: "..r.name)end;hook.Run("GRM_PropertyBreach",r,actor,door,r.cameraIDs);audit("breach",actor,r,{alarmNetwork=r.alarmNetwork,cameras=#r.cameraIDs})end
  hook.Add("GRM_OnDoorLockpicked","GRM_Property_Alarm",propertyBreach);hook.Add("GRM_DoorHacked","GRM_Property_AlarmHack",propertyBreach)
  hook.Add("PlayerSay","GRM_Property_Chat",function(p,t)local s=string.lower(string.Trim(t or""));if s=="/property"or s=="/недвижимость"then local tr=p:GetEyeTrace();if tr and IsValid(tr.Entity)then P.OpenForDoor(p,tr.Entity)end return""elseif s=="/property_admin"and P.CanAdmin(p)then send(p,nil,true)return""end end)
- hook.Add("PlayerSayTransform","GRM_Property_EasyChat",function(p,t,d)d=istable(t)and t or d;local raw=istable(t)and t[1]or t;local s=string.lower(string.Trim(raw or""));if s~="/property"and s~="/недвижимость"and s~="/property_admin"then return end;if s=="/property_admin"then if P.CanAdmin(p)then send(p,nil,true)end else local tr=p:GetEyeTrace();if tr and IsValid(tr.Entity)then P.OpenForDoor(p,tr.Entity)end end;d.SkipPlayerSay=true;d[1]=""end)
+
  concommand.Add("grm_property",function(p)if IsValid(p)then local tr=p:GetEyeTrace();if tr and IsValid(tr.Entity)then P.OpenForDoor(p,tr.Entity)end end end);concommand.Add("grm_property_admin",function(p)if P.CanAdmin(p)then send(p,nil,true)end end)
  --[[ ПРЕДУПРЕЖДЕНИЕ ОБ ОКОНЧАНИИ АРЕНДЫ (фаза 4).
       Раньше биллинг выселял молча: человек заходил и обнаруживал, что
@@ -380,4 +380,11 @@ local HALO_SEL = Color(70, 220, 120)
   if #hover>0 then halo.Add(hover,HALO_HOVER,2,2,1,true,true) end
   if #sel>0 then halo.Add(sel,HALO_SEL,3,3,2,true,true) end
  end)
+end
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/property", "/property_admin", "/недвижимость" })
 end

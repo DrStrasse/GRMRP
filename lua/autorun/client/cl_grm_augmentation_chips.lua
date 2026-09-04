@@ -565,7 +565,9 @@ end
 concommand.Add("grm_chips", CHIPS.OpenProgrammer)
 
 -- Обработка через PlayerSayTransform для интеграции с админ-меню
-hook.Add("PlayerSayTransform", "GRM_AugChips_Cmd", function(ply, pack)
+hook.Add("GRMRPChat_ClientCommand", "GRM_AugChips_Cmd", function(ply, text)
+    if ply ~= LocalPlayer() then return end
+    local pack = { tostring(text or ""), SkipPlayerSay = false }
     if not istable(pack) then return end
     local cmd = string.lower(string.Trim(tostring(pack[1] or "")))
     if cmd == "grm_chips" then
@@ -573,6 +575,8 @@ hook.Add("PlayerSayTransform", "GRM_AugChips_Cmd", function(ply, pack)
         pack[1] = ""
         pack.SkipPlayerSay = true
     end
+
+    if pack.SkipPlayerSay == true then return true end
 end)
 
 -- Обработка открытия меню имплантации из инвентаря

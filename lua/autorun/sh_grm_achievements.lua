@@ -418,14 +418,17 @@ if SERVER then
         return false
     end
 
-    hook.Add("PlayerSayTransform", "GRM_Ach_TransformCmds", function(ply, datapack)
-        if not istable(datapack) then return end
-        local msg = datapack[1]
-        if not isstring(msg) then return end
-        if AC.HandleChat and AC.HandleChat(ply, msg) then
-            datapack[1] = ""
-            datapack.SkipPlayerSay = true
-        end
+    hook.Add("PlayerSay", "GRM_Ach_TransformCmds", function(ply, text, teamSays)
+        local datapack = { tostring(text or ""), SkipPlayerSay = false }
+            if not istable(datapack) then return end
+            local msg = datapack[1]
+            if not isstring(msg) then return end
+            if AC.HandleChat and AC.HandleChat(ply, msg) then
+                datapack[1] = ""
+                datapack.SkipPlayerSay = true
+            end
+
+        if datapack.SkipPlayerSay == true then return "" end
     end)
 
     hook.Add("PlayerSay", "GRM_Ach_ChatCmds", function(ply, text)
@@ -571,4 +574,11 @@ if CLIENT then
     end)
 
     print("[GRM Ach] Клиент достижений v" .. AC.Version .. " загружен")
+end
+
+-- Вечер-18: команда разбирается внутри парсера модуля (не литералом в
+-- хуке) — регистрируем её множество в едином внешнем словаре библиотеки,
+-- иначе на режиме она стала бы «неизвестной» до цепочки.
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/ach", "/achievements" })
 end

@@ -56,8 +56,8 @@ print("\n=== 3. СТОЙКА И ВЫЗОВ МЕНЮ ===")
 ok(has(core, "function G.AddTerminal") and has(core, "function G.SpawnTerminals"), "стойки хранятся в записи гаража и поднимаются сами")
 ok(has(entI, "G.Push(ply, rec)"), "E на стойке открывает меню гаража")
 ok(has(entI, "function ENT:PhysgunPickup() return false end"), "стойку нельзя утащить физганом")
-ok(has(core, 'hook.Add("PlayerSay", "GRM_Garage_Chat"') and has(core, 'hook.Add("PlayerSayTransform", "GRM_Garage_ChatEC"'),
-    "/garage зарегистрирован и в PlayerSay, и в EasyChat")
+ok(has(core, 'hook.Add("PlayerSay", "GRM_Garage_Chat"') and has(core, 'hook.Add("PlayerSay", "GRM_Garage_ChatEC"'),
+    "/garage — оба входа боевые (PlayerSay), имена в реестре библиотеки")
 ok(has(core, "if not G.GarageAt(ply) then return false end"),
     "вне гаража команда отдаётся дилеру — конфликта /garage нет")
 ok(has(core, "function G.GarageAt"), "гараж определяется по зоне или по стойке рядом")

@@ -401,11 +401,7 @@ if SERVER then
         local msg = string.lower(string.Trim(tostring(text or "")))
         if msg == "/grm_access" or msg == "!grm_access" or msg == "/доступы" then openEditor(ply) return "" end
     end)
-    hook.Add("PlayerSayTransform", "GRM_AccessCore_EasyChat", function(ply, text, datapack)
-        local msg = string.lower(string.Trim(tostring(text or "")))
-        if msg ~= "/grm_access" and msg ~= "!grm_access" and msg ~= "/доступы" then return end
-        openEditor(ply); datapack.SkipPlayerSay = true; datapack[1] = ""
-    end)
+
 end
 
 if CLIENT then
@@ -550,3 +546,10 @@ if CLIENT then
 end
 
 print("[GRM Access] capability core v" .. A.Version .. " loaded")
+
+-- Вечер-18: единый словарь slash-команд: имена живого PlayerSay-обработчика
+-- вносятся во внешний реестр библиотеки (на режиме сверка идёт ДО ParseSay —
+-- без регистрации команда стала бы «неизвестной»).
+if GRM and GRM.Chat and GRM.Chat.RegisterExternalCommands then
+    GRM.Chat.RegisterExternalCommands({ "/grm_access", "/доступы" })
+end
