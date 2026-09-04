@@ -58,14 +58,14 @@ for _, path in ipairs(FILES.inp) do
     local s = read(path)
     check(path .. ": /chatdiag перехвачен до отправки",
         s:find('"/chatdiag"', 1, true) ~= nil and s:find("GRMRPChat.Diagnose()", 1, true) ~= nil)
-    check(path .. ": баннер вечер-15", s:find("сборка вечер-15 (04.09)", 1, true) ~= nil)
+    check(path .. ": баннер вечер-15", s:find("сборка вечер-16 (04.09)", 1, true) ~= nil)
 end
 for _, path in ipairs(FILES.hud) do
     local s = read(path)
     check(path .. ": Diagnose пишет в ленту",
         s:find("function GRMRPChat.Diagnose", 1, true) ~= nil
         and s:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
-    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-15 (04.09)", 1, true) ~= nil)
+    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-16 (04.09)", 1, true) ~= nil)
 end
 
 print("\n=== 5. РАЗМЕРЫ ЛЕНТЫ (веч.-10) ===")
@@ -186,8 +186,14 @@ do
     check("образование: дубль вырезан, зовёт шину",
         read("lua/autorun/sh_grm_education.lua"):find("GRM.RPBroadcast(ply, meText, 400)", 1, true) ~= nil
         and read("lua/autorun/sh_grm_education.lua"):find("EasyChat.", 1, true) == nil)
-    check("старый модуль: EasyChat-рукав вырезан",
-        read("lua/autorun/sh_grm_rp_chat.lua"):find("EasyChat.PlayerAddText", 1, true) == nil)
+    check("легаси-модули чата УДАЛЕНЫ (веч.-16; подавитель — для старых установок)",
+        read("lua/autorun/sh_grm_rp_chat.lua") == nil
+        and read("lua/autorun/sh_grm_chat_config.lua") == nil)
+    check("sv: say-контракт потребления (строка не утекает движку)",
+        sv:find('if #body == 0 and not (extra and GRMRPChat.RP[extra.cmd or ""]) then return "" end', 1, true) ~= nil
+        and sv:find('return nil, #targets', 1, true) ~= nil)
+    check("sv: молчание видно — подсказка «никто не слышит» с троттлом",
+        sv:find("никто не слышит", 1, true) ~= nil and sv:find("soloHintT", 1, true) ~= nil)
     check("фабрика диспетчеров регистрирует команды модулей в реестр чата",
         read("lua/autorun/sh_01_grm_core.lua"):find("ns.RegisterExternalChatCommand", 1, true) ~= nil
         and read("lua/autorun/sh_01_grm_core.lua"):find("chatRegister(HANDLERS)", 1, true) ~= nil)

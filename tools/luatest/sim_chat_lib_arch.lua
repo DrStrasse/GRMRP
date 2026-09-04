@@ -247,7 +247,8 @@ do
         hookRun("PlayerSay", playerStub, "hello from mode test", false, false)
         check("режим-владелец: библиотечный хук молчит", #sent == nBefore)
         g.GAMEMODE = nil
-        hookRun("PlayerSay", playerStub, "hello world", false, false)
+        local rrv = hookRun("PlayerSay", playerStub, "hello world", false, false)
+        check("без режима: say СЪЕДЕН (\"\"), ванильный дубль невозможен", rrv == "", tostring(rrv))
         local rec = sent[#sent]
         check("без режима: библиотека обрабатывает say (net слушателю)",
             #sent == nBefore + 1 and rec ~= nil

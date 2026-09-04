@@ -1490,7 +1490,6 @@ luajit должен лежать каталог `jit/`. Путь определ�
 | `grm_roomtap_load` | server/sv_grm_roomtap.lua |
 | `grm_roomtap_reload` | server/sv_grm_roomtap.lua |
 | `grm_roomtap_save` | server/sv_grm_roomtap.lua |
-| `grm_rpchat_help` | sh_grm_rp_chat.lua |
 | `grm_rpdesc` | sh_grm_rpdesc.lua |
 | `grm_salary_admin` | sh_grm_economy.lua |
 | `grm_save_flush` | sh_05_grm_save.lua |
@@ -3203,8 +3202,11 @@ preventDefault → copy selection в SetClipboardText).
 > нормальный сделать»). Режим несёт свой чат (7.3); аддон-серверы (песочница)
 > — на `sh_grm_rp_chat` v1.1 с его же резервной цепью EasyChat→GRM_RPChat→
 > ChatPrint (первые две ветки теперь просто не срабатывают, всё уже было
-> под `if EasyChat and`). Разбор ниже — исторический (знания встроены в
-> cl_grmrp_chat*).
+> под `if EasyChat and`). РАЗБОР НИЖЕ — ИСТОРИЧЕСКИЙ: вечером-14 (03.09) чат
+> сведён в библиотеку `lua/grm_chat`, вечером-16 (04.09) сам `sh_grm_rp_chat`
+> и `sh_grm_chat_config` УДАЛЕНЫ из сборки (полезное — подсказка «никто не
+> слышит», потребление say — переехали в библиотеку; префиксы подавителя
+> остались защитой старых установок).
 
 18k строк апстрим (у нас вендорен форк в `lua/easychat/`, 6.7k —
 с `zz_grm_easychat_cmds.lua`/`zz_easychat_grm_fix.lua` мостами). Разобрано
@@ -3422,7 +3424,7 @@ action — `resource.action`; hook — `GRM_<Domain><PastTense>`; backend — к
 | `sh_grm_vehicle_access.lua` / `sh_grm_vehicle_dealer.lua` / `sh_vehicle_keys.lua` | Транспорт |
 | `zz_grm_vehicle_antistuck.lua` | Антистак/антиколлизия транспорта |
 | `sh_grm_vendor.lua` | Торговцы |
-| `sh_grm_chat_config.lua` / `sh_grm_rp_chat.lua` / `sh_grm_rpdesc.lua` | Чат и RP-описания |
+| `sh_grm_rpdesc.lua` | RP-описания (чат — своя библиотека `lua/grm_chat`, веч.-14/16) |
 
 > Клиентские панели — в `lua/autorun/client/` (35 файлов): `cl_grm_factions_unified_ui.lua`,
 > `cl_grm_inventory_ui.lua`, `cl_grm_cctv.lua`, `cl_grm_phone.lua`, `cl_grm_quests.lua` и т.д.
@@ -21478,7 +21480,6 @@ autorun-часть основного GRM.
 | `lua/autorun/sh_grm_cctv_access.lua` | 787 | shared |  |
 | `lua/autorun/sh_grm_cctv_config.lua` | 113 | shared |  |
 | `lua/autorun/sh_grm_character.lua` | 2781 | shared |  |
-| `lua/autorun/sh_grm_chat_config.lua` | 80 | shared |  |
 | `lua/autorun/sh_grm_chip_control.lua` | 555 | shared |  |
 | `lua/autorun/sh_grm_civil_vehicle_market.lua` | 317 | shared | [[ GRM Civil Vehicle Market v1.1.0 |
 | `lua/autorun/sh_grm_comp_access.lua` | 444 | shared |  |
@@ -21576,7 +21577,6 @@ autorun-часть основного GRM.
 | `lua/autorun/sh_grm_registry.lua` | 488 | shared |  |
 | `lua/autorun/sh_grm_roomtap_config.lua` | 116 | shared |  |
 | `lua/autorun/sh_grm_rootguard.lua` | 391 | shared |  |
-| `lua/autorun/sh_grm_rp_chat.lua` | 349 | shared |  |
 | `lua/autorun/sh_grm_rpdesc.lua` | 456 | shared |  |
 | `lua/autorun/sh_grm_service_orders.lua` | 42 | shared | [[ GRM Service Orders v1.0 — paid/requested ATM services in organization computers. ]] |
 | `lua/autorun/sh_grm_services.lua` | 1064 | shared | Boot-шим: старт подсистемы идёт через планировщик GRM.Boot (приоритеты и |
@@ -21965,7 +21965,7 @@ EasyChat замещается собственным core.chat. Права — �
 | телефония/устройства | sh_grm_mobile, phone_access/config/shop/vendor, radionet | mob.core | телефон = Derma-приложение в qmenu-слое; звонки — серверная коммутация (не WebRTC, движковый Voice + can-hear хук: EChat voice_hud precedent) |
 | оптимизация/антилаг | GRM.Perf целиком (Coalesce/Queue/Spread/Throttle/Material/EyeTrace/NW) | core.perf | остаётся ядром; новые системы = только через него; sim_perf-гейты + FProfiler-метрики 4.18 |
 | античит | sh_grm_anticheat (v1.0.0) | core.anticheat | + inflictor-laundering (4.11.3), + hwid-цепь бана (наш ban 1.3) |
-| чат режима | sh_grm_rp_chat, chat_config, qmenu-мосты, EasyChat (УДАЛЁН 03.09) | core.chat | ПЕРВЫЙ модуль режима: каналы ooc/ic/pm/me/advert/dead, лестница, закрытая лента + окно истории (копируется), Tab-дополнение каналов и ников /pm, RP-команды (me/do/it/try/roll), emoji, предпоказ ввода, без CEF/DHTML. С ВЕЧЕРА-14 — ЕДИНАЯ БИБЛИОТЕКА `lua/grm_chat/` (EasyChat-style: лоадер `lua/autorun/grm_chat.lua` + модули sh_core/sv_net/cl_hud/cl_input); режим подключает её форвардерами `modules/chat/*`, при отсутствии аддона — байтовый бандл `gamemode/lib/grm_chat` (гейт tools/sync_chat_addon.py --check). Генерированных портов *_08_grm_chat* БОЛЬШЕ НЕТ; GRMChat — алиас GRMRPChat. Уступки режима: GM.__chatOwnsPlayerSay / GM.__chatOwnsStartChat; чужие владельцы снимаются SuppressForeignChat (префиксы GRMChat*/GRM_RPChat*) |
+| чат режима | библиотека `lua/grm_chat` (веч.-14/16), qmenu-мосты; EasyChat (УДАЛЁН 03.09), sh_grm_rp_chat + chat_config (УДАЛЕНЫ 04.09) | core.chat | ПЕРВЫЙ модуль режима: каналы ooc/ic/pm/me/advert/dead, лестница, закрытая лента + окно истории (копируется), Tab-дополнение каналов и ников /pm, RP-команды (me/do/it/try/roll), emoji, предпоказ ввода, без CEF/DHTML. С ВЕЧЕРА-14 — ЕДИНАЯ БИБЛИОТЕКА `lua/grm_chat/` (EasyChat-style: лоадер `lua/autorun/grm_chat.lua` + модули sh_core/sv_net/cl_hud/cl_input); режим подключает её форвардерами `modules/chat/*`, при отсутствии аддона — байтовый бандл `gamemode/lib/grm_chat` (гейт tools/sync_chat_addon.py --check). Генерированных портов *_08_grm_chat* БОЛЬШЕ НЕТ; GRMChat — алиас GRMRPChat. Уступки режима: GM.__chatOwnsPlayerSay / GM.__chatOwnsStartChat; чужие владельцы снимаются SuppressForeignChat (префиксы GRMChat*/GRM_RPChat*) |
 
 ## 7.3 Фаза I — что уже заложено (этот коммит)
 
@@ -22413,7 +22413,9 @@ table.Empty(nil)` на net-инициализации XGUI). Режим их н�
 там зафиксированные баги (277 стендов!), переносить стенд ВМЕСТЕ с логикой;
 (2) гейты прогонять на каждом шаге; (3) вендорные мосты (easychat_init,
 zz_grm_easychat_cmds, zz_easychat_grm_fix) УДАЛЕНЫ 03.09 (ночь) по указанию
-владельца вместе с lua/easychat/ — core.chat режима + sh_grm_rp_chat аддона; (4) Comedy/CleanName-канон, ТЗК-флоу,
+владельца; чат — ЕДИНАЯ библиотека `lua/grm_chat` (веч.-14), легаси-модули
+`sh_grm_rp_chat`/`sh_grm_chat_config` УДАЛЕНЫ 04.09 (веч.-16), режим ест
+библиотеку форвардерами/бандлом; (4) Comedy/CleanName-канон, ТЗК-флоу,
 запрет байтовой идентичности — из постоянных указаний владельца; (5) dist-
 политика: режим пакуется ОТДЕЛЬНЫМ архивом grmrp_gamemode.zip (его собирает
 tools/build_dist.py; ссылка на него — в каждом финале, указание 5 Части I),

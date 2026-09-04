@@ -74,7 +74,7 @@ local function deliver(chan, author, body, extra, lineOverride, includeAuthor, f
     if chan.scope == "pm" then
         local target
         target, err = GRMRPChat.ResolvePmTarget(extra and extra.target or "", players, author)
-        if not target then return err end
+        if not target then return err, 0 end
         targets = { target }
     elseif forcedTargets then
         targets = forcedTargets
@@ -109,7 +109,7 @@ local function deliver(chan, author, body, extra, lineOverride, includeAuthor, f
             net.WriteDouble(now)
         net.Send(net_list)
     end
-    return nil
+    return nil, #targets
 end
 
 -- Состояние /do → контекст для /it (слабые ключи: утечек нет, §5.1.5).
@@ -199,7 +199,7 @@ function GRMRPChat.ProcessLine(ply, text, defaultChannel)
             GRMRPChat._inExternal = true
             local okh, ret = pcall(hook.Run, "PlayerSay", ply, text, defaultChannel == "ooc", false)
             GRMRPChat._inExternal = nil
-            if (not okh) or ret == nil or ret == "" then return end
+            if (not okh) or ret == nil or ret == "" then return "" end
             text = ret
         end
     end
@@ -209,15 +209,18 @@ function GRMRPChat.ProcessLine(ply, text, defaultChannel)
     local ok, warn = GRMRPChat.LadderCheck(st, now, cvRate:GetFloat(),
         cvBurst:GetInt(), cvWindow:GetInt())
     if warn then sendSystem(ply, warn) end
-    if not ok then return end
+    if not ok then return "" end
 
     local chanId, body, extra = GRMRPChat.ParseSay(text, defaultChannel or "ic")
     if not chanId then
+        if body == "empty" then return "" end -- пробелы: съедено молча
         sendSystem(ply, body) -- ParseSay вернул причину во втором значении
-        return
+        -- (в т.ч. «неизвестная команда»: подсказка — наша, стенд sv_routing
+        -- веч.-13; движку строку не отдаём — дубля ванильным say нет)
+        return ""
     end
     body = GRMRPChat.Sanitize(body, cvMax:GetInt())
-    if #body == 0 and not (extra and GRMRPChat.RP[extra.cmd or ""]) then return end
+    if #body == 0 and not (extra and GRMRPChat.RP[extra.cmd or ""]) then return "" end
 
     -- RP-действия (/me /do /it /try /roll): своя форма строки, тот же
     -- аудиторный путь (один владелец — deliver).
@@ -227,22 +230,22 @@ function GRMRPChat.ProcessLine(ply, text, defaultChannel)
             -- одинокий «/me» без действия не должен рождать пустую строку
             -- «* Ник » у половины сервера (стенд sv_routing)
             sendSystem(ply, "/" .. kind .. ": опишите действие после команды")
-            return
+            return ""
         end
         local err = GRMRPChat.RPAction(kind, ply, body, chanId)
         if err then sendSystem(ply, err) end
-        return
+        return ""
     end
 
     local chan = GRMRPChat.GetChannel(chanId)
-    if not chan then sendSystem(ply, "канал не найден") return end
+    if not chan then sendSystem(ply, "канал не найден") return "" end
 
     if chan.cooldown > 0 then
         local last = lastAdvert[ply] or 0
         if now - last < chan.cooldown then
             sendSystem(ply, string.format("%s: подождите %d сек",
                 chan.title, math.ceil(chan.cooldown - (now - last))))
-            return
+            return ""
         end
         lastAdvert[ply] = now
     end
@@ -252,8 +255,18 @@ function GRMRPChat.ProcessLine(ply, text, defaultChannel)
         chan.range = cvIcRange:GetFloat()
     end
 
-    local err = deliver(chan, ply, body, extra)
-    if err then sendSystem(ply, err) end
+    local err, heard = deliver(chan, ply, body, extra)
+    if err then sendSystem(ply, err) return "" end
+    -- Вечер-16 (Код 88.1 переехал из легаси-модуля): молчание локального
+    -- канала видно — автор получает системную строку, а не «сообщение
+    -- пропало». Троттл 8 с (диалог-пустышка не спамит).
+    if chanId == "ic" and heard == 0 and (st.soloHintT or 0) + 8 <= now then
+        st.soloHintT = now
+        sendSystem(ply, "рядом никого нет — вас никто не слышит (радиус ~"
+            .. tostring(math.floor(cvIcRange:GetFloat()))
+            .. " юн). Глобально: /ooc, лично: /pm <ник> <текст>")
+    end
+    return ""
 end
 
 function GRMRPChat.OnPlayerSay(ply, text, teamChat, isDead)

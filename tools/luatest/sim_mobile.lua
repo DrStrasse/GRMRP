@@ -1,7 +1,9 @@
 -- Симуляция сервера GMod для Кода 88 (мобильные телефоны, GTA IV) + регресс
 -- телефонии Код 88.1 (репорт «чат закрыт»: звонки-призраки глушили чат).
 -- БЕЗ GMod: грузятся РЕАЛЬНЫЕ sv_grm_phone.lua, sh_grm_mobile.lua,
--- sh_grm_phone_shop.lua, sh_grm_rp_chat.lua, sh_grm_chat_config.lua на моках.
+-- sh_grm_phone_shop.lua на моках + СВОЯ чат-библиотека lua/grm_chat
+-- (вечер-16: легаси sh_grm_rp_chat/chat_config УДАЛЕНЫ; секция 10 проверяет
+-- контракт библиотеки: say съеден, молчание видно).
 ----------------------------------------------------------------------
 
 string.Trim = function(s) s = tostring(s or ""); return (s:gsub("^%s*(.-)%s*$", "%1")) end
@@ -125,6 +127,8 @@ local function mkPly(id, x, isSAdmin)
     if k == "GetAimVector" then return function() return V(1, 0, 0) end end
     if k == "GetForward" then return function() return V(1, 0, 0) end end
     if k == "Nick" then return function() return "Игрок" .. tostring(self.__idx) end end
+    if k == "Name" then return function() return "Игрок" .. tostring(self.__idx) end end
+    if k == "Name" then return function() return "Игрок" .. tostring(self.__idx) end end
     if k == "Health" then return function() return 100 end end
     if k == "GetMaxHealth" then return function() return 100 end end
     if k == "Armor" then return function() return 0 end end
@@ -248,10 +252,20 @@ GRM.Inventory = {
 
 -- Ядро GRM (sh_00_grm_ui + sh_01_grm_core) — как на сервере, до модулей.
 dofile("tools/luatest/lib_grm_core.lua")()
-dofile("lua/autorun/sh_grm_chat_config.lua")
+-- Своя чат-библиотека (боевые файлы) — вместо удалённых легаси-модулей.
+math.Clamp = math.Clamp or function(v, a, b) return math.max(a, math.min(b, v)) end
+CreateConVar = function(n, d)
+  local box = { tostring(d) }
+  return { GetFloat = function() return tonumber(box[1]) or 0 end,
+           GetInt = function() return math.floor(tonumber(box[1]) or 0) end,
+           GetBool = function() return (tonumber(box[1]) or 0) ~= 0 end,
+           GetString = function() return box[1] end }
+end
+GetConVar = GetConVar or function() return nil end
+dofile("lua/grm_chat/sh_core.lua")
+dofile("lua/grm_chat/sv_net.lua")
 dofile("lua/autorun/server/sv_grm_phone.lua")
 dofile("lua/autorun/sh_grm_mobile.lua")
-dofile("lua/autorun/sh_grm_rp_chat.lua")
 dofile("lua/autorun/sh_grm_phone_shop.lua")
 
 local MB = GRM.Mobile
@@ -605,47 +619,55 @@ phC.__dt.LineState = "call" phC.__dt.CallID = 424242
 H.timers["GRM_Phone_CallThink"]()
 ok(phC.__dt.LineState == "idle" and phC.__dt.CallID == 0, "застрявшая линия самолечится в idle")
 
--- ══ 10. RP chat: молчание локального чата стало видимым ════════════════
-P("== 10. Подсказка «никто не слышит» ==")
+-- ══ 10. Своя лента: say съеден, молчание видно (вечер-16) ════════════
+P("== 10. Чат-библиотека: владение say + подсказка «никто не слышит» ==")
 local p7 = addPlayer(mkPly(7, 5000, false))
-local rp = H.hooks["PlayerSay"]["GRM_RPChat_PlayerSay"]
+local rp = H.hooks["PlayerSay"]["GRMRPChat_Capture"]
+ok(rp ~= nil, "PlayerSay принадлежит библиотеке grm_chat")
 clearLogs()
-ok(rp(p7, "/grm_arrest_admin", false) == nil, "чужая slash-команда проходит дальше по PlayerSay")
-ok(rp(p7, "!grm_persistence", false) == nil, "чужая bang-команда проходит дальше по PlayerSay")
-TT = CurTime() + 10
-ok(rp(p7, "кто-нибудь тут есть?", false) == "", "обычный текст всеяден: RP-chat забирает")
-local hintHits = netlog(function(e)
-  if e.msg ~= "GRM_RPChat_Msg" or e.sentTo ~= p7 then return false end
-  for _, f in ipairs(e.f) do
-    if isstring(f) and string.find(f, "никто не слышит", 1, true) then return true end
+local function sentHas(e, p)
+  if e.sentTo == p then return true end
+  if istable(e.sentTo) and not e.sentTo.__isply then
+    for _, x in ipairs(e.sentTo) do if x == p then return true end end
   end
   return false
-end)
-ok(#hintHits == 1, "отправитель видит «рядом никого нет» вместо молчания")
--- троттл: повтор в пределах 8с не спамит
+end
+local function hintCount()
+  local n = 0
+  for _, e in ipairs(H.netlog) do
+    if e.msg == "grmrp/chat_msg" and sentHas(e, p7) then
+      for _, f in ipairs(e.f) do
+        if isstring(f) and string.find(f, "никто не слышит", 1, true) then n = n + 1 end
+      end
+    end
+  end
+  return n
+end
+ok(rp(p7, "кто-нибудь тут есть?", false) == "", "обычный текст СЪЕДЕН (движковый дубль невозможен)")
+ok(hintCount() == 1, "отправитель видит «рядом никого нет» вместо молчания")
 TT = CurTime() + 2
-rp(p7, "ау?", false)
-local hintHits2 = netlog(function(e)
-  if e.msg ~= "GRM_RPChat_Msg" or e.sentTo ~= p7 then return false end
-  for _, f in ipairs(e.f) do
-    if isstring(f) and string.find(f, "никто не слышит", 1, true) then return true end
-  end
-  return false
-end)
-ok(#hintHits2 == 1, "троттл: повторная подсказка не летит")
--- рядом появился человек → подсказка не нужна
+rp(p7, "ау? тут?", false)
+ok(hintCount() == 1, "троттл 8 с: подсказка не спамит")
 local p8 = addPlayer(mkPly(8, 5010, false))
-TT = CurTime() + 10
-rp(p7, "теперь другой вопрос", false)
-local hintHits3 = netlog(function(e)
-  if e.msg ~= "GRM_RPChat_Msg" or e.sentTo ~= p7 then return false end
-  for _, f in ipairs(e.f) do
-    if isstring(f) and string.find(f, "никто не слышит", 1, true) then return true end
+TT = CurTime() + 30
+ok(rp(p7, "теперь другой вопрос", false) == "", "строка при слушателе тоже съедена")
+ok(hintCount() == 1, "при слушателе рядом новых подсказок нет")
+local got = false
+for _, e in ipairs(H.netlog) do
+  if e.msg == "grmrp/chat_msg" and sentHas(e, p8) then got = true end
+end
+ok(got, "рядом стоящий получил строку нашей лентой (grmrp/chat_msg)")
+TT = CurTime() + 30 -- иначе лестница антифлуда закономерно заглушит строку
+ok(rp(p7, "/grm_arrest_admin", false) == "", "незарегистрированный слэш не утекает движку: отвечаем сами")
+local unknownHint = false
+for _, e in ipairs(H.netlog) do
+  if e.msg == "grmrp/chat_msg" and sentHas(e, p7) then
+    for _, f in ipairs(e.f) do
+      if isstring(f) and string.find(f, "неизвестная команда", 1, true) then unknownHint = true end
+    end
   end
-  return false
-end)
-ok(#hintHits3 == 1, "при слушателе рядом подсказки нет")
-ok(#netlog(function(e) return e.msg == "GRM_RPChat_Msg" and e.sentTo == p8 end) >= 1, "рядом стоящий получил сообщение")
+end
+ok(unknownHint, "о чужом незарегистрированном слэше сообщаем system-строкой")
 
 -- ══ 11. Магазин: покупка телефонов в инвентарь ═════════════════════════
 P("== 11. Телефонный магазин (invItem) ==")

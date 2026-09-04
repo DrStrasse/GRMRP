@@ -183,6 +183,42 @@ if m then
     T2("range=400 отсекает дальнего сильнее cvar", not hasC)
 end
 
+-- ============ 1c. потребление строки + «никто не слышит» (веч.-16) ============
+reset()
+local r = GRMRPChat.OnPlayerSay(A, "привет, обрывок", false, false)
+T2("say съеден: OnPlayerSay вернул \"\"", r == "", tostring(r))
+-- слушателей — за горизонт ПОСЛЕ move (reset пересоздаёт игроков — ловушка
+-- веч.-13); t-пауза 10 с — иначе лестница антифлуда законоглушает строку
+clock.t = clock.t + 10
+B.x, BOBA.x, C.x = 5000, 6000, 7000
+GRMRPChat.OnPlayerSay(A, "есть кто?", false, false)
+r = lastMsg()
+T2("один в радиусе: system-подсказка «никто не слышит»",
+    r ~= nil and r.parts[1] == "system" and r.parts[2]:find("никто не слышит", 1, true) ~= nil,
+    r and (r.parts[1] .. '/' .. tostring(r.parts[2])))
+clock.t = clock.t + 2
+GRMRPChat.OnPlayerSay(A, "алло?", false, false)
+local hints = 0
+for _, e in ipairs(sent) do
+    if e.parts and e.parts[1] == "system" and isstring(e.parts[2])
+        and e.parts[2]:find("никто не слышит", 1, true) then
+        hints = hints + 1
+    end
+end
+T2("троттл 8 с: повтор через 2 с не добавляет подсказку", hints == 1, hints)
+B.x = 100
+reset()
+GRMRPChat.OnPlayerSay(A, "тут кто-то есть", false, false)
+T2("при слушателе — подсказки нет", (function()
+    for _, e in ipairs(sent) do
+        if e.parts and isstring(e.parts[2]) and e.parts[2]:find("никто не слышит", 1, true) then return false end
+    end
+    return true end)())
+reset()
+r = GRMRPChat.OnPlayerSay(A, "/grm_zhulyo", false, false)
+T2("чужой незарегистрированный слэш: system + съеден (не отдаём ванили)",
+    r == "", tostring(r))
+
 -- принудительная аудитория (вечер-15: nameplate/шина, bypass канала по design)
 reset()
 err = GRMRPChat.RPAction("me", A, "предъявляет вам документ", nil,
