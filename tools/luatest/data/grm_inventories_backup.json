@@ -2,7 +2,7 @@
     "_grm_meta": {
         "revision": 4,
         "version": 2,
-        "savedAt": 1788513773
+        "savedAt": 1788514914
     },
     "76561198000000012": {
         "slots": [
@@ -15,14 +15,14 @@
                 "count": 30
             },
             {
-                "id": "mobile_badger",
-                "count": 1
+                "count": 1,
+                "id": "mobile_badger"
             },
             {
+                "id": "radio_modulator",
                 "data": {
                     "on": true
                 },
-                "id": "radio_modulator",
                 "count": 1
             }
         ]

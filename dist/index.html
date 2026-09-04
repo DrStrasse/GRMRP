@@ -3,57 +3,58 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GRM — файлы для скачивания</title>
+<title>GRM — файлы сборки</title>
 <style>
-  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #0e141f; color: #e8eef5; max-width: 680px; margin: 40px auto; padding: 0 16px; }
+  body { font-family: system-ui, "Segoe UI", Roboto, sans-serif; background: #0e141f; color: #e8eef5; max-width: 720px; margin: 40px auto; padding: 0 16px; }
   h1 { font-size: 20px; margin-bottom: 4px; }
-  .sub { color: #8aa0b8; font-size: 13px; margin-bottom: 24px; }
-  h2 { font-size: 14px; color: #6fc3ff; margin: 26px 0 10px; text-transform: uppercase; letter-spacing: .5px; }
-  a.card { display: block; text-decoration: none; color: inherit; background: #16202e; border: 1px solid #26364a; border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; }
+  .sub { color: #8aa0b8; font-size: 13px; margin-bottom: 20px; }
+  a.card { display: block; text-decoration: none; color: inherit; background: #16202e; border: 1px solid #26364a; border-radius: 10px; padding: 12px 16px; margin-bottom: 9px; }
   a.card:hover { background: #1c2a3c; border-color: #3a5678; }
-  a.card.clean { border-color: #2f7a4f; background: #14211b; }
+  a.card.key { border-color: #2f7a4f; background: #14211b; }
   .name { font-weight: 600; font-size: 15px; }
   .meta { color: #8aa0b8; font-size: 12px; margin-top: 2px; }
-  .hint { color: #6c8299; font-size: 12px; margin-top: 20px; line-height: 1.5; }
-  code { background: #1c2a3c; padding: 1px 6px; border-radius: 4px; font-size: 11px; word-break: break-all; }
+  .hint { color: #9fb4c9; font-size: 13px; margin-top: 20px; line-height: 1.55; background: #131c29; border: 1px solid #26364a; border-radius: 10px; padding: 12px 16px; }
 </style>
 </head>
 <body>
-  <h1>GRM — файлы для скачивания</h1>
-  <div class="sub">Ссылки открываются в новой вкладке. Если скачивание не началось — клик правой кнопкой → «Сохранить ссылку как…».</div>
-
-  <h2>Чистый проект (новый репозиторий)</h2>
-  <a class="card clean" href="./grm_project_source.zip" target="_blank">
-    <div class="name">grm_project_source.zip</div>
-    <div class="meta">Чистый проект для нового репозитория — только lua/materials/models + fire + tools + dist, README, addon.json · 23 МБ</div>
-  </a>
-
-  <h2>Готовые архивы</h2>
-  <a class="card" href="./grm_single_addon.zip" target="_blank">
+  <h1>GRM — файлы сборки</h1>
+  <div class="sub">сборка веч.-20 (04.09) · список генерируется build_dist.py, только реально собранные архивы</div>
+  <a class="card key" href="./grm_single_addon.zip" target="_blank">
     <div class="name">grm_single_addon.zip</div>
-    <div class="meta">Единый готовый аддон со всеми модулями · 5.3 МБ</div>
+    <div class="meta">ВЕСЬ аддон grm — распаковать В ЦЕЛОМ в garrysmod/addons/ с заменой папки grm (не копировать руками!) · 6.3 МБ</div>
+  </a>
+  <a class="card key" href="./grmrp_gamemode.zip" target="_blank">
+    <div class="name">grmrp_gamemode.zip</div>
+    <div class="meta">Игровой режим — распаковать в garrysmod/gamemodes/ с заменой папки grmrp · 0.0 МБ</div>
   </a>
   <a class="card" href="./grm_full_code.zip" target="_blank">
     <div class="name">grm_full_code.zip</div>
-    <div class="meta">Полный исходный код проекта · 5.3 МБ</div>
+    <div class="meta">Полные исходники проекта (дерево репозитория) · 6.2 МБ</div>
   </a>
   <a class="card" href="./grm_economy.zip" target="_blank">
     <div class="name">grm_economy.zip</div>
-    <div class="meta">Изолированный экономический срез · 452 КБ</div>
-  </a>
-  <a class="card" href="./grm_fix_hud_tab_currency.zip" target="_blank">
-    <div class="name">grm_fix_hud_tab_currency.zip</div>
-    <div class="meta">Точечный патч интерфейса и валюты · 72 КБ</div>
+    <div class="meta">Изолированный экономический срез · 0.5 МБ</div>
   </a>
   <a class="card" href="./grm_fire_addon.zip" target="_blank">
     <div class="name">grm_fire_addon.zip</div>
-    <div class="meta">Пожарный контент-аддон · 6.1 МБ</div>
+    <div class="meta">Пожарный контент-аддон · 6.0 МБ</div>
   </a>
-
-  <div class="hint">
-    Если встроенный просмотрщик мешает — скопируйте прямую ссылку и откройте в отдельном окне браузера.<br><br>
-    Пример:<br>
-    <code>https://8080-iwmfkxawfdbhogyspddb2.e2b.app/grm_project_source.zip</code>
-  </div>
+  <a class="card" href="./grm_textscreens.zip" target="_blank">
+    <div class="name">grm_textscreens.zip</div>
+    <div class="meta">3D2D Textscreens (отдельный аддон) · 0.0 МБ</div>
+  </a>
+  <a class="card" href="./grm_addon_studio.zip" target="_blank">
+    <div class="name">grm_addon_studio.zip</div>
+    <div class="meta">Студия аддона (отдельный аддон) · 0.1 МБ</div>
+  </a>
+  <a class="card" href="./grm_fix_hud_tab_currency.zip" target="_blank">
+    <div class="name">grm_fix_hud_tab_currency.zip</div>
+    <div class="meta">Точечный патч интерфейса и валюты · 0.1 МБ</div>
+  </a>
+  <a class="card" href="./system_prone.zip" target="_blank">
+    <div class="name">system_prone.zip</div>
+    <div class="meta">Prone Mod (отдельный аддон) · 14.9 МБ</div>
+  </a>
+  <div class="hint"><b>Порядок развертывания</b>: 1) остановить сервер; 2) снести <code>garrysmod/addons/grm</code> и распаковать <b>grm_single_addon.zip</b> в <code>garrysmod/addons/</code>; 3) снести <code>garrysmod/gamemodes/grmrp</code> и распаковать <b>grmrp_gamemode.zip</b> в <code>garrysmod/gamemodes/</code>; 4) запустить и сверить: подпись меню «вечер-20». Режим сам откажет в загрузке СТАРОЙ копии чата из аддона (страж веч.-20) и скажет об этом в консоли.</div>
 </body>
 </html>

@@ -6,8 +6,12 @@
     байтовым равенством. Тела файлов идемпотентны (флаги __core/__sv/__hud/
     __inp), поэтому двойной include (лоадером и отсюда) безопасен. ]]
 
-if file and file.Exists and file.Exists("grm_chat/cl_input.lua", "LUA") then
+local stale = GRMRP and isfunction(GRMRP.IsAddonChatStale)
+    and GRMRP.IsAddonChatStale()
+if file and file.Exists and file.Exists("grm_chat/cl_input.lua", "LUA")
+    and not stale then
     include("grm_chat/cl_input.lua")
 else
+    if stale and GRMRPChat then GRMRPChat.__inp = nil end
     include("lib/grm_chat/cl_input.lua")
 end

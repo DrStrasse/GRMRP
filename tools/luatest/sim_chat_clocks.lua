@@ -77,14 +77,14 @@ for _, path in ipairs(FILES.inp) do
     local s = read(path)
     check(path .. ": /chatdiag перехвачен до отправки",
         s:find('"/chatdiag"', 1, true) ~= nil and s:find("GRMRPChat.Diagnose()", 1, true) ~= nil)
-    check(path .. ": баннер вечер-15", s:find("сборка вечер-19 (04.09)", 1, true) ~= nil)
+    check(path .. ": баннер вечер-15", s:find("сборка вечер-20 (04.09)", 1, true) ~= nil)
 end
 for _, path in ipairs(FILES.hud) do
     local s = read(path)
     check(path .. ": Diagnose пишет в ленту",
         s:find("function GRMRPChat.Diagnose", 1, true) ~= nil
         and s:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
-    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-19 (04.09)", 1, true) ~= nil)
+    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-20 (04.09)", 1, true) ~= nil)
 end
 
 print("\n=== 5. РАЗМЕРЫ ЛЕНТЫ (веч.-10) ===")
@@ -301,6 +301,22 @@ do
             return true
         end)())
 end
+
+print("\n=== 10. КАРАНТИН СТАРОГО АДДОНА (веч.-20) ===")
+local guard = read("gamemodes/grmrp/gamemode/modules/chat/cl_a_grmrp_chat_guard.lua")
+check("страж существует и грузится раньше форвардеров", guard ~= nil
+    and guard:find("IsAddonChatStale", 1, true) ~= nil
+    and guard:find(":SetBounds(", 1, true) ~= nil
+    and guard:find(":SetKeyInputEnabled(", 1, true) ~= nil)
+for _, P in ipairs({ "cl_grmrp_chat_hud.lua", "cl_grmrp_chat.lua" }) do
+    local s = read("gamemodes/grmrp/gamemode/modules/chat/" .. P)
+    check(P .. ": при stale — встроенная копия + сброс флага",
+        s:find("IsAddonChatStale", 1, true) ~= nil
+        and s:find("include(\"lib/grm_chat/", 1, true) ~= nil)
+end
+local sv = read("gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua")
+check("sv-форвардер НЕ карантинит (яд был только в cl)",
+    sv:find("IsAddonChatStale", 1, true) == nil)
 
 print(("\nCHAT CLOCKS: %d/%d, провалов: %d"):format(total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

@@ -16,6 +16,7 @@
 """
 import os
 import shutil
+import io
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -205,6 +206,73 @@ def pack_system_prone():
     print("%-34s %4d файлов, %8.1f КБ" % ("system_prone.zip", written, os.path.getsize(path) / 1024.0))
 
 
+INDEX_DESC = [
+    ("grm_single_addon.zip", "ВЕСЬ аддон grm — распаковать В ЦЕЛОМ в "
+     "garrysmod/addons/ с заменой папки grm (не копировать руками!)"),
+    ("grmrp_gamemode.zip", "Игровой режим — распаковать в garrysmod/gamemodes/ "
+     "с заменой папки grmrp"),
+    ("grm_full_code.zip", "Полные исходники проекта (дерево репозитория)"),
+    ("grm_economy.zip", "Изолированный экономический срез"),
+    ("grm_fire_addon.zip", "Пожарный контент-аддон"),
+    ("grm_textscreens.zip", "3D2D Textscreens (отдельный аддон)"),
+    ("grm_addon_studio.zip", "Студия аддона (отдельный аддон)"),
+    ("grm_fix_hud_tab_currency.zip", "Точечный патч интерфейса и валюты"),
+    ("system_prone.zip", "Prone Mod (отдельный аддон)"),
+]
+
+
+def build_index():
+    """dist/index.html — честная витрина, генерится при КАЖДОМ билде:
+    только реально существующие архивы, актуальные размеры, инструкция
+    развертывания (веч.-20: устаревший статичный index вводил в заблуждение)."""
+    head = ("<!DOCTYPE html>\n<html lang=\"ru\">\n<head>\n<meta charset=\"utf-8\">\n"
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+            "<title>GRM — файлы сборки</title>\n<style>\n"
+            "  body { font-family: system-ui, \"Segoe UI\", Roboto, sans-serif; "
+            "background: #0e141f; color: #e8eef5; max-width: 720px; margin: 40px auto; "
+            "padding: 0 16px; }\n"
+            "  h1 { font-size: 20px; margin-bottom: 4px; }\n"
+            "  .sub { color: #8aa0b8; font-size: 13px; margin-bottom: 20px; }\n"
+            "  a.card { display: block; text-decoration: none; color: inherit; "
+            "background: #16202e; border: 1px solid #26364a; border-radius: 10px; "
+            "padding: 12px 16px; margin-bottom: 9px; }\n"
+            "  a.card:hover { background: #1c2a3c; border-color: #3a5678; }\n"
+            "  a.card.key { border-color: #2f7a4f; background: #14211b; }\n"
+            "  .name { font-weight: 600; font-size: 15px; }\n"
+            "  .meta { color: #8aa0b8; font-size: 12px; margin-top: 2px; }\n"
+            "  .hint { color: #9fb4c9; font-size: 13px; margin-top: 20px; "
+            "line-height: 1.55; background: #131c29; border: 1px solid #26364a; "
+            "border-radius: 10px; padding: 12px 16px; }\n"
+            "</style>\n</head>\n<body>\n")
+    stamp = "сборка веч.-20 (04.09)"
+    parts = [head,
+             "  <h1>GRM — файлы сборки</h1>\n  <div class=\"sub\">%s · "
+             "список генерируется build_dist.py, только реально собранные "
+             "архивы</div>\n" % stamp]
+    for name, desc in INDEX_DESC:
+        path = os.path.join(DIST, name)
+        if not os.path.isfile(path):
+            continue
+        kb = os.path.getsize(path) / 1024.0
+        cls = "card key" if name in ("grm_single_addon.zip", "grmrp_gamemode.zip") else "card"
+        parts.append('  <a class="%s" href="./%s" target="_blank">\n'
+                     '    <div class="name">%s</div>\n'
+                     '    <div class="meta">%s · %.1f МБ</div>\n  </a>\n'
+                     % (cls, name, name, desc, kb / 1024.0))
+    parts.append(
+        "  <div class=\"hint\"><b>Порядок развертывания</b>: 1) остановить "
+        "сервер; 2) снести <code>garrysmod/addons/grm</code> и распаковать "
+        "<b>grm_single_addon.zip</b> в <code>garrysmod/addons/</code>; 3) снести "
+        "<code>garrysmod/gamemodes/grmrp</code> и распаковать "
+        "<b>grmrp_gamemode.zip</b> в <code>garrysmod/gamemodes/</code>; 4) "
+        "запустить и сверить: подпись меню «вечер-20». Режим сам откажет в "
+        "загрузке СТАРОЙ копии чата из аддона (страж веч.-20) и скажет об этом "
+        "в консоли.</div>\n</body>\n</html>\n")
+    with io.open(os.path.join(DIST, "index.html"), "w", encoding="utf-8") as f:
+        f.write("".join(parts))
+    print("index.html перегенерирован (список живой, не статичный)")
+
+
 def main():
     os.makedirs(DIST, exist_ok=True)
     everything = collect_all()
@@ -220,6 +288,7 @@ def main():
     # gamemode в каждом финале; аддон-dist не затрагивает)
     build_gamemode("grmrp_gamemode.zip", "grmrp", prefix="grmrp/")
     pack_system_prone()
+    build_index()
 
 
 if __name__ == "__main__":
