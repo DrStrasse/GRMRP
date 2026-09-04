@@ -45,9 +45,11 @@ for _, path in ipairs(FILES.hud) do
     local s = read(path)
     check(path .. ": рисует EditablePanel", s:find('vgui.Create("EditablePanel")', 1, true) ~= nil)
     check(path .. ": HUDPaint-хука ленты больше нет", s:find('hook.Add("HUDPaint"', 1, true) == nil)
-    check(path .. ": панель не перехватывает мышь/клавиши",
+    check(path .. ": панель не перехватывает мышь/клавиши (РЕАЛЬНЫЕ методы)",
         s:find("SetMouseInputEnabled(false)", 1, true) ~= nil
-        and s:find("SetKeyInputEnabled(false)", 1, true) ~= nil)
+        and s:find("SetKeyboardInputEnabled(false)", 1, true) ~= nil)
+    check(path .. ": фантома SetKeyInputEnabled нет (краш 04.09, wiki Panel)",
+        s:find(":SetKeyInputEnabled(", 1, true) == nil)
     check(path .. ": панель ленива (из push)", s:find("ensureFeed()", 1, true) ~= nil)
     check(path .. ": переклейка на смену экрана",
         s:find("GRMRPChat_FeedPos", 1, true) ~= nil)
@@ -58,14 +60,14 @@ for _, path in ipairs(FILES.inp) do
     local s = read(path)
     check(path .. ": /chatdiag перехвачен до отправки",
         s:find('"/chatdiag"', 1, true) ~= nil and s:find("GRMRPChat.Diagnose()", 1, true) ~= nil)
-    check(path .. ": баннер вечер-15", s:find("сборка вечер-16 (04.09)", 1, true) ~= nil)
+    check(path .. ": баннер вечер-15", s:find("сборка вечер-17 (04.09)", 1, true) ~= nil)
 end
 for _, path in ipairs(FILES.hud) do
     local s = read(path)
     check(path .. ": Diagnose пишет в ленту",
         s:find("function GRMRPChat.Diagnose", 1, true) ~= nil
         and s:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
-    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-16 (04.09)", 1, true) ~= nil)
+    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-17 (04.09)", 1, true) ~= nil)
 end
 
 print("\n=== 5. РАЗМЕРЫ ЛЕНТЫ (веч.-10) ===")

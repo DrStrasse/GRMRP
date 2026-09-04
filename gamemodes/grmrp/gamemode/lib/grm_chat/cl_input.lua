@@ -499,7 +499,7 @@ function GRMRPChat.OpenInput()
     end
     if not GRMRPChat._bannered and GRMRPChat.AddSystem then
         GRMRPChat._bannered = true
-        GRMRPChat.AddSystem("чат GRM · сборка вечер-16 (04.09) · /chatdiag · библиотека едина (дублей чата нет) · память ввода — переживает рестарт")
+        GRMRPChat.AddSystem("чат GRM · сборка вечер-17 (04.09) · /chatdiag · библиотека едина (дублей чата нет) · память ввода — переживает рестарт")
     end
     if not IsValid(frame) then build() end
     frame:Show()

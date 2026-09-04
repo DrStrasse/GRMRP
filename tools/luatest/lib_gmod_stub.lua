@@ -142,7 +142,15 @@ function S.install()
         band = function(a) return a or 0 end, bnot = function(a) return -(a or 0) end }
     _G.surface = setmetatable({}, { __index = function() return noop end })
     _G.draw = setmetatable({}, { __index = function() return noop end })
-    _G.vgui = { Create = function() return setmetatable({}, { __index = function() return noop end }) end }
+    -- Вечер-17: фантомы движка = nil (как в реальном GMod) — вызов
+    -- «attempt to call method 'X' (a nil value)» роняет стенд, а не молчит.
+    local PHANTOM_VGUI = { SetKeyInputEnabled = true, SetReadOnly = true }
+    _G.vgui = { Create = function()
+        return setmetatable({}, { __index = function(_, k)
+            if PHANTOM_VGUI[k] then return nil end
+            return noop
+        end })
+    end }
     _G.language = { Add = noop }
     _G.list = { Set = noop, Get = function() return {} end }
     _G.duplicator = { RegisterEntityModifier = noop }

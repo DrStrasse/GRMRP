@@ -152,7 +152,7 @@ function GRMRPChat.Diagnose()
             or "чужие владельцы: АКТИВЕН — дубль чата!!!"
     end
     local bits = {
-        "чат вечер-16 (04.09) · автоотыгровки модулей — на шине, лента = панель · SendText для модулей",
+        "чат вечер-17 (04.09) · автоотыгровки модулей — на шине, лента = панель · SendText для модулей",
         portDesc .. " · chat.AddText: " .. (GRMRPChat._addTextBridge and "мост к ленте" or "мимо ленты!"),
         "лента: " .. n .. " строк · архив истории: " .. arcN .. " · " .. fdesc,
         "память ввода: " .. inpN .. " строк (↑/↓, переживает рестарт)",
@@ -216,7 +216,10 @@ ensureFeed = function()
     feed = vgui.Create("EditablePanel")
     if not IsValid(feed) then return nil end
     feed:SetMouseInputEnabled(false)
-    feed:SetKeyInputEnabled(false)
+    -- Реальный метод — SetKeyboardInputEnabled («SetKeyInputEnabled» в
+    -- движке НЕТ: 04.09 краш боевого клиента ensureFeed:174, стендовый
+    -- вседозволяющий vgui-стаб его не видел).
+    feed:SetKeyboardInputEnabled(false)
     feedLayout(feed)
     feed.Paint = function(p, w, h)
         local lines = GRMRPChat.lines
