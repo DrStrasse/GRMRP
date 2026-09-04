@@ -144,7 +144,8 @@ function S.install()
     _G.draw = setmetatable({}, { __index = function() return noop end })
     -- Вечер-17: фантомы движка = nil (как в реальном GMod) — вызов
     -- «attempt to call method 'X' (a nil value)» роняет стенд, а не молчит.
-    local PHANTOM_VGUI = { SetKeyInputEnabled = true, SetReadOnly = true }
+    local PHANTOM_VGUI = { SetKeyInputEnabled = true, SetReadOnly = true,
+        SetBounds = true }
     _G.vgui = { Create = function()
         return setmetatable({}, { __index = function(_, k)
             if PHANTOM_VGUI[k] then return nil end

@@ -152,7 +152,7 @@ function GRMRPChat.Diagnose()
             or "чужие владельцы: АКТИВЕН — дубль чата!!!"
     end
     local bits = {
-        "чат вечер-18 (04.09) · автоотыгровки модулей — на шине, лента = панель · SendText для модулей",
+        "чат вечер-19 (04.09) · автоотыгровки модулей — на шине, лента = панель · SendText для модулей",
         portDesc .. " · chat.AddText: " .. (GRMRPChat._addTextBridge and "мост к ленте" or "мимо ленты!"),
         "лента: " .. n .. " строк · архив истории: " .. arcN .. " · " .. fdesc,
         "память ввода: " .. inpN .. " строк (↑/↓, переживает рестарт)",
@@ -208,7 +208,12 @@ local ROW = 26 -- строка ленты вечером-10 крупнее: 22 -
 feedLayout = function(p)
     local w = math.min(900, ScrW() - 32)
     local hgt = ROW * 18 + 14
-    p:SetBounds(8, math.max(0, ScrH() - 268 - hgt), w, hgt)
+    -- Вечер-18: «Panel:SetBounds» в Lua-API движка НЕТ (есть только
+    -- GetBounds) — боевой креш клиента именно здесь. Реальные нативные
+    -- методы: SetPos + SetSize (ground truth: ноль употреблений SetBounds
+    -- во всём lua-дереве движка Facepunch/garrysmod).
+    p:SetPos(8, math.max(0, ScrH() - 268 - hgt))
+    p:SetSize(w, hgt)
 end
 
 ensureFeed = function()

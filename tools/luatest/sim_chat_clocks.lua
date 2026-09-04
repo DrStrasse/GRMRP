@@ -50,6 +50,10 @@ for _, path in ipairs(FILES.hud) do
         and s:find("SetKeyboardInputEnabled(false)", 1, true) ~= nil)
     check(path .. ": фантома SetKeyInputEnabled нет (краш 04.09, wiki Panel)",
         s:find(":SetKeyInputEnabled(", 1, true) == nil)
+    check(path .. ": фантома SetBounds нет (боевой креш 04.09; нативно SetPos+SetSize)",
+        s:find(":SetBounds(", 1, true) == nil
+        and s:find(":SetPos(", 1, true) ~= nil
+        and s:find(":SetSize(", 1, true) ~= nil)
     check(path .. ": панель ленива (из push)", s:find("ensureFeed()", 1, true) ~= nil)
     check(path .. ": переклейка на смену экрана",
         s:find("GRMRPChat_FeedPos", 1, true) ~= nil)
@@ -73,14 +77,14 @@ for _, path in ipairs(FILES.inp) do
     local s = read(path)
     check(path .. ": /chatdiag перехвачен до отправки",
         s:find('"/chatdiag"', 1, true) ~= nil and s:find("GRMRPChat.Diagnose()", 1, true) ~= nil)
-    check(path .. ": баннер вечер-15", s:find("сборка вечер-18 (04.09)", 1, true) ~= nil)
+    check(path .. ": баннер вечер-15", s:find("сборка вечер-19 (04.09)", 1, true) ~= nil)
 end
 for _, path in ipairs(FILES.hud) do
     local s = read(path)
     check(path .. ": Diagnose пишет в ленту",
         s:find("function GRMRPChat.Diagnose", 1, true) ~= nil
         and s:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
-    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-18 (04.09)", 1, true) ~= nil)
+    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-19 (04.09)", 1, true) ~= nil)
 end
 
 print("\n=== 5. РАЗМЕРЫ ЛЕНТЫ (веч.-10) ===")

@@ -73,7 +73,8 @@ print("\n=== 4. RUNTIME: трейс владельца 04.09 (AddSystem→push�
 -- GMod) — любой возврат к фантому роняет эту секцию, а не «зелёнёт».
 do
     local isT = function(v) return type(v) == "table" end
-    local PHANTOM = { SetKeyInputEnabled = true, SetReadOnly = true }
+    local PHANTOM = { SetKeyInputEnabled = true, SetReadOnly = true,
+        SetBounds = true }
     local panelMT
     local function newPanel() return setmetatable({ __panel = true }, panelMT) end
     panelMT = { __index = function(p, k)

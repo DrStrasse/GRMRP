@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-17 (04.09)'
+Menu.BuildStamp = 'вечер-19 (04.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -96,9 +96,9 @@ Menu.AddTab({ id = "workshop", order = 50, title = "Мастерская", accen
     action = function() Menu.OpenGameuiWith(nil) end })
 Menu.AddTab({ id = "disconnect", order = 70, title = "Отключиться от сервера", accent = COL.red,
     visible = function() return not game.SinglePlayer() end,
-    action = function() RunConsoleCommand("disconnect") end })
+    action = function() Menu.OpenGameuiWith("Disconnect") end })
 Menu.AddTab({ id = "quit", order = 80, title = "Выход из игры", accent = COL.red,
-    action = function() RunConsoleCommand("quit") end })
+    action = function() Menu.OpenGameuiWith("quit") end })
 
 function Menu.SystemLine(text)
     if GRMRPChat and GRMRPChat.pushSystem then
