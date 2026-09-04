@@ -315,27 +315,9 @@ end
 -- Дистанция 200 юнитов и объявление в /me на 400 — те же правила, что
 -- у остальных документов (sh_grm_documents.lua), чтобы поведение
 -- не отличалось от привычного игрокам.
+-- Вечер-13: дубль развилки из sh_grm_documents удалён — одна шина.
 local function announce(ply, meText)
-    local name = ply:GetNWString("GRM_RPName", "")
-    if name == "" then name = ply:Nick() end
-    local full = "* " .. name .. " " .. meText
-    local origin = ply:GetPos()
-
-    for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
-        if IsValid(p) and p:GetPos():DistToSqr(origin) <= 400 * 400 then
-            if EasyChat and EasyChat.PlayerAddText then
-                EasyChat.PlayerAddText(p, Color(200, 160, 255), full)
-            elseif util.NetworkStringToID("GRM_RPChat_Msg") ~= 0 then
-                net.Start("GRM_RPChat_Msg")
-                    net.WriteUInt(2, 8) net.WriteBool(true)
-                    net.WriteUInt(200, 8) net.WriteUInt(160, 8) net.WriteUInt(255, 8)
-                    net.WriteBool(false) net.WriteString(full)
-                net.Send(p)
-            else
-                p:ChatPrint(full)
-            end
-        end
-    end
+    return GRM.RPBroadcast(ply, meText, 400)
 end
 
 local function showDiplomaToAim(ply,number)

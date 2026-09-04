@@ -41,15 +41,13 @@ if SERVER then
         return
     end
     GRM._rpChatActive = true
-    GRM._rpChatVer = "1.1.0"
+    GRM._rpChatVer = "1.2.1" -- (print ниже врал про 1.2.0 при поле 1.1.0 — мелочь, сведена)
 
     local function sendTo(ply, parts)
         -- parts = { Color, "text", Color, "text", ... }
+        -- Вечер-13: рукав EasyChat вырезан (чат вынесен в GRM-системы;
+        -- указание владельца). Собственный net-канал — единственный путь.
         if not IsValid(ply) then return end
-        if EasyChat and EasyChat.PlayerAddText then
-            EasyChat.PlayerAddText(ply, unpack(parts))
-            return
-        end
         net.Start(NET_MSG)
             net.WriteUInt(#parts, 8)
             for i = 1, #parts do

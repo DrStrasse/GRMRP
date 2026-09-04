@@ -2,14 +2,55 @@
 -- Не править руками: изменения вносите в файл режима и перегенерируйте
 -- (`python3 tools/sync_chat_addon.py`); расхождение ловит --check.
 --[[ GRMChat — аддонский мутированный порт чат-модуля режима (тот же код,
-    другие имена). На серверах с gamemode GRMRP модуль молча выключается
-    целиком: чат режима — единственный владелец, дублей net-имён/cvar'ов/
-    перехвата PlayerSay не возникает никогда.
+    другие имена). На серверах с gamemode GRMRP порт подавляется САМИМ
+    РЕЖИМОМ (GRMRPChat.SuppressAddonPort снимает все хуки/таймеры/команды с
+    id «GRMChat*»; вечер-13): прежний guard «if GRMRP.Version» ловил
+    только поздний reload — GMod исполняет lua/autorun аддонов ДО файлов
+    режима, и на свежей карте два чата жили бок о бок (двойная Y-полоса,
+    перехваты, общая DATA-история). Теперь плюс ранний guard (порядок
+    reload через lua_refresh) и гейты SUPPRESSED на входах.
 ]]
-if GRMRP and GRMRP.Version then return end
+if (GRMRP and GRMRP.Version) or (GRMRPChat and GRMRPChat.Channels)
+    then return end -- режим уже здесь/на reload: порт не рождается
 
 GRMChat = GRMChat or {}
+GRMChat._standalone = true -- песочница: режимного чата нет (для диагностики)
 GRMChat.Net = { SAY = "grm/chat_say", MSG = "grm/chat_msg" }
+
+-- Вечер-13 (дефект песочницы): GRMRPChat.Enabled живёт в shared.lua РЕЖИМА,
+-- в конверт он не попадает — а ProcessLine порта звал GRMChat.Enabled()
+-- напрямую: крах на первом же сообщении. Фолбэк читает реплицируемый cvar
+-- порта (CreateConVar — в сконвертированном sv-файле).
+if not GRMChat.Enabled then
+    function GRMChat.Enabled()
+        local cv = GetConVar and GetConVar("grm_chat_enable")
+        if not cv then return true end
+        return cv:GetBool()
+    end
+end
+
+-- Вечер-13: и в песочнице владелец один. Старый модуль sh_grm_rp_chat.lua
+-- вешает PlayerSay с return "" и глотает чужие строки целиком; его лента
+-- вторым слоем дублирует вывод через chat.AddText. Снимаем его хуки после
+-- загрузки всех аддонов (Initialize — порядок файлов внутри autorun
+-- не гарантирован).
+if hook and hook.Add then
+    hook.Add("Initialize", "GRMChat_SuppressLegacy", function()
+        if not (hook and hook.GetTable) then return end
+        for name, byId in pairs(hook.GetTable()) do
+            local doomed = {}
+            for id in pairs(byId) do
+                if type(id) == "string" and string.find(id, "^GRM_RPChat", 1, true) then
+                    doomed[#doomed + 1] = id
+                end
+            end
+            for i = 1, #doomed do pcall(hook.Remove, name, doomed[i]) end
+        end
+        if concommand and concommand.Remove then
+            pcall(concommand.Remove, "grm_rpchat_help")
+        end
+    end)
+end
 
 function GRMChat.ErrorNoHalt(...)
     if MsgC then
@@ -165,9 +206,12 @@ GRMChat.RegisterChannel("ic", {
     title = "Крик", scope = "range", cmd = "w",
     color = { r = 235, g = 235, b = 235 }
 })
+-- cmd="dead" (вечер-13, ловля sv_routing): без алиаса «/dead текст» падал в
+-- «неизвестная команда», хотя канал dead есть — добраться до него можно было
+-- только безслэшевым вводом мертвеца.
 GRMChat.RegisterChannel("dead", {
     title = "Мертвечина", scope = "range", range = 400, onlyDead = true,
-    color = { r = 240, g = 90, b = 90 }
+    cmd = "dead", color = { r = 240, g = 90, b = 90 }
 })
 GRMChat.RegisterChannel("ooc", {
     title = "OOC", scope = "world", cmd = "ooc",
@@ -387,7 +431,18 @@ function GRMChat.ResolvePmTarget(query, players, selfPly)
     for i = 1, #players do
         local ply = players[i]
         if ply ~= selfPly then
-            local name = string.lower(tostring(ply.Name or ""))
+            -- Вечер-13 (стенд sv_routing): на движке ply.Name — МЕТОД,
+            -- прежний tostring(ply.Name) давал «function: 0x…»: /pm по нику
+            -- не находил НИКОГО, только по SteamID64. Кириллица тоже жива:
+            -- lower — байтовый, но для совпадения достаточно обеих сторон.
+            local name
+            if isfunction(ply.Name) then
+                name = tostring(ply:Name())
+            else
+                name = tostring(ply.Name
+                    or (isfunction(ply.Nick) and ply:Nick() or ""))
+            end
+            name = string.lower(name)
             if name:find(query, 1, true) then
                 if found then ambiguous = true break end
                 found = ply
@@ -397,4 +452,72 @@ function GRMChat.ResolvePmTarget(query, players, selfPly)
     if ambiguous then return nil, "адресат неоднозначен" end
     if found then return found, nil end
     return nil, "игрок не найден"
+end
+
+-----------------------------------------------------------------------
+-- Вечер-13: КОРЕНЬ «всё тех же ошибок» на живом сервере. Песочный порт
+-- (аддон GRMChat — машиногенная копия этого модуля) самоотключался по
+-- `if GRMRP.Version` В МОМЕНТ СВОЕЙ ЗАГРУЗКИ — а GMod исполняет
+-- lua/autorun аддонов ДО файлов режима, значит условие было ложным ВСЕГДА.
+-- На GRMRP-сервере жили ДВА чата: вторая Y-полоса, две ленты в одной
+-- точке, перехваченный портом chat.AddText (строки документов/анонсов
+-- утекали в чужую панель) и общий файл истории в DATA. Порт обязан быть
+-- мёртв, когда чат режима загрузился: снимаем всё, что он зарегистрировал
+-- (все его id начинаются с «GRMChat» — префикс зафиксирован генератором),
+-- вешаем таймеры и команды.
+-----------------------------------------------------------------------
+function GRMChat.SuppressAddonPort()
+    local port = rawget(_G, "GRMRPChat")
+    if type(port) ~= "table" then return false end
+    port.SUPPRESSED = true
+    local removed = 0
+    if hook and hook.GetTable then
+        -- Вечер-13: префиксов ДВА. «GRMChat*» — песочный порт; «GRM_RPChat*» —
+        -- СТАРЫЙ модуль rp_chat, его PlayerSay возвращал "" и съедал РЯД
+        -- целиком (на GRMRP-серверах с живым портом GM:PlayerSay не вызывался
+        -- никогда); его же лента лезла в AddText вторым слоем.
+        local PREFIXES = { "^GRMChat", "^GRM_RPChat" }
+        local doomed = {}
+        for name, byId in pairs(hook.GetTable()) do
+            for id in pairs(byId) do
+                if type(id) == "string" then
+                    for _, pat in ipairs(PREFIXES) do
+                        if string.find(id, pat, 1, true) then
+                            doomed[#doomed + 1] = { name, id }
+                            break
+                        end
+                    end
+                end
+            end
+        end
+        for i = 1, #doomed do
+            pcall(hook.Remove, doomed[i][1], doomed[i][2])
+            removed = removed + 1
+        end
+    end
+    if timer and timer.Remove then
+        for _, t in ipairs({ "GRMChat_HistSave", "GRMChat_InpSave", "GRMChat_HistRefr" }) do
+            pcall(timer.Remove, t)
+        end
+    end
+    -- консольные команды порта СОВПАДАЮТ по именам с нашими (grm_chat_*) —
+    -- удаляем только для того, чтобы перерегистрировать свои (ниже по этому
+    -- же пути), а не из-за конфликта владельцев.
+    if concommand and concommand.Remove then
+        for _, c in ipairs({ "grm_chat_open", "grm_chat_save", "grm_chat_clear",
+            "grm_rpchat_help" }) do
+            pcall(concommand.Remove, c)
+        end
+    end
+    GRMChat.PORT_SUPPRESSED = true
+    if not GRMChat._suppressPrinted then
+        GRMChat._suppressPrinted = true
+        print(("[GRMChat] песочный порт чата подавлен (%d хуков) — режим единственный владелец")
+            :format(removed))
+    end
+    return true
+end
+
+do
+    GRMChat.SuppressAddonPort()
 end

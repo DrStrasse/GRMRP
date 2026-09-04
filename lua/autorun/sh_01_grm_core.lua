@@ -76,7 +76,37 @@ local ACCOUNT_ONLY = "^%d+$"
 -- любые порядки загрузки autorun были пригодны. Разбор «/cmd arg…»,
 -- реестр HANDLERS, pcall-защита обработчиков и reply при падении.
 GRM.Chat = GRM.Chat or {}
+
+-- Вечер-13 (указание владельца: «все модули приведены в соответствие со
+-- СВОЕЙ системой»): фабрика регистрирует команды модуля во внешнем реестре
+-- чата (GRMRPChat режима / GRMChat порта). Дает: автодополнение в Y-окне,
+-- честный роутинг из ввода (не «неизвестная команда»), единый словарь.
+-- Отложенные попытки — из-за негарантированного порядка autorun-файлов.
+local function chatRegister(HANDLERS)
+    for _, nsName in ipairs({ "GRMRPChat", "GRMChat" }) do
+        local ns = rawget(_G, nsName)
+        if istable(ns) and isfunction(ns.RegisterExternalChatCommand) then
+            for cmd in pairs(HANDLERS) do
+                pcall(ns.RegisterExternalChatCommand, "/" .. tostring(cmd))
+            end
+            return true
+        end
+    end
+    return false
+end
+
 function GRM.Chat.DispatchFactory(tag, HANDLERS, reply)
+    if not chatRegister(HANDLERS) then
+        local tries = 40
+        local function retry()
+            if chatRegister(HANDLERS) then return end
+            tries = tries - 1
+            if tries > 0 and timer and timer.Simple then
+                timer.Simple(0.6, retry)
+            end
+        end
+        if timer and timer.Simple then timer.Simple(0.6, retry) end
+    end
     return function(ply, text)
         if not isstring(text) then return false end
         local args = string.Explode(" ", string.Trim(text))

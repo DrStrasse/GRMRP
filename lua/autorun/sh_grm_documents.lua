@@ -258,6 +258,9 @@ end
 DOC.GetCharKey = getCharKey
 
 local function getPlayerRPName(ply)
+    -- Вечер-13: единственный владелец логики — GRM.GetRPName (шина
+    -- sh_grm_rpbridge). Фолбэк оставлен на случай порядка загрузки autorun.
+    if GRM and isfunction(GRM.GetRPName) then return GRM.GetRPName(ply) end
     if not IsValid(ply) then return "?" end
     local n = ply:GetNWString("GRM_RPName", "")
     return (n ~= "" and n) or ply:Nick()
@@ -1048,42 +1051,13 @@ if SERVER then
     end
     DOC.SendOwnDoc = sendOwnDoc
 
-    -- Трансляция RP-действия в чат всем игрокам поблизости.
-    -- Используем ЕДИНЫЙ канал доставки (как sendTo в sh_grm_rp_chat.lua):
-    --   1. EasyChat      -> если установлен,
-    --   2. GRM RPChat-net-> иначе,
-    --   3. ChatPrint     -> последний резерв.
-    -- Раньше отыгровка шла всеми тремя сразу и дублировалась в чат.
+    -- Вечер-13: трансляция — через ЕДИНУЮ шину GRM.RPBroadcast (sh_grm_rpbridge).
+    -- Прежняя трёхветочная копия (EasyChat → GRM_RPChat_Msg → ChatPrint) жила
+    -- и здесь, и в sh_grm_education.lua: мёртвый EasyChat, дублирование,
+    -- минуемая лента режима. Не изобретать заново — правила в OWNER_REPORTS.md.
     local function broadcastDocAction(ply, meText)
-        if not IsValid(ply) then return end
-        local senderName = getPlayerRPName(ply)
-        local fullText = "* " .. senderName .. " " .. meText
-        local origin = ply:GetPos()
-
-        for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
-            if IsValid(p) and p:GetPos():DistToSqr(origin) <= 400 * 400 then
-                if EasyChat and EasyChat.PlayerAddText then
-                    -- EasyChat сам рисует сообщение — других каналов не трогаем.
-                    EasyChat.PlayerAddText(p, Color(200, 160, 255), fullText)
-                elseif util.NetworkStringToID("GRM_RPChat_Msg") ~= 0 then
-                    -- Клиент GRM RPChat рисует это через chat.AddText (см. sh_grm_rp_chat.lua).
-                    net.Start("GRM_RPChat_Msg")
-                        net.WriteUInt(2, 8)
-                        net.WriteBool(true)
-                        net.WriteUInt(200, 8)
-                        net.WriteUInt(160, 8)
-                        net.WriteUInt(255, 8)
-                        net.WriteBool(false)
-                        net.WriteString(fullText)
-                    net.Send(p)
-                else
-                    -- Резерв без EasyChat и без GRM RPChat.
-                    p:ChatPrint(fullText)
-                end
-            end
-        end
+        return GRM.RPBroadcast(ply, meText, 400)
     end
-
     -- Показ документа целевому игроку (в прицеле или явная цель)
     --[[ ЧЕЙ ЭТО ДОКУМЕНТ.
          Бланк, показанный другому игроку, должен нести SteamID64 ВЛАДЕЛЬЦА:

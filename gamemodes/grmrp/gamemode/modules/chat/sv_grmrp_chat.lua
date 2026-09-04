@@ -71,8 +71,14 @@ local function deliver(chan, author, body, extra, lineOverride, includeAuthor)
     -- Автор не получает ретрансляцию: клиент печатает свою строку локально
     -- (оптимистичный эхо-каст; состояния сервер не менял — см. §5.4.3).
     local net_list = {}
+    -- Вечер-13 (стенд sv_routing поймал): «includeAuthor» раньше НИЧЕГО не
+    -- значило — автор уже был исключён из targets в ResolveAudience, и
+    -- /it /try /roll (результат «знает только сервер») не видел САМ автор:
+    -- ни локального эха (echo=false в клиенте), ни серверной строки. Теперь
+    -- флаг явно ставит автора в начало списка.
+    if includeAuthor then table.insert(net_list, author) end
     for i = 1, #targets do
-        if includeAuthor or targets[i] ~= author then
+        if targets[i] ~= author then
             table.insert(net_list, targets[i])
         end
     end
@@ -90,13 +96,30 @@ end
 -- Состояние /do → контекст для /it (слабые ключи: утечек нет, §5.1.5).
 local lastDo = setmetatable({}, { __mode = "k" })
 
-function GRMRPChat.RPAction(kind, ply, body, chanId)
+-- opts (вечер-13): echoAuthor — ретранслировать строку и автору (серверные
+-- события: показ документов; у клиентского ввода эхо локальное, не надо);
+-- rpName — RP-имя вместо steam-ника; range — радиус события (400 у бланков).
+function GRMRPChat.RPAction(kind, ply, body, chanId, opts)
     local def = GRMRPChat.RP[kind]
     if not def then return nil end
     local chan = table.Copy(GRMRPChat.GetChannel(def.chan) or GRMRPChat.GetChannel(chanId))
     if not chan then return "нет канала отыгровки" end
-    chan.range = cvIcRange:GetFloat()
-    local authorName = GRMRPChat.Sanitize(ply:Name(), GRMRPChat.SUGAR_MAX)
+    chan.range = (opts and tonumber(opts.range)) or cvIcRange:GetFloat()
+    local authorName
+    if opts and isstring(opts.rpName) and #opts.rpName > 0 then
+        authorName = GRMRPChat.Sanitize(opts.rpName, GRMRPChat.SUGAR_MAX)
+    else
+        authorName = GRMRPChat.Sanitize(ply:Name(), GRMRPChat.SUGAR_MAX)
+    end
+
+    if kind == "me" then
+        -- Вечер-13: ветки «me» НЕ БЫЛО ВООБЩЕ — /me и серверные отыгровки
+        -- проваливались в пустоту: получатель видел «* ...» только если
+        -- строка шла через чужие каналы (старый RPChat/EasyChat), т.е.
+        -- либо дубль, либо ничего. Стенд sim_chat_sv_routing закрывает дыру.
+        return deliver(chan, ply, body, nil, def.fmt(authorName, body, nil),
+            opts and opts.echoAuthor == true)
+    end
 
     if kind == "do" then
         local audience = GRMRPChat.ResolveAudience(chan, ply, player.GetAll(),
@@ -184,6 +207,12 @@ function GRMRPChat.ProcessLine(ply, text, defaultChannel)
     -- аудиторный путь (один владелец — deliver).
     local kind = extra and extra.cmd
     if kind and GRMRPChat.RP[kind] then
+        if #body == 0 and kind ~= "roll" then
+            -- одинокий «/me» без действия не должен рождать пустую строку
+            -- «* Ник » у половины сервера (стенд sv_routing)
+            sendSystem(ply, "/" .. kind .. ": опишите действие после команды")
+            return
+        end
         local err = GRMRPChat.RPAction(kind, ply, body, chanId)
         if err then sendSystem(ply, err) end
         return
@@ -229,3 +258,9 @@ hook.Add("PlayerDisconnect", "GRMRPChat", function(ply)
     stateByPlayer[ply] = nil
     lastAdvert[ply] = nil
 end)
+
+-- Вечер-13: поздняя страховка (см. sh-ядро) — после reload порта снять его
+-- серверные хуки заново.
+if isfunction(GRMRPChat.SuppressAddonPort) then
+    GRMRPChat.SuppressAddonPort()
+end

@@ -2,11 +2,17 @@
 -- Не править руками: изменения вносите в файл режима и перегенерируйте
 -- (`python3 tools/sync_chat_addon.py`); расхождение ловит --check.
 --[[ GRMChat — аддонский мутированный порт чат-модуля режима (тот же код,
-    другие имена). На серверах с gamemode GRMRP модуль молча выключается
-    целиком: чат режима — единственный владелец, дублей net-имён/cvar'ов/
-    перехвата PlayerSay не возникает никогда.
+    другие имена). На серверах с gamemode GRMRP порт подавляется САМИМ
+    РЕЖИМОМ (GRMRPChat.SuppressAddonPort снимает все хуки/таймеры/команды с
+    id «GRMChat*»; вечер-13): прежний guard «if GRMRP.Version» ловил
+    только поздний reload — GMod исполняет lua/autorun аддонов ДО файлов
+    режима, и на свежей карте два чата жили бок о бок (двойная Y-полоса,
+    перехваты, общая DATA-история). Теперь плюс ранний guard (порядок
+    reload через lua_refresh) и гейты SUPPRESSED на входах.
 ]]
-if GRMRP and GRMRP.Version then return end
+if (GRMRP and GRMRP.Version) or (GRMRPChat and GRMRPChat.Channels)
+    then return end -- режим уже здесь/на reload: порт не рождается
+
 GRMChat.DeferToModules = true -- любые /команды остаются модулям
 
 if SERVER then
@@ -76,8 +82,14 @@ local function deliver(chan, author, body, extra, lineOverride, includeAuthor)
     -- Автор не получает ретрансляцию: клиент печатает свою строку локально
     -- (оптимистичный эхо-каст; состояния сервер не менял — см. §5.4.3).
     local net_list = {}
+    -- Вечер-13 (стенд sv_routing поймал): «includeAuthor» раньше НИЧЕГО не
+    -- значило — автор уже был исключён из targets в ResolveAudience, и
+    -- /it /try /roll (результат «знает только сервер») не видел САМ автор:
+    -- ни локального эха (echo=false в клиенте), ни серверной строки. Теперь
+    -- флаг явно ставит автора в начало списка.
+    if includeAuthor then table.insert(net_list, author) end
     for i = 1, #targets do
-        if includeAuthor or targets[i] ~= author then
+        if targets[i] ~= author then
             table.insert(net_list, targets[i])
         end
     end
@@ -95,13 +107,30 @@ end
 -- Состояние /do → контекст для /it (слабые ключи: утечек нет, §5.1.5).
 local lastDo = setmetatable({}, { __mode = "k" })
 
-function GRMChat.RPAction(kind, ply, body, chanId)
+-- opts (вечер-13): echoAuthor — ретранслировать строку и автору (серверные
+-- события: показ документов; у клиентского ввода эхо локальное, не надо);
+-- rpName — RP-имя вместо steam-ника; range — радиус события (400 у бланков).
+function GRMChat.RPAction(kind, ply, body, chanId, opts)
     local def = GRMChat.RP[kind]
     if not def then return nil end
     local chan = table.Copy(GRMChat.GetChannel(def.chan) or GRMChat.GetChannel(chanId))
     if not chan then return "нет канала отыгровки" end
-    chan.range = cvIcRange:GetFloat()
-    local authorName = GRMChat.Sanitize(ply:Name(), GRMChat.SUGAR_MAX)
+    chan.range = (opts and tonumber(opts.range)) or cvIcRange:GetFloat()
+    local authorName
+    if opts and isstring(opts.rpName) and #opts.rpName > 0 then
+        authorName = GRMChat.Sanitize(opts.rpName, GRMChat.SUGAR_MAX)
+    else
+        authorName = GRMChat.Sanitize(ply:Name(), GRMChat.SUGAR_MAX)
+    end
+
+    if kind == "me" then
+        -- Вечер-13: ветки «me» НЕ БЫЛО ВООБЩЕ — /me и серверные отыгровки
+        -- проваливались в пустоту: получатель видел «* ...» только если
+        -- строка шла через чужие каналы (старый RPChat/EasyChat), т.е.
+        -- либо дубль, либо ничего. Стенд sim_chat_sv_routing закрывает дыру.
+        return deliver(chan, ply, body, nil, def.fmt(authorName, body, nil),
+            opts and opts.echoAuthor == true)
+    end
 
     if kind == "do" then
         local audience = GRMChat.ResolveAudience(chan, ply, player.GetAll(),
@@ -189,6 +218,12 @@ function GRMChat.ProcessLine(ply, text, defaultChannel)
     -- аудиторный путь (один владелец — deliver).
     local kind = extra and extra.cmd
     if kind and GRMChat.RP[kind] then
+        if #body == 0 and kind ~= "roll" then
+            -- одинокий «/me» без действия не должен рождать пустую строку
+            -- «* Ник » у половины сервера (стенд sv_routing)
+            sendSystem(ply, "/" .. kind .. ": опишите действие после команды")
+            return
+        end
         local err = GRMChat.RPAction(kind, ply, body, chanId)
         if err then sendSystem(ply, err) end
         return
@@ -235,8 +270,15 @@ hook.Add("PlayerDisconnect", "GRMChat", function(ply)
     lastAdvert[ply] = nil
 end)
 
+-- Вечер-13: поздняя страховка (см. sh-ядро) — после reload порта снять его
+-- серверные хуки заново.
+if isfunction(GRMChat.SuppressAddonPort) then
+    GRMChat.SuppressAddonPort()
+end
+
 -- Realm-клей песочницы: движковый PlayerSay превращается в наш канал.
 hook.Add("PlayerSay", "GRMChat_Capture", function(ply, text, teamChat, isDead)
+    if GRMChat.SUPPRESSED then return end -- вечер-13: режим владелец
     if GRMChat.Enabled and GRMChat.Enabled() then
         if GRMChat.OnPlayerSay(ply, text, teamChat, isDead) == "keep" then
             return text -- обрабатывают модули; лента получит их вывод

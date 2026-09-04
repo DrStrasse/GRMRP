@@ -2,12 +2,17 @@
 -- Не править руками: изменения вносите в файл режима и перегенерируйте
 -- (`python3 tools/sync_chat_addon.py`); расхождение ловит --check.
 --[[ GRMChat — аддонский мутированный порт чат-модуля режима (тот же код,
-    другие имена). На серверах с gamemode GRMRP модуль молча выключается
-    целиком: чат режима — единственный владелец, дублей net-имён/cvar'ов/
-    перехвата PlayerSay не возникает никогда.
+    другие имена). На серверах с gamemode GRMRP порт подавляется САМИМ
+    РЕЖИМОМ (GRMRPChat.SuppressAddonPort снимает все хуки/таймеры/команды с
+    id «GRMChat*»; вечер-13): прежний guard «if GRMRP.Version» ловил
+    только поздний reload — GMod исполняет lua/autorun аддонов ДО файлов
+    режима, и на свежей карте два чата жили бок о бок (двойная Y-полоса,
+    перехваты, общая DATA-история). Теперь плюс ранний guard (порядок
+    reload через lua_refresh) и гейты SUPPRESSED на входах.
 ]]
 if SERVER then return end
-if GRMRP and GRMRP.Version then return end
+if (GRMRP and GRMRP.Version) or (GRMRPChat and GRMRPChat.Channels)
+    then return end -- режим уже здесь/на reload: порт не рождается
 
 if SERVER then return end
 
@@ -18,7 +23,7 @@ local histIdx = 0
 -- 50 строк в DATA, отложенная запись dirty-таймером. Голый RAM означал
 -- «чат ничего не помнит после перезахода» — ровно досадная мелочь из
 -- «всё те же проблемы».
-local INP_FILE = "grm_chat/input.txt"
+local INP_FILE = "grm_chat/port_input.txt"
 local function saveInput()
     if not (file and file.CreateDir and file.Write and util and util.TableToJSON) then return end
     pcall(function()
@@ -501,7 +506,7 @@ function GRMChat.OpenInput()
     end
     if not GRMChat._bannered and GRMChat.AddSystem then
         GRMChat._bannered = true
-        GRMChat.AddSystem("чат GRM · сборка вечер-12.2 (03.09) · /chatdiag · память ввода — переживает рестарт · /clear — очистить ленту")
+        GRMChat.AddSystem("чат GRM · сборка вечер-13 (03.09) · /chatdiag · двойной чат порта и режима устранён · память ввода — переживает рестарт")
     end
     if not IsValid(frame) then build() end
     frame:Show()
@@ -522,6 +527,7 @@ end)
 
 -- Y в песочнице: хук движковой клавиатуры + консольная команда для бинда.
 hook.Add("HUDKeyPress", "GRMChat_Y", function(code, down, up, onlydown)
+    if GRMChat.SUPPRESSED then return end -- вечер-13: Y принадлежит режиму
     if code == KEY_Y and GRMChat.Enabled and GRMChat.Enabled() then
         GRMChat.OpenInput()
         return true

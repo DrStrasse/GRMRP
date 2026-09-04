@@ -88,6 +88,38 @@ function GRMRPChat.ClearLines()
     GRMRPChat.lines = {}
 end
 
+--[[ Вечер-13: МОСТ chat.AddText. Документы/анонсы/обучение зовут движковый
+     chat.AddText; панель движка режим прячет (GM:HUDShouldDraw), и без моста
+     эти строки просто исчезали — а с живым песочным портом их перехватывал
+     порт в СВОЮ ленту (тот же баг двойного владельца). Теперь chat.AddText течёт
+     в ленту режима; при выключенном чате — базовая реализация (цепочка).
+     Единственный wrapper за сессию: повторная загрузка файла не удваивает. ]]
+if not GRMRPChat._addTextBridge and chat and chat.AddText then
+    local baseAddText = chat.AddText
+    function chat.AddText(...)
+        if not GRMRPChat.Enabled() then
+            return baseAddText(...)
+        end
+        local parts = {}
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            if isstring(v) then
+                parts[#parts + 1] = v
+            elseif istable(v) and isstring(v[1]) then
+                parts[#parts + 1] = v[1] -- {color, text}
+            elseif IsValid(v) and v.IsPlayer and v:IsPlayer() then
+                parts[#parts + 1] = v:Nick()
+            end
+        end
+        local text = table.concat(parts, " ")
+        if #text == 0 then return end
+        if GRMRPChat.AddLine then
+            GRMRPChat.AddLine("ooc", "", text, CurTime())
+        end
+    end
+    GRMRPChat._addTextBridge = true
+end
+
 -- Самодиагностика (эскалация 03.09: «не отрисовывает ни по одному
 -- каналу»). «/chatdiag» в строке ввода: вывод — в консоль И одной строкой
 -- в ленту. Строка нарисована — значит лента жива, а жалоба относится к
@@ -109,8 +141,14 @@ function GRMRPChat.Diagnose()
                 (tm and (" (запись " .. os.date("%H:%M", tm) .. ")") or "")
         end
     end)
+    local portDesc = "песочный порт: не установлен"
+    if GRMChat and not GRMChat._standalone then
+        portDesc = GRMChat.SUPPRESSED and "песочный порт: подавлен (режим один)"
+            or "песочный порт: АКТИВЕН — дубль чата!!!"
+    end
     local bits = {
-        "чат вечер-12.2 (03.09), лента = панель · SendText для модулей",
+        "чат вечер-13 (03.09), лента = панель · SendText для модулей",
+        portDesc .. " · chat.AddText: " .. (GRMRPChat._addTextBridge and "мост к ленте" or "мимо ленты!"),
         "лента: " .. n .. " строк · архив истории: " .. arcN .. " · " .. fdesc,
         "память ввода: " .. inpN .. " строк (↑/↓, переживает рестарт)",
         "окно истории: " .. (GRMRPChat.HIST_OPEN and "открыто" or "закрыто") .. " · источник — архив, не лента",

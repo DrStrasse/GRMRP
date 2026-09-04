@@ -37,6 +37,12 @@ GRMRP.Loading = false
 
 hook.Run("GRMRPFinishedLoadingClient")
 
+-- Вечер-13: после lua_refresh аддонский порт мог пересоздать свои хуки —
+-- снимаем повторно на поздней клиентской стадии.
+if GRMRPChat and isfunction(GRMRPChat.SuppressAddonPort) then
+    GRMRPChat.SuppressAddonPort()
+end
+
 -- Движковый чат скрыт: окно и лента — наши (cl_grmrp_chat*).
 function GM:HUDShouldDraw(name)
     if name == "CHudChat" and GRMRPChat and GRMRPChat.Enabled

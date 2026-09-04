@@ -2,12 +2,17 @@
 -- Не править руками: изменения вносите в файл режима и перегенерируйте
 -- (`python3 tools/sync_chat_addon.py`); расхождение ловит --check.
 --[[ GRMChat — аддонский мутированный порт чат-модуля режима (тот же код,
-    другие имена). На серверах с gamemode GRMRP модуль молча выключается
-    целиком: чат режима — единственный владелец, дублей net-имён/cvar'ов/
-    перехвата PlayerSay не возникает никогда.
+    другие имена). На серверах с gamemode GRMRP порт подавляется САМИМ
+    РЕЖИМОМ (GRMRPChat.SuppressAddonPort снимает все хуки/таймеры/команды с
+    id «GRMChat*»; вечер-13): прежний guard «if GRMRP.Version» ловил
+    только поздний reload — GMod исполняет lua/autorun аддонов ДО файлов
+    режима, и на свежей карте два чата жили бок о бок (двойная Y-полоса,
+    перехваты, общая DATA-история). Теперь плюс ранний guard (порядок
+    reload через lua_refresh) и гейты SUPPRESSED на входах.
 ]]
 if SERVER then return end
-if GRMRP and GRMRP.Version then return end
+if (GRMRP and GRMRP.Version) or (GRMRPChat and GRMRPChat.Channels)
+    then return end -- режим уже здесь/на reload: порт не рождается
 
 if SERVER then return end
 
@@ -94,6 +99,38 @@ function GRMChat.ClearLines()
     GRMChat.lines = {}
 end
 
+--[[ Вечер-13: МОСТ chat.AddText. Документы/анонсы/обучение зовут движковый
+     chat.AddText; панель движка режим прячет (GM:HUDShouldDraw), и без моста
+     эти строки просто исчезали — а с живым песочным портом их перехватывал
+     порт в СВОЮ ленту (тот же баг двойного владельца). Теперь chat.AddText течёт
+     в ленту режима; при выключенном чате — базовая реализация (цепочка).
+     Единственный wrapper за сессию: повторная загрузка файла не удваивает. ]]
+if not GRMChat._addTextBridge and chat and chat.AddText then
+    local baseAddText = chat.AddText
+    function chat.AddText(...)
+        if not GRMChat.Enabled() then
+            return baseAddText(...)
+        end
+        local parts = {}
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            if isstring(v) then
+                parts[#parts + 1] = v
+            elseif istable(v) and isstring(v[1]) then
+                parts[#parts + 1] = v[1] -- {color, text}
+            elseif IsValid(v) and v.IsPlayer and v:IsPlayer() then
+                parts[#parts + 1] = v:Nick()
+            end
+        end
+        local text = table.concat(parts, " ")
+        if #text == 0 then return end
+        if GRMChat.AddLine then
+            GRMChat.AddLine("ooc", "", text, CurTime())
+        end
+    end
+    GRMChat._addTextBridge = true
+end
+
 -- Самодиагностика (эскалация 03.09: «не отрисовывает ни по одному
 -- каналу»). «/chatdiag» в строке ввода: вывод — в консоль И одной строкой
 -- в ленту. Строка нарисована — значит лента жива, а жалоба относится к
@@ -108,15 +145,21 @@ function GRMChat.Diagnose()
     local inpN = #(GRMChat.inputHistory or {})
     local fdesc = "диск: нет файла"
     pcall(function()
-        if file and file.Exists and file.Size and file.Exists("grm_chat/archive.txt", "DATA") then
-            local sz = file.Size("grm_chat/archive.txt", "DATA")
-            local tm = file.Time and file.Time("grm_chat/archive.txt", "DATA", "mtime")
+        if file and file.Exists and file.Size and file.Exists("grm_chat/port_archive.txt", "DATA") then
+            local sz = file.Size("grm_chat/port_archive.txt", "DATA")
+            local tm = file.Time and file.Time("grm_chat/port_archive.txt", "DATA", "mtime")
             fdesc = "диск: " .. tostring(sz or "?") .. " Б" ..
                 (tm and (" (запись " .. os.date("%H:%M", tm) .. ")") or "")
         end
     end)
+    local portDesc = "порт: активен (песочница, режим не найден)"
+    if GRMChat and not GRMChat._standalone then
+        portDesc = GRMChat.SUPPRESSED and "песочный порт: подавлен (режим один)"
+            or "песочный порт: АКТИВЕН — дубль чата!!!"
+    end
     local bits = {
-        "чат вечер-12.2 (03.09), лента = панель · SendText для модулей",
+        "чат вечер-13 (03.09), лента = панель · SendText для модулей",
+        portDesc .. " · chat.AddText: " .. (GRMChat._addTextBridge and "мост к ленте" or "мимо ленты!"),
         "лента: " .. n .. " строк · архив истории: " .. arcN .. " · " .. fdesc,
         "память ввода: " .. inpN .. " строк (↑/↓, переживает рестарт)",
         "окно истории: " .. (GRMChat.HIST_OPEN and "открыто" or "закрыто") .. " · источник — архив, не лента",
@@ -258,7 +301,7 @@ end
      (только когда менялся) и читается на старте — история пережила
      рестарт клиента. Нет file/util — молча живём в RAM: окно истории
      работоспособность от этого не теряет. ]]
-local HIST_FILE = "grm_chat/archive.txt"
+local HIST_FILE = "grm_chat/port_archive.txt"
 
 local function saveArchive()
     if not (GRMChat.archive and #GRMChat.archive > 0) then return end
@@ -345,6 +388,7 @@ end
 -- Единственный владелец отображения чата: движковая панель скрыта, весь
 -- chat.AddText (его зовут документы/обучение/биндер) течёт в нашу ленту.
 hook.Add("HUDShouldDraw", "GRMChat_HideVanilla", function(name)
+    if GRMChat.SUPPRESSED then return end -- вечер-13: решает режим
     if name == "CHudChat" and GRMChat.Enabled and GRMChat.Enabled() then
         return false
     end
@@ -353,7 +397,10 @@ end)
 do
     local baseAddText = chat.AddText
     function chat.AddText(...)
-        if not (GRMChat.Enabled and GRMChat.Enabled()) then
+        -- вечер-13: при живом чате режима порт прозрачен (цепочка наружу,
+        -- строки идут в ленту режима, не в порт)
+        if GRMChat.SUPPRESSED or (GRMRPChat and GRMRPChat.Channels)
+            or not (GRMChat.Enabled and GRMChat.Enabled()) then
             return baseAddText(...)
         end
         local parts = {}

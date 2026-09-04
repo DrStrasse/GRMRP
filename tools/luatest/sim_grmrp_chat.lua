@@ -16,6 +16,7 @@
 -- минимальные стабы движка (ровно то, что трогает core)
 function istable(v) return type(v) == "table" end
 function isstring(v) return type(v) == "string" end
+function isfunction(v) return type(v) == "function" end
 function isnumber(v) return type(v) == "number" end
 function math.Clamp(v, a, b) return v < a and a or (v > b and b or v) end
 
