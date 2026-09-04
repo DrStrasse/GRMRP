@@ -21965,7 +21965,7 @@ EasyChat замещается собственным core.chat. Права — �
 | телефония/устройства | sh_grm_mobile, phone_access/config/shop/vendor, radionet | mob.core | телефон = Derma-приложение в qmenu-слое; звонки — серверная коммутация (не WebRTC, движковый Voice + can-hear хук: EChat voice_hud precedent) |
 | оптимизация/антилаг | GRM.Perf целиком (Coalesce/Queue/Spread/Throttle/Material/EyeTrace/NW) | core.perf | остаётся ядром; новые системы = только через него; sim_perf-гейты + FProfiler-метрики 4.18 |
 | античит | sh_grm_anticheat (v1.0.0) | core.anticheat | + inflictor-laundering (4.11.3), + hwid-цепь бана (наш ban 1.3) |
-| чат режима | sh_grm_rp_chat, chat_config, qmenu-мосты, EasyChat (УДАЛЁН 03.09) | core.chat | ПЕРВЫЙ модуль режима: каналы ooc/ic/pm/me/advert/dead, лестница, закрытая лента + окно истории (копируется), Tab-дополнение каналов и ников /pm, RP-команды (me/do/it/try/roll), emoji, предпоказ ввода, без CEF/DHTML. Для песочницы — машинный порт GRMChat (lua/autorun/*_08_grm_chat*, генератор tools/sync_chat_addon.py; --check в гейтах; на GRMRP-серверах самоотключается) |
+| чат режима | sh_grm_rp_chat, chat_config, qmenu-мосты, EasyChat (УДАЛЁН 03.09) | core.chat | ПЕРВЫЙ модуль режима: каналы ooc/ic/pm/me/advert/dead, лестница, закрытая лента + окно истории (копируется), Tab-дополнение каналов и ников /pm, RP-команды (me/do/it/try/roll), emoji, предпоказ ввода, без CEF/DHTML. С ВЕЧЕРА-14 — ЕДИНАЯ БИБЛИОТЕКА `lua/grm_chat/` (EasyChat-style: лоадер `lua/autorun/grm_chat.lua` + модули sh_core/sv_net/cl_hud/cl_input); режим подключает её форвардерами `modules/chat/*`, при отсутствии аддона — байтовый бандл `gamemode/lib/grm_chat` (гейт tools/sync_chat_addon.py --check). Генерированных портов *_08_grm_chat* БОЛЬШЕ НЕТ; GRMChat — алиас GRMRPChat. Уступки режима: GM.__chatOwnsPlayerSay / GM.__chatOwnsStartChat; чужие владельцы снимаются SuppressForeignChat (префиксы GRMChat*/GRM_RPChat*) |
 
 ## 7.3 Фаза I — что уже заложено (этот коммит)
 
@@ -22077,6 +22077,36 @@ gameui намеренно остаётся видимым (suppressUntil) — с
 «Command is blocked! (volume/snd_musicvolume)» в стандартной вкладке «Аудио»
 — известный баг x64-сборки Facepunch (их слайдеры пишут через
 RunConsoleCommand); значения применяются локально, запись — шум движка.
+
+**Вечер-14 (03.09) — чат вынесен в отдельную библиотеку `lua/grm_chat` по образцу EasyChat.**
+Приказ владельца: «вывести чат в отдельную папку, все модули/автораны/клиенты
+туда, пример устройства — EasyChat», плюс «полностью своя система» (раунд 18)
+означал ликвидацию машиногенных дублей. Устройство: тонкий autorun-лоадер
+`lua/autorun/grm_chat.lua` (реестр MODULES_SHARED/SERVER/CLIENT — как в
+EasyChat) + папка `lua/grm_chat/`: sh_core (ядро: sanitize/ParseSay/каналы/
+лестница/реестр внешних команд/`SuppressForeignChat` + `Enabled()`/`Net`),
+sv_net (cvar'ы, net-контракт, deliver, RPAction, ЕДИНЫЙ вход
+hook PlayerSay `GRMRPChat_Capture` с уступкой `GAMEMODE.__chatOwnsPlayerSay`),
+cl_hud (лента-панель, архив DATA, chat.AddText-мост, HideVanilla), cl_input
+(Y-полоса, чипы, Tab, память ввода, окно истории, /chatdiag, HUDKeyPress-y
+с уступкой `GAMEMODE.__chatOwnsStartChat`). Идемпотентность: флаги
+__core/__sv/__hud/__inp — двойной include (лоадер + форвардер) безвреден.
+Режимские `modules/chat/*` — форвардеры (аддон → `grm_chat/`, соло-установка
+зипа режима → идентичный бандл `gamemode/lib/grm_chat`; побайтовость сторожит
+`tools/sync_chat_addon.py --check`, прежний генератор портов выведен). Стены:
+`GRMRPChat` — канон, `GRMChat` — алиас того же стола (шина CHAT_OWNERS
+дедуплируется первым совпадением — двойной доставки нет); при смешанной
+установке старый порт — отдельный стол, гасится подавителем. Стенд-рантайм
+`sim_chat_lib_arch` (16 проверок: загрузка цепочки, двойной include, выбор
+бандла, уступки, подавление) словил ЖИВОЙ баг: plain-find с якорем
+`string.find(id, "^GRMChat", 1, true)` — «^» литерал, чужие хуки не снимались
+никогда; заменено на честный префикс `id:sub(1, #pat) == pat`. Ещё урок:
+«нет отправки автору» в однопользовательском мире — НЕ баг (deliver исключает
+автора, оптимистичное эхо клиента). Баннер/Diagnose — «вечер-14 (03.09)».
+Стенды: clocks 136/136, lib_arch 16/16, sv_routing 37/37, chat 65/65,
+binder 148/148, admin_panel 32/32, hygiene 10/10 (GRMRPChat добавлен в
+whitelist глобалов — библиотека теперь живёт в аддон-скоупе); ноль регрессий
+к baseline 26/65.
 
 **Вечер-13 (03.09) — КОРЕНЬ «всё тех же ошибок»: двойной (тройной!) владелец чата. Плюс — всё по заказу владельца: модули приведены к СВОЕЙ шине.**
 Отчёт: «всё ещё проблемы с чатом… работает… всё те же ошибки» ×4 —

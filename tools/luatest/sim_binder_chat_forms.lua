@@ -85,18 +85,18 @@ ok(binder:find("RegisterExternalChatCommand", 1, true) ~= nil,
     "свои команды биндер регистрирует в чате: «/binder» открывается и из GRM-ввода")
 
 print("\n=== 3b. ЧАТ ↔ БИНДЕР: СЕРВЕРНЫЙ МАРШРУТ (вечер-12) ===")
-local sv = read("gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua")
+local sv = read("lua/grm_chat/sv_net.lua")
 ok(sv:find("GRMRPChat._inExternal = true", 1, true) ~= nil
     and sv:find('hook.Run, "PlayerSay"', 1, true) ~= nil,
     "ProcessLine отдаёт внешние /команды цепочке PlayerSay (маршрут из net-канала)")
 local ini = read("gamemodes/grmrp/gamemode/init.lua")
 ok(ini:find('if GRMRPChat._inExternal then return "" end', 1, true) ~= nil,
     "ре-ентерь guard GM:PlayerSay — маршрутизация не зацикливается")
-local core = read("gamemodes/grmrp/gamemode/modules/chat/sh_grmrp_chat_core.lua")
+local core = read("lua/grm_chat/sh_core.lua")
 ok(core:find("function GRMRPChat.RegisterExternalChatCommand", 1, true) ~= nil
     and core:find("function GRMRPChat.RPCommandNames", 1, true) ~= nil,
     "ядро чата держит реестр внешних команд и словарь RP")
-local cli = read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua")
+local cli = read("lua/grm_chat/cl_input.lua")
 ok(cli:find("GRMRPChat.SendText = send", 1, true) ~= nil,
     "чат экспортирует SendText — общий путь отправки для модулей")
 ok(cli:find('RunConsoleCommand("say", text)', 1, true) ~= nil,

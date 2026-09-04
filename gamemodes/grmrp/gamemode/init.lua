@@ -64,6 +64,10 @@ end
 -- Чат: полный перехват. Возврат "" глушит движковую рассылку — режим
 -- никогда не отдаётsay наружу, кроме явного BaseClass-fallback при
 -- выключенном модуле (чтобы чат не «исчез молча»).
+-- Вечер-14: режим — владелец say целиком; библиотечный хук
+-- GRMRPChat_Capture по этому флагу уступает (двойной обработки нет).
+GM.__chatOwnsPlayerSay = true
+
 function GM:PlayerSay(ply, text, teamChat, isDead)
     if GRMRPChat and GRMRPChat.Enabled and GRMRPChat.Enabled() then
         -- ProcessLine сам дёргает цепочку PlayerSay ради внешних команд

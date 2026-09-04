@@ -1,67 +1,44 @@
--- СГЕНЕРИРОВАНО tools/sync_chat_addon.py — источник: sh_grmrp_chat_core.lua
--- Не править руками: изменения вносите в файл режима и перегенерируйте
--- (`python3 tools/sync_chat_addon.py`); расхождение ловит --check.
---[[ GRMChat — аддонский мутированный порт чат-модуля режима (тот же код,
-    другие имена). На серверах с gamemode GRMRP порт подавляется САМИМ
-    РЕЖИМОМ (GRMRPChat.SuppressAddonPort снимает все хуки/таймеры/команды с
-    id «GRMChat*»; вечер-13): прежний guard «if GRMRP.Version» ловил
-    только поздний reload — GMod исполняет lua/autorun аддонов ДО файлов
-    режима, и на свежей карте два чата жили бок о бок (двойная Y-полоса,
-    перехваты, общая DATA-история). Теперь плюс ранний guard (порядок
-    reload через lua_refresh) и гейты SUPPRESSED на входах.
+--[[ GRMRPChat — чистые функции чата: санитайз, разбор, лестница нарушений,
+    разрешение адресатов. Ни одной движковой зависимости — весь файл
+    прогоняется стендом tools/luatest/sim_grmrp_chat.lua (урок
+    «нормализатор с отказом», WIKI 4.9.1 + control-chars EasyChat 4.21.3).
 ]]
-if (GRMRP and GRMRP.Version) or (GRMRPChat and GRMRPChat.Channels)
-    then return end -- режим уже здесь/на reload: порт не рождается
 
-GRMChat = GRMChat or {}
-GRMChat._standalone = true -- песочница: режимного чата нет (для диагностики)
-GRMChat.Net = { SAY = "grm/chat_say", MSG = "grm/chat_msg" }
+-- Вечер-14: ЕДИНАЯ БИБЛИОТЕКА. Физический дом этого файла — lua/grm_chat/
+-- (EasyChat-style: тонкий autorun-лоадер lua/autorun/grm_chat.lua + папка
+-- модулей). Режим подключает библиотеку форвардерами modules/chat/*; при
+-- отсутствии аддона — идентичная встроенная копия gamemode/lib/grm_chat
+-- (байты сверяет tools/sync_chat_addon.py --check). Песочный алиас GRMChat
+-- указывает на ТОТ ЖЕ стол: машиногенные дубли-порты авторазагрузки выведены,
+-- namespace-конвертации больше нет.
+if GRMRPChat and GRMRPChat.__core then return end
+GRMRPChat = GRMRPChat or {}
+GRMRPChat.__core = true
+if not GRMChat then GRMChat = GRMRPChat end
 
--- Вечер-13 (дефект песочницы): GRMRPChat.Enabled живёт в shared.lua РЕЖИМА,
--- в конверт он не попадает — а ProcessLine порта звал GRMChat.Enabled()
--- напрямую: крах на первом же сообщении. Фолбэк читает реплицируемый cvar
--- порта (CreateConVar — в сконвертированном sv-файле).
-if not GRMChat.Enabled then
-    function GRMChat.Enabled()
-        local cv = GetConVar and GetConVar("grm_chat_enable")
-        if not cv then return true end
-        return cv:GetBool()
-    end
+-- net-контракт и тумблер переехали сюда из gamemode/shared.lua: их обязаны
+-- видеть и режим, и песочница (правило веч.-6: любой API обеих сторон
+-- объявляется в shared-слое).
+GRMRPChat.Net = { SAY = "grmrp/chat_say", MSG = "grmrp/chat_msg" }
+if GRMRP and GRMRP.Net then
+    GRMRPChat.Net.SAY = GRMRP.Net.SAY or GRMRPChat.Net.SAY
+    GRMRPChat.Net.MSG = GRMRP.Net.MSG or GRMRPChat.Net.MSG
 end
 
--- Вечер-13: и в песочнице владелец один. Старый модуль sh_grm_rp_chat.lua
--- вешает PlayerSay с return "" и глотает чужие строки целиком; его лента
--- вторым слоем дублирует вывод через chat.AddText. Снимаем его хуки после
--- загрузки всех аддонов (Initialize — порядок файлов внутри autorun
--- не гарантирован).
-if hook and hook.Add then
-    hook.Add("Initialize", "GRMChat_SuppressLegacy", function()
-        if not (hook and hook.GetTable) then return end
-        for name, byId in pairs(hook.GetTable()) do
-            local doomed = {}
-            for id in pairs(byId) do
-                if type(id) == "string" and string.find(id, "^GRM_RPChat", 1, true) then
-                    doomed[#doomed + 1] = id
-                end
-            end
-            for i = 1, #doomed do pcall(hook.Remove, name, doomed[i]) end
-        end
-        if concommand and concommand.Remove then
-            pcall(concommand.Remove, "grm_rpchat_help")
-        end
-    end)
+function GRMRPChat.Enabled()
+    local cv = GetConVar("grmrp_chat_enable")
+    if not cv then return true end -- ранний клиент/меню: включён
+    return cv:GetBool()
 end
 
-function GRMChat.ErrorNoHalt(...)
+function GRMRPChat.ErrorNoHalt(...)
     if MsgC then
-        MsgC(Color(244, 78, 96), "[GRMChat] ", Color(250, 185, 63), ...)
+        MsgC(Color(244, 78, 96), "[GRM chat] ", Color(250, 185, 63), ...)
     end
 end
 
-GRMChat = GRMChat or {}
-
-GRMChat.HARD_MAX = 512          -- жёсткий потолок байт (серверный закон)
-GRMChat.SUGAR_MAX = 64          -- потолок «сладких» слов (ник/канал/адресат)
+GRMRPChat.HARD_MAX = 512          -- жёсткий потолок байт (серверный закон)
+GRMRPChat.SUGAR_MAX = 64          -- потолок «сладких» слов (ник/канал/адресат)
 
 -- Управляющие символы вырезаются ДО всего остального; "<" ">" зеркалятся
 -- — защита markup-инъекции: клиент экранировать больше не обязан,
@@ -93,7 +70,7 @@ end
 -- Вечер-12.2: гранично-безопасная обрезка наружу (клиентский ввод режет
 -- 512 ЭТИМ, а не сырым string.sub — иначе кириллица на границе превращается
 -- в «битый хвост», ровно класс жалоб «плохо обрабатывает текст»).
-GRMChat.Utf8Cut = utf8Clamp
+GRMRPChat.Utf8Cut = utf8Clamp
 
 -- Эмодзи: текстовые смайлы заменяются живыми символами, готовые многобайтные
 -- символы sanitize и так сохраняет (продовольствие UTF-8-safe). Дёшево и
@@ -124,16 +101,16 @@ local function replaceAll(text, from, to)
     return table.concat(out)
 end
 
-function GRMChat.EmojiPass(text)
+function GRMRPChat.EmojiPass(text)
     for i = 1, #EMOJI do
         text = replaceAll(text, EMOJI[i][1], EMOJI[i][2])
     end
     return text
 end
 
-function GRMChat.Sanitize(text, maxBytes)
+function GRMRPChat.Sanitize(text, maxBytes)
     text = tostring(text or "")
-    local limit = math.Clamp(tonumber(maxBytes) or GRMChat.HARD_MAX, 1, GRMChat.HARD_MAX)
+    local limit = math.Clamp(tonumber(maxBytes) or GRMRPChat.HARD_MAX, 1, GRMRPChat.HARD_MAX)
     local out = {}
     local i, n = 1, #text
     while i <= n do
@@ -154,25 +131,25 @@ function GRMChat.Sanitize(text, maxBytes)
     s = s:gsub("[ \t]+", " ")
     s = s:gsub("^ +", "")
     s = s:gsub(" +$", "")
-    s = GRMChat.EmojiPass(s) -- "<3" жив: углы разворачиваем ПОСЛЕ эмодзи-паса
+    s = GRMRPChat.EmojiPass(s) -- "<3" жив: углы разворачиваем ПОСЛЕ эмодзи-паса
     s = s:gsub("<", "＜"):gsub(">", "＞")
     return utf8Clamp(s, limit)
 end
 
 -- Таблица каналов: объявление = данные (декларативность DarkRP + наш
 -- реестр). scope: "range" | "world" | "pm"; onlyDead — слушают только мертвые.
-GRMChat.Channels = {}
+GRMRPChat.Channels = {}
 
-function GRMChat.RegisterChannel(id, spec)
-    if not isstring(id) or #id == 0 or #id > GRMChat.SUGAR_MAX then return nil, "bad id" end
+function GRMRPChat.RegisterChannel(id, spec)
+    if not isstring(id) or #id == 0 or #id > GRMRPChat.SUGAR_MAX then return nil, "bad id" end
     if not istable(spec) then return nil, "bad spec" end
-    if GRMChat.Channels[id] then return nil, "duplicate channel " .. id end
+    if GRMRPChat.Channels[id] then return nil, "duplicate channel " .. id end
     spec = spec or {}
     local col = istable(spec.color) and spec.color or {}
     local chan = {
         id = id,
         title = string.sub(tostring(spec.title or id), 1, 32),
-        cmd = spec.cmd and string.sub(tostring(spec.cmd), 1, GRMChat.SUGAR_MAX) or nil,
+        cmd = spec.cmd and string.sub(tostring(spec.cmd), 1, GRMRPChat.SUGAR_MAX) or nil,
         allowEmpty = spec.allowEmpty == true,
         color = {
             r = math.Clamp(tonumber(col.r) or 255, 0, 255),
@@ -188,49 +165,49 @@ function GRMChat.RegisterChannel(id, spec)
         chan.cmds = {}
         for i = 1, #spec.cmds do
             local c = string.lower(tostring(spec.cmds[i] or ""))
-            if #c > 0 and #c <= GRMChat.SUGAR_MAX then chan.cmds[c] = true end
+            if #c > 0 and #c <= GRMRPChat.SUGAR_MAX then chan.cmds[c] = true end
         end
     end
-    GRMChat.Channels[id] = chan
+    GRMRPChat.Channels[id] = chan
     return chan
 end
 
-function GRMChat.GetChannel(id)
-    return GRMChat.Channels[tostring(id)]
+function GRMRPChat.GetChannel(id)
+    return GRMRPChat.Channels[tostring(id)]
 end
 
 -- Каналы режима — ОБЩАЯ декларация (не sv!): клиент строит по этому же
 -- реестру чипы ввода и цвета ленты; сервер — маршрутизацию. Дальность ic
 -- перебивается cvar'ом на сервере при разборе (sv-обвязка).
-GRMChat.RegisterChannel("ic", {
+GRMRPChat.RegisterChannel("ic", {
     title = "Крик", scope = "range", cmd = "w",
     color = { r = 235, g = 235, b = 235 }
 })
 -- cmd="dead" (вечер-13, ловля sv_routing): без алиаса «/dead текст» падал в
 -- «неизвестная команда», хотя канал dead есть — добраться до него можно было
 -- только безслэшевым вводом мертвеца.
-GRMChat.RegisterChannel("dead", {
+GRMRPChat.RegisterChannel("dead", {
     title = "Мертвечина", scope = "range", range = 400, onlyDead = true,
     cmd = "dead", color = { r = 240, g = 90, b = 90 }
 })
-GRMChat.RegisterChannel("ooc", {
+GRMRPChat.RegisterChannel("ooc", {
     title = "OOC", scope = "world", cmd = "ooc",
     color = { r = 120, g = 210, b = 255 }
 })
-GRMChat.RegisterChannel("me", {
+GRMRPChat.RegisterChannel("me", {
     title = "Отыгровка", scope = "range", cmd = "me",
     cmds = { "do", "it", "try" },
     color = { r = 255, g = 185, b = 63 }
 })
-GRMChat.RegisterChannel("dice", {
+GRMRPChat.RegisterChannel("dice", {
     title = "Кости", scope = "range", cmd = "roll", allowEmpty = true,
     color = { r = 120, g = 240, b = 200 }
 })
-GRMChat.RegisterChannel("advert", {
+GRMRPChat.RegisterChannel("advert", {
     title = "Объявление", scope = "world", cmd = "advert", cooldown = 60,
     color = { r = 190, g = 120, b = 255 }
 })
-GRMChat.RegisterChannel("pm", {
+GRMRPChat.RegisterChannel("pm", {
     title = "Личное", scope = "pm", cmd = "pm",
     color = { r = 64, g = 222, b = 147 }
 })
@@ -242,25 +219,25 @@ GRMChat.RegisterChannel("pm", {
 -- парсит и не казнит как «неизвестные»: серверный ProcessLine отдаёт такие
 -- строки общей цепочке PlayerSay, а клиентский ввод ведёт их через движковый
 -- say — перехватчики аддонов срабатывают и из нашего окна ввода.
-GRMChat.ExternalCommands = GRMChat.ExternalCommands or {}
-function GRMChat.RegisterExternalChatCommand(name)
+GRMRPChat.ExternalCommands = GRMRPChat.ExternalCommands or {}
+function GRMRPChat.RegisterExternalChatCommand(name)
     name = string.lower(tostring(name or ""))
     if name == "" then return false end
     if string.sub(name, 1, 1) ~= "/" then name = "/" .. name end
-    GRMChat.ExternalCommands[name] = true
+    GRMRPChat.ExternalCommands[name] = true
     return true
 end
 
 -- Единый словарь отыгровок наружу: биндер сверяет пресеты/шаги с НИМ, а не
 -- со своим домыслом («синхронизация с /me и другими командами», вечер-12).
-function GRMChat.RPCommandNames()
+function GRMRPChat.RPCommandNames()
     local out = {}
-    for k in pairs(GRMChat.RP or {}) do out[#out + 1] = "/" .. k end
+    for k in pairs(GRMRPChat.RP or {}) do out[#out + 1] = "/" .. k end
     table.sort(out)
     return out
 end
 
-GRMChat.RP = {
+GRMRPChat.RP = {
     me = { chan = "me", fmt = function(n, b)
         return "* " .. n .. " " .. b
     end },
@@ -283,19 +260,19 @@ GRMChat.RP = {
     end }
 }
 
-function GRMChat.RollSpec(body)
+function GRMRPChat.RollSpec(body)
     local num = tonumber(string.match(tostring(body or ""), "%d+"))
     if not num then num = 100 end
     return math.Clamp(math.floor(num), 2, 10000)
 end
 
 -- Строка предпросмотра для поля ввода (клиент, чистая функция).
-function GRMChat.PreviewText(name, raw, selChan)
+function GRMRPChat.PreviewText(name, raw, selChan)
     raw = tostring(raw or "")
     if #raw == 0 then return "" end
     local cmdRaw, body = raw:match("^/([%w_]+)%s*(.*)$")
     if not cmdRaw then
-        local chan = selChan and GRMChat.GetChannel(selChan)
+        local chan = selChan and GRMRPChat.GetChannel(selChan)
         if chan and chan.cmd ~= "w" then
             return "[" .. chan.title .. "] " .. name .. ": " .. raw
         end
@@ -306,9 +283,9 @@ function GRMChat.PreviewText(name, raw, selChan)
         return "📩 " .. (body:match("^(%S+)") or "?") .. ": " ..
             (string.gsub(body, "^%S+%s*", "", 1) or "")
     end
-    local def = GRMChat.RP[cmd]
+    local def = GRMRPChat.RP[cmd]
     if def then return def.fmt(name, body, { self = true }) end
-    for _, chan in pairs(GRMChat.Channels) do
+    for _, chan in pairs(GRMRPChat.Channels) do
         if chan.cmd == cmd or (chan.cmds and chan.cmds[cmd]) then
             return "[" .. chan.title .. "] " .. name .. ": " .. body
         end
@@ -318,8 +295,8 @@ end
 
 -- Разбор строки PlayerSay: "/cmd text" → канал+тело; без слэша — defChan.
 -- Возвращает (channelID, body, extra) либо (nil, причина).
-function GRMChat.ParseSay(text, defChan)
-    text = GRMChat.Sanitize(text, GRMChat.HARD_MAX)
+function GRMRPChat.ParseSay(text, defChan)
+    text = GRMRPChat.Sanitize(text, GRMRPChat.HARD_MAX)
     if #text == 0 then return nil, "empty" end
 
     local cmdRaw, body = text:match("^/([%w_]+)%s*(.*)$")
@@ -332,7 +309,7 @@ function GRMChat.ParseSay(text, defChan)
         return "pm", rest, { target = target }
     end
 
-    for id, chan in pairs(GRMChat.Channels) do
+    for id, chan in pairs(GRMRPChat.Channels) do
         if chan.cmd == cmd or (chan.cmds and chan.cmds[cmd]) then
             if chan.scope ~= "world" and #body == 0 and not chan.allowEmpty then
                 return nil, "пустое сообщение в /" .. cmd
@@ -348,7 +325,7 @@ end
 -- ростом и потолком; декей окна — sliding count, без буферов-окон.
 -- state = {hits, lastHit, lastAny, penalty, muteUntil} (персист per-player).
 -- Возврат: (ok, warn, muteUntil).
-function GRMChat.LadderCheck(state, now, rate, burst, window)
+function GRMRPChat.LadderCheck(state, now, rate, burst, window)
     rate = rate or 0.35
     burst = burst or 8
     window = window or 10
@@ -386,7 +363,7 @@ function GRMChat.LadderCheck(state, now, rate, burst, window)
 end
 
 -- Аудитория автора в канале. distSqrFn/isDeadFn — инжектируемые (стенд!).
-function GRMChat.ResolveAudience(chan, author, players, distSqrFn, isDeadFn)
+function GRMRPChat.ResolveAudience(chan, author, players, distSqrFn, isDeadFn)
     if not chan then return nil, "нет канала" end
     if chan.scope == "pm" then return nil, "pm требует адресата" end
 
@@ -418,8 +395,8 @@ end
 
 -- Разрешение "/pm <query>": точный SteamID64 → уникальное вхождение ника
 -- (непрефиксные совпадения — отказ, без «первого попавшегося»).
-function GRMChat.ResolvePmTarget(query, players, selfPly)
-    query = string.lower(GRMChat.Sanitize(query, GRMChat.SUGAR_MAX))
+function GRMRPChat.ResolvePmTarget(query, players, selfPly)
+    query = string.lower(GRMRPChat.Sanitize(query, GRMRPChat.SUGAR_MAX))
     if #query == 0 then return nil, "пустой адресат" end
     for i = 1, #players do
         local ply = players[i]
@@ -466,23 +443,30 @@ end
 -- (все его id начинаются с «GRMChat» — префикс зафиксирован генератором),
 -- вешаем таймеры и команды.
 -----------------------------------------------------------------------
-function GRMChat.SuppressAddonPort()
-    local port = rawget(_G, "GRMRPChat")
-    if type(port) ~= "table" then return false end
-    port.SUPPRESSED = true
+function GRMRPChat.SuppressForeignChat()
+    -- Вечер-14 цели: СТАРЫЙ sh_grm_rp_chat («GRM_RPChat*») и пережитки
+    -- прошлой генерации (порт «GRMChat*» из смешанных установок). Свои id
+    -- («GRMRPChat_*») префиксам не совпадают — саможога нет; алиас нового
+    -- мира (GRMChat == GRMRPChat) пропускается явно.
+    local port = rawget(_G, "GRMChat")
+    if port == GRMRPChat then port = nil end
     local removed = 0
+    if type(port) == "table" then port.SUPPRESSED = true end
     if hook and hook.GetTable then
         -- Вечер-13: префиксов ДВА. «GRMChat*» — песочный порт; «GRM_RPChat*» —
         -- СТАРЫЙ модуль rp_chat, его PlayerSay возвращал "" и съедал РЯД
         -- целиком (на GRMRP-серверах с живым портом GM:PlayerSay не вызывался
         -- никогда); его же лента лезла в AddText вторым слоем.
-        local PREFIXES = { "^GRMChat", "^GRM_RPChat" }
+        -- Вечер-14 фикс: прежний вариант звал string.find(id, "^GRMChat", 1,
+        -- true) — в plain-режиме «^» литерал, совпадений ноль, хуки НЕ
+        -- снимались (стенд sim_chat_lib_arch поймал). Теперь честный префикс.
+        local PREFIXES = { "GRMChat", "GRM_RPChat" }
         local doomed = {}
         for name, byId in pairs(hook.GetTable()) do
             for id in pairs(byId) do
                 if type(id) == "string" then
                     for _, pat in ipairs(PREFIXES) do
-                        if string.find(id, pat, 1, true) then
+                        if id:sub(1, #pat) == pat then
                             doomed[#doomed + 1] = { name, id }
                             break
                         end
@@ -506,18 +490,20 @@ function GRMChat.SuppressAddonPort()
     if concommand and concommand.Remove then
         for _, c in ipairs({ "grm_chat_open", "grm_chat_save", "grm_chat_clear",
             "grm_rpchat_help" }) do
-            pcall(concommand.Remove, c)
+            if not (GRMRPChat.__cc and GRMRPChat.__cc[c]) then
+                pcall(concommand.Remove, c)
+            end
         end
     end
-    GRMChat.PORT_SUPPRESSED = true
-    if not GRMChat._suppressPrinted then
-        GRMChat._suppressPrinted = true
-        print(("[GRMChat] песочный порт чата подавлен (%d хуков) — режим единственный владелец")
+    if removed > 0 or type(port) == "table" then GRMRPChat.PORT_SUPPRESSED = true end
+    if not GRMRPChat._suppressPrinted then
+        GRMRPChat._suppressPrinted = true
+        print(("[GRMRPChat] чужие владельцы чата подавлены (%d хуков) — библиотека единственная")
             :format(removed))
     end
-    return true
+    return removed
 end
 
 do
-    GRMChat.SuppressAddonPort()
+    GRMRPChat.SuppressForeignChat()
 end

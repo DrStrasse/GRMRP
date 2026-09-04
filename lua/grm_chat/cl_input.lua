@@ -1,20 +1,13 @@
--- СГЕНЕРИРОВАНО tools/sync_chat_addon.py — источник: cl_grmrp_chat.lua
--- Не править руками: изменения вносите в файл режима и перегенерируйте
--- (`python3 tools/sync_chat_addon.py`); расхождение ловит --check.
---[[ GRMChat — аддонский мутированный порт чат-модуля режима (тот же код,
-    другие имена). На серверах с gamemode GRMRP порт подавляется САМИМ
-    РЕЖИМОМ (GRMRPChat.SuppressAddonPort снимает все хуки/таймеры/команды с
-    id «GRMChat*»; вечер-13): прежний guard «if GRMRP.Version» ловил
-    только поздний reload — GMod исполняет lua/autorun аддонов ДО файлов
-    режима, и на свежей карте два чата жили бок о бок (двойная Y-полоса,
-    перехваты, общая DATA-история). Теперь плюс ранний guard (порядок
-    reload через lua_refresh) и гейты SUPPRESSED на входах.
+--[[ GRMRPChat ввод: полоса с чипами каналов, история (↑/↓), Tab-дополнение
+    команд. Модель textentryx из EasyChat (4.21.4) в нативном Derma-виде,
+    без DHTML. Enter при пустом поле закрывает окно (§5.7).
 ]]
-if SERVER then return end
-if (GRMRP and GRMRP.Version) or (GRMRPChat and GRMRPChat.Channels)
-    then return end -- режим уже здесь/на reload: порт не рождается
 
+-- Вечер-14: единая библиотека (см. sh_core).
 if SERVER then return end
+if GRMRPChat and GRMRPChat.__inp then return end
+GRMRPChat = GRMRPChat or {}
+GRMRPChat.__inp = true
 
 local history = {}
 local histIdx = 0
@@ -23,7 +16,7 @@ local histIdx = 0
 -- 50 строк в DATA, отложенная запись dirty-таймером. Голый RAM означал
 -- «чат ничего не помнит после перезахода» — ровно досадная мелочь из
 -- «всё те же проблемы».
-local INP_FILE = "grm_chat/port_input.txt"
+local INP_FILE = "grm_chat/input.txt"
 local function saveInput()
     if not (file and file.CreateDir and file.Write and util and util.TableToJSON) then return end
     pcall(function()
@@ -33,7 +26,7 @@ local function saveInput()
             out[#out + 1] = tostring(history[i])
         end
         file.Write(INP_FILE, util.TableToJSON(out))
-        GRMChat._inpDirty = false
+        GRMRPChat._inpDirty = false
     end)
 end
 local function loadInput()
@@ -50,11 +43,11 @@ local function loadInput()
     end)
 end
 loadInput()
-GRMChat.inputHistory = history -- виден диагностике
-GRMChat.SaveInput = saveInput
+GRMRPChat.inputHistory = history -- виден диагностике
+GRMRPChat.SaveInput = saveInput
 if timer and timer.Create then
-    timer.Create("GRMChat_InpSave", 20, 0, function()
-        if GRMChat._inpDirty then saveInput() end
+    timer.Create("GRMRPChat_InpSave", 20, 0, function()
+        if GRMRPChat._inpDirty then saveInput() end
     end)
 end
 local histPanel = nil
@@ -65,7 +58,7 @@ local selChan = "ic"
 
 local function channelsOrdered()
     local list = {}
-    for id, chan in pairs(GRMChat.Channels or {}) do
+    for id, chan in pairs(GRMRPChat.Channels or {}) do
         if not chan.onlyDead then table.insert(list, { id = id, chan = chan }) end
     end
     table.sort(list, function(a, b) return a.id < b.id end)
@@ -74,15 +67,15 @@ end
 
 local function commands()
     local out = { "/pm " }
-    for _, chan in pairs(GRMChat.Channels or {}) do
+    for _, chan in pairs(GRMRPChat.Channels or {}) do
         if chan.cmd then table.insert(out, "/" .. chan.cmd .. " ") end
     end
     -- Вечер-12: общий словарь — RP-команды ядра и команды модулей (биндер)
     -- живут в автодополнении наравне с каналами: чат и биндер видят одно и то же.
-    for _, c in ipairs(GRMChat.RPCommandNames and GRMChat.RPCommandNames() or {}) do
+    for _, c in ipairs(GRMRPChat.RPCommandNames and GRMRPChat.RPCommandNames() or {}) do
         table.insert(out, c .. " ")
     end
-    for c in pairs(GRMChat.ExternalCommands or {}) do
+    for c in pairs(GRMRPChat.ExternalCommands or {}) do
         table.insert(out, c .. " ")
     end
     table.sort(out)
@@ -97,24 +90,24 @@ local function send(text)
     if #text == 0 then return end
     if string.lower(text) == "/clear" then
         -- лента — витрина: чистится только экран, архив истории НЕ трогается
-        if GRMChat.ClearLines then GRMChat.ClearLines() end
+        if GRMRPChat.ClearLines then GRMRPChat.ClearLines() end
         return
     end
     if string.lower(text) == "/chatdiag" then
         -- Самодиагностика ленты (вечер-8): строку-диагностику печатает в
         -- ту же ленту — видно её = чат рендерит; не видно = сборка старая.
-        if GRMChat.Diagnose then GRMChat.Diagnose() end
+        if GRMRPChat.Diagnose then GRMRPChat.Diagnose() end
         return
     end
     -- 512 по UTF-8 границе (Utf8Cut из ядра), не посередине буквы
     if #text > 512 then
-        text = (GRMChat.Utf8Cut and GRMChat.Utf8Cut(text, 512))
+        text = (GRMRPChat.Utf8Cut and GRMRPChat.Utf8Cut(text, 512))
             or string.sub(text, 1, 512)
     end
     table.insert(history, text)
     if #history > 50 then table.remove(history, 1) end
     histIdx = 0
-    GRMChat._inpDirty = true
+    GRMRPChat._inpDirty = true
 
     -- Локальный эхо-каст форматром ядра; для rand-действий (try/roll) и
     -- /it результат знает только сервер — там ждём настоящую строку
@@ -123,24 +116,24 @@ local function send(text)
     if first == nil then
         -- кириллические алиасы (/бинды) вне %w_ — сверка префиксом по реестру
         local low = string.lower(text)
-        for c in pairs(GRMChat.ExternalCommands or {}) do
+        for c in pairs(GRMRPChat.ExternalCommands or {}) do
             if string.sub(low, 1, #c) == c then first = c:sub(2) break end
         end
     end
-    if first and GRMChat.ExternalCommands
-        and GRMChat.ExternalCommands["/" .. string.lower(first)] then
+    if first and GRMRPChat.ExternalCommands
+        and GRMRPChat.ExternalCommands["/" .. string.lower(first)] then
         -- Вечер-12 (чат ↔ модули): чужие slash-команды идут ЧЕРЕЗ движковый
         -- say — их обработчики живут в цепочке PlayerSay; наш net-канал
         -- «съел» бы их как неизвестные («/binder» из ввода не открывал биндер).
         RunConsoleCommand("say", text)
         return
     end
-    local def = first and GRMChat.RP and GRMChat.RP[string.lower(first)]
+    local def = first and GRMRPChat.RP and GRMRPChat.RP[string.lower(first)]
     if not (def and def.echo) then
-        GRMChat.AddSelfLine(text, selChan)
+        GRMRPChat.AddSelfLine(text, selChan)
     end
 
-    net.Start(GRMChat.Net.SAY)
+    net.Start(GRMRPChat.Net.SAY)
         net.WriteString(selChan)
         net.WriteString(text)
     net.SendToServer()
@@ -150,15 +143,15 @@ end
 -- ретранслирует («оптимистичное эхо», §5.4.3), поэтому без локального эха
 -- строки биндера в ленте/истории автора просто исчезали. SendText = тот же
 -- путь, что и Enter в окне: форматер RP, история ввода, канал выбора.
-GRMChat.SendText = send
+GRMRPChat.SendText = send
 
 local function closeInput()
     if IsValid(frame) then frame:Hide() end
-    GRMChat.INPUT_OPEN = false
+    GRMRPChat.INPUT_OPEN = false
 end
 
 local function chanNow()
-    return GRMChat.GetChannel and GRMChat.GetChannel(selChan)
+    return GRMRPChat.GetChannel and GRMRPChat.GetChannel(selChan)
 end
 
 local function toggleHistory()
@@ -176,15 +169,15 @@ local function toggleHistory()
         draw.RoundedBox(6, 0, 0, w, h, Color(8, 14, 23, 245))
         surface.SetDrawColor(40, 62, 92, 140)
         surface.DrawOutlinedRect(0, 0, w, h)
-        local arc = GRMChat.archive or {}
+        local arc = GRMRPChat.archive or {}
         draw.SimpleText(("История чата · %d строк · дописывается живьём · ESC — закрыть · Ctrl+C копирует")
             :format(#arc), "GRMRP_ChatChip", 14, 8, Color(132, 160, 178))
     end
     win.OnRemove = function()
-        GRMChat.HIST_OPEN = false
+        GRMRPChat.HIST_OPEN = false
         histPanel = nil
-        if timer and timer.Remove then timer.Remove("GRMChat_HistRefr") end
-        hook.Remove("OnScreenSizeChanged", "GRMChat_HistSize")
+        if timer and timer.Remove then timer.Remove("GRMRPChat_HistRefr") end
+        hook.Remove("OnScreenSizeChanged", "GRMRPChat_HistSize")
     end
     win.OnKeyCodeTyped = function(_, code)
         if code == KEY_ESCAPE then win:Remove() end
@@ -198,7 +191,7 @@ local function toggleHistory()
     local state = { y = 0, n = 0 }
     -- вечер-12.2: «окна» — при смене разрешения окно и скролл пересчитываются
     -- (прежде край съедал строки после alt+enter/fullscreen)
-    hook.Add("OnScreenSizeChanged", "GRMChat_HistSize", function()
+    hook.Add("OnScreenSizeChanged", "GRMRPChat_HistSize", function()
         if not IsValid(win) then return end
         win:SetSize(math.Clamp(ScrW() * 0.62, 760, 1400), math.Clamp(ScrH() * 0.72, 480, 1120))
         win:Center()
@@ -209,7 +202,7 @@ local function toggleHistory()
 
     -- Вечер-12 («хранение/история»): источник — АРХИВ, а не кормовой буфер:
     -- строки ленты подметаются TTL через ~49 с, «история» оказывалась самой
-    -- лентой. Архив живёт в cl_grm_chat_hud (push), пишется на диск и
+    -- лентой. Архив живёт в cl_grmrp_chat_hud (push), пишется на диск и
     -- несёт стенные метки времени (wallT) — корректные и после рестарта.
     local function addLine(ln)
         local chan = ln.chan or { title = "·", color = { r = 200, g = 200, b = 200 } }
@@ -255,7 +248,7 @@ local function toggleHistory()
         if not (IsValid(vb) and isfunction(vb.GetScroll)) then return true end
         return vb:GetScroll() >= maxScroll() - 4
     end
-    local src = GRMChat.archive or GRMChat.lines or {}
+    local src = GRMRPChat.archive or GRMRPChat.lines or {}
     for i = 1, #src do lastLine = addLine(src[i]) end
     state.n = #src
     timer.Simple(0.02, function()
@@ -264,12 +257,12 @@ local function toggleHistory()
     -- окно живое: пока открыто, новые строки ДОПИСЫВАЮТСЯ (не пересборка —
     -- пересборка убивала бы выделение и прокрутку)
     if timer and timer.Create then
-        timer.Create("GRMChat_HistRefr", 1, 0, function()
+        timer.Create("GRMRPChat_HistRefr", 1, 0, function()
             if not IsValid(win) or not IsValid(body) then
-                timer.Remove("GRMChat_HistRefr")
+                timer.Remove("GRMRPChat_HistRefr")
                 return
             end
-            local arc = GRMChat.archive or {}
+            local arc = GRMRPChat.archive or {}
             if state.n >= #arc then return end
             -- если пользователь отскроллил вверх читать — НЕ утаскиваем вниз;
             -- если стоит у конца — дописка тянет ленту за собой
@@ -281,12 +274,12 @@ local function toggleHistory()
             if stickBottom then stick() end
         end)
     end
-    GRMChat.HIST_OPEN = true
+    GRMRPChat.HIST_OPEN = true
 end
 
 
 local function setChannel(id)
-    if not (GRMChat.GetChannel and GRMChat.GetChannel(id)) then return end
+    if not (GRMRPChat.GetChannel and GRMRPChat.GetChannel(id)) then return end
     selChan = id
     if IsValid(entry) and entry.updatePreview then entry:updatePreview() end
 end
@@ -302,7 +295,7 @@ local function build()
         surface.DrawOutlinedRect(0, 0, w, h)
     end
     frame.OnRemove = function()
-        GRMChat.INPUT_OPEN = false
+        GRMRPChat.INPUT_OPEN = false
     end
 
     local preview = vgui.Create("DLabel", frame)
@@ -376,7 +369,7 @@ local function build()
             Color(132, 160, 178), TEXT_ALIGN_CENTER)
     end
     hbtn.DoClick = function()
-        GRMChat.INPUT_OPEN = false
+        GRMRPChat.INPUT_OPEN = false
         if IsValid(frame) then frame:Hide() end
         toggleHistory()
     end
@@ -399,8 +392,8 @@ local function build()
 
     local function updatePreview(pp)
         if not IsValid(preview) then return end
-        if GRMChat.PreviewText then
-            preview:SetText(GRMChat.PreviewText(LocalPlayer():Name(), pp:GetValue(), selChan))
+        if GRMRPChat.PreviewText then
+            preview:SetText(GRMRPChat.PreviewText(LocalPlayer():Name(), pp:GetValue(), selChan))
         end
     end
     entry.updatePreview = updatePreview
@@ -494,45 +487,51 @@ local function build()
     end
 end
 
-function GRMChat.OpenInput()
-    if not (GRMChat.GetChannel and GRMChat.Sanitize) then
+function GRMRPChat.OpenInput()
+    if not (GRMRPChat.GetChannel and GRMRPChat.Sanitize) then
         -- ядро не загрузилось (битый install/ошибка файла) —Say тихо, но один раз
         -- в консоль: без ядра ввод рисовать нельзя, и молчание тут хуже ошибки.
-        if not GRMChat._warned then
-            GRMChat._warned = true
-            GRMChat.ErrorNoHalt("чат: ядро не загружено — ввод отключён")
+        if not GRMRPChat._warned then
+            GRMRPChat._warned = true
+            GRMRPChat.ErrorNoHalt("чат: ядро не загружено — ввод отключён")
         end
         return
     end
-    if not GRMChat._bannered and GRMChat.AddSystem then
-        GRMChat._bannered = true
-        GRMChat.AddSystem("чат GRM · сборка вечер-13 (03.09) · /chatdiag · двойной чат порта и режима устранён · память ввода — переживает рестарт")
+    if not GRMRPChat._bannered and GRMRPChat.AddSystem then
+        GRMRPChat._bannered = true
+        GRMRPChat.AddSystem("чат GRM · сборка вечер-14 (03.09) · /chatdiag · библиотека едина (дублей чата нет) · память ввода — переживает рестарт")
     end
     if not IsValid(frame) then build() end
     frame:Show()
     frame:SetPos(16, ScrH() - frame:GetTall() - 196)
     frame:MakePopup()
-    GRMChat.INPUT_OPEN = true
+    GRMRPChat.INPUT_OPEN = true
     if IsValid(entry) then
         entry:RequestFocus()
         entry:SetValue(entry:GetValue() or "")
     end
 end
 
-hook.Add("OnScreenSizeChanged", "GRMChat_InputPos", function()
+hook.Add("OnScreenSizeChanged", "GRMRPChat_InputPos", function()
     if IsValid(frame) then
         frame:SetPos(16, ScrH() - frame:GetTall() - 196)
     end
 end)
 
--- Y в песочнице: хук движковой клавиатуры + консольная команда для бинда.
-hook.Add("HUDKeyPress", "GRMChat_Y", function(code, down, up, onlydown)
-    if GRMChat.SUPPRESSED then return end -- вечер-13: Y принадлежит режиму
-    if code == KEY_Y and GRMChat.Enabled and GRMChat.Enabled() then
-        GRMChat.OpenInput()
+-- Вечер-14: Y и консольная команда — ЕДИНСЮДА (раньше были хвостом
+-- генерируемого порта). Режимский GM:StartChat помечен __chatOwnsStartChat:
+-- если он есть, хук уступает, не перекликая окно повторно.
+hook.Add("HUDKeyPress", "GRMRPChat_Y", function(code, down, up, onlydown)
+    if code ~= KEY_Y or not (down or onlydown) then return end
+    if GRMRPChat.INPUT_OPEN then return true end -- окно уже открыто
+    if GAMEMODE and GAMEMODE.__chatOwnsStartChat then return end
+    if GRMRPChat.Enabled() then
+        GRMRPChat.OpenInput()
         return true
     end
 end)
 concommand.Add("grm_chat_open", function()
-    if GRMChat.OpenInput then GRMChat.OpenInput() end
+    if GRMRPChat.OpenInput then GRMRPChat.OpenInput() end
 end)
+GRMRPChat.__cc = GRMRPChat.__cc or {}
+GRMRPChat.__cc.grm_chat_open = true

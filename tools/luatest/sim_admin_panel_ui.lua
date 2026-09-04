@@ -25,11 +25,11 @@ local function has(s, n) return s:find(n, 1, true) ~= nil end
 local files = {
     "lua/autorun/client/cl_grm_admin_panel.lua",
     "lua/autorun/client/cl_grm_hud.lua",
-    "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua",
-    "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua",
+    "lua/grm_chat/cl_input.lua",
+    "lua/grm_chat/cl_hud.lua",
     "gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua",
-    "lua/autorun/client/cl_08_grm_chat_input.lua",
-    "lua/autorun/client/cl_08_grm_chat_hud.lua",
+    "gamemodes/grmrp/gamemode/lib/grm_chat/cl_input.lua",
+    "gamemodes/grmrp/gamemode/lib/grm_chat/cl_hud.lua",
 }
 
 print("\n=== 1. ЗАПРЕЩЁННЫЕ ФАНТОМЫ (все клиентские файлы) ===")
@@ -52,8 +52,8 @@ end
 
 print("\n=== 3. ИСТОРИЯ ЧАТА (реальные API + размер) ===")
 for _, pair in ipairs({
-    { "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua", "scroll" },
-    { "lua/autorun/client/cl_08_grm_chat_input.lua", "scroll" },
+    { "lua/grm_chat/cl_input.lua", "scroll" },
+    { "gamemodes/grmrp/gamemode/lib/grm_chat/cl_input.lua", "scroll" },
 }) do
     local s2 = read(pair[1])
     check(pair[1] .. ": прокрутка — ScrollToChild(lastLine)",

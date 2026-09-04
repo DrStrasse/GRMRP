@@ -120,10 +120,10 @@ _G.player = { GetAll = function() return { A, B, C, BOBA } end }
 GRMRP = { Net = { SAY = "grmrp/chat_say", MSG = "grmrp/chat_msg" } }
 function GRMRP.ErrorNoHalt(...) end
 local root = arg[0]:match("^(.*)[/\\]tools[/\\]luatest") or "."
-dofile(root .. "/gamemodes/grmrp/gamemode/modules/chat/sh_grmrp_chat_core.lua")
+dofile(root .. "/lua/grm_chat/sh_core.lua")
 -- как в shared.lua режима:
 function GRMRPChat.Enabled() return true end
-dofile(root .. "/gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua")
+dofile(root .. "/lua/grm_chat/sv_net.lua")
 
 -- ============ мини-фреймворк ============
 local total, fails = 0, 0

@@ -278,6 +278,10 @@ for _, n in ipairs({
     "resetall", "resetline",
     -- ключевые таблицы движка/аддона
     "GRM", "ENT", "SWEP", "TOOL", "PANEL", "GRMChat", "textscreenFonts",
+    -- вечер-14: чат-библиотека живёт в lua/grm_chat (аддон-скоуп сканера);
+    -- GRMRPChat — канолический стол API (режим зовёт его из init/shared),
+    -- GRMChat — алиас того же стола для смешанных установок.
+    "GRMRPChat",
 }) do ALLOWED_GLOBALS[n] = true end
 
 local leaks = {}

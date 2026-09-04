@@ -22,9 +22,9 @@ function math.Clamp(v, a, b) return v < a and a or (v > b and b or v) end
 
 local which = (arg and arg[1]) or "mode"
 if which == "addon" then
-    dofile("lua/autorun/sh_08_grm_chat_core.lua")
+    dofile("gamemodes/grmrp/gamemode/lib/grm_chat/sh_core.lua")
 else
-    dofile("gamemodes/grmrp/gamemode/modules/chat/sh_grmrp_chat_core.lua")
+    dofile("lua/grm_chat/sh_core.lua")
 end
 local GRMRPChat = _G[(which == "addon") and "GRMChat" or "GRMRPChat"]
 

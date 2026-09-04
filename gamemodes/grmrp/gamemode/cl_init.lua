@@ -37,10 +37,10 @@ GRMRP.Loading = false
 
 hook.Run("GRMRPFinishedLoadingClient")
 
--- Вечер-13: после lua_refresh аддонский порт мог пересоздать свои хуки —
+-- Вечер-14: после reload (аддонов/режима) чужие хуки могли пересоздаться —
 -- снимаем повторно на поздней клиентской стадии.
-if GRMRPChat and isfunction(GRMRPChat.SuppressAddonPort) then
-    GRMRPChat.SuppressAddonPort()
+if GRMRPChat and isfunction(GRMRPChat.SuppressForeignChat) then
+    GRMRPChat.SuppressForeignChat()
 end
 
 -- Движковый чат скрыт: окно и лента — наши (cl_grmrp_chat*).
@@ -50,7 +50,9 @@ function GM:HUDShouldDraw(name)
     return self.BaseClass:HUDShouldDraw(name)
 end
 
--- Y открывает наш ввод вместо движкового.
+-- Y открывает наш ввод вместо движкового (флаг — библиотечный HUDKeyPress
+-- уступает, см. cl_input библиотеки).
+GM.__chatOwnsStartChat = true
 function GM:StartChat()
     if GRMRPChat and GRMRPChat.OpenInput and GRMRPChat.Enabled
         and GRMRPChat.Enabled() then
