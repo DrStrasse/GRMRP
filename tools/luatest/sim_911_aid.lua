@@ -135,6 +135,8 @@ local function mkPlayer(nick, sid, x)
     return p
 end
 
+-- Ядро GRM (ui/core/шина RP-отыгровок) — как на сервере, до модуля.
+dofile("tools/luatest/lib_grm_core.lua")()
 assert(loadfile("lua/autorun/sh_grm_911.lua"))()
 local EM = GRM.EmergencyMedical or GRM.EM or GRM["911"] or GRM.Emergency
 if not EM then

@@ -22396,6 +22396,17 @@ SetAnimated+drag-rotate, без центральной сцены.
    `gamemodes/` (найдено и исправлено; в красном наборе остались только
    owner-исключения админ-панели, указание 7).
 
+6. **Имя метода панели проверяется по движку ДО того, как попадёт в стену
+   стенда (вечер-16, 04.09).** `feed:SetKeyInputEnabled(false)` в ленте
+   (`lua/grm_chat/cl_hud.lua` ensureFeed) — фантом: у `Panel` есть только
+   `SetKeyboardInputEnabled` (`SetKeyBoardInputEnabled` — deprecated-алиас).
+   Лента не создавалась вовсе, каждое Y давало стек `OpenInput → AddSystem →
+   push → ensureFeed` — и в аддоне, и в бандле режима (один код). Три чистки
+   фантомов (веч.-5/7/10) его не поймали, потому что `sim_chat_clocks`
+   ТРЕБОВАЛ эту строку: стенд консервировал баг. Теперь
+   `sim_admin_panel_ui` запрещает `:SetKeyInputEnabled(` во всех клиентских
+   файлах, clocks требует правильное имя и запрещает старое.
+
 Манифест: корневой блок = имя папки (`"grmrp" { ... }`), поля
 `title/base/maps/author/authorurl/license` + `menusystem 1`/`category rp`
 (иначе режим не виден в меню выбора; голый `{...}` парсится «на удачу»).

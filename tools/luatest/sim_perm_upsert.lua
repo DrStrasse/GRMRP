@@ -32,7 +32,7 @@ file = {
   IsDir = function() return true end,
 }
 game = { GetMap = function() return "rp_test" end }
-os = { time = function() return 1700000000 end }
+os.time = function() return 1700000000 end -- вечер-16: подмена всей таблицы os убивала os.exit в финале стенда
 util = {
   AddNetworkString = function() end,
   IsValidModel = function() return true end,

@@ -42,6 +42,13 @@ local function ensureGlobals()
         string.Trim = function(s) return (tostring(s):gsub("^%s+", ""):gsub("%s+$", "")) end
     end
     if not _G.player then _G.player = { GetAll = function() return {} end } end
+    -- Шине RP-отыгровок нужны isplayer/math.Clamp (вечер-16).
+    if not _G.isplayer then
+        _G.isplayer = function(v) return type(v) == "table" and v.IsPlayer ~= nil and v:IsPlayer() == true end
+    end
+    if not math.Clamp then
+        math.Clamp = function(v, lo, hi) return v < lo and lo or (v > hi and hi or v) end
+    end
 end
 
 --- Загрузить настоящий файл ядра. Ошибка загрузки — это ошибка стенда,
@@ -60,5 +67,11 @@ return function()
     -- Порядок тот же, что и на сервере: UI (sh_00) → контракты (sh_01).
     if not (GRM.UI and GRM.UI.Button) then loadCoreFile("lua/autorun/sh_00_grm_ui.lua") end
     if not GRM.CharKey then loadCoreFile("lua/autorun/sh_01_grm_core.lua") end
+    -- Вечер-16: шина RP-отыгровок (GRM.RPBroadcast) — часть ядра с вечера-13;
+    -- на сервере sh_grm_rpbridge грузится autorun'ом до модулей. Стенды
+    -- nameplate/911/pcboard падали на nil-поле — не потому, что модуль
+    -- сломан, а потому, что преамбула отставала от ядра (та же болезнь,
+    -- ради которой этот файл и появился).
+    if not GRM.RPBroadcast then loadCoreFile("lua/autorun/sh_grm_rpbridge.lua") end
     return GRM
 end

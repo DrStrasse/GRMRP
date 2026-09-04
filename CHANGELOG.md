@@ -1,5 +1,29 @@
 # CHANGELOG — история изменений
 
+## 2026-09-04 (вечер-16) — лента чата не создавалась: фантом SetKeyInputEnabled
+
+Стек владельца (аддон `grm_chat/cl_hud.lua:219` и бандл режима — один код):
+`attempt to call method 'SetKeyInputEnabled' (a nil value)` в ensureFeed ←
+push ← AddSystem ← OpenInput ← GM:StartChat. У Panel такого метода нет —
+движковое имя `SetKeyboardInputEnabled` (wiki Panel; `SetKeyBoardInputEnabled`
+— лишь deprecated-алиас). Итог до фикса: панель ленты не создавалась, ввод
+открывался, строки ленты — никогда, ошибка на каждом Y. Фантом жил с
+вечера-9 и пережил три чистки фантомов, потому что `sim_chat_clocks` сам
+требовал строку `SetKeyInputEnabled(false)` — стена закрепляла баг.
+
+- `lua/grm_chat/cl_hud.lua` → `SetKeyboardInputEnabled(false)`; бандл
+  `gamemodes/grmrp/gamemode/lib/grm_chat` пересинхронизирован (`--check` зелёный);
+  баннер/`/chatdiag` — «вечер-16 (04.09)».
+- Стенды: `sim_admin_panel_ui` запрещает `:SetKeyInputEnabled(` во всех
+  клиентских файлах (откат фикса → красный, проверено); `sim_chat_clocks`
+  требует `SetKeyboardInputEnabled(false)` и запрещает старое имя (143/143).
+- Гигиена стендов: `lib_grm_core` грузит шину `sh_grm_rpbridge` (+стабы
+  `isplayer`/`math.Clamp`) — nameplate_runtime 57/57, pcboard_runtime 120/120,
+  911_aid 23/23 снова зелёные (падали с веч.-15 на `GRM.RPBroadcast nil`);
+  `sim_perm_upsert` больше не затирает таблицу `os` (os.exit). Красных файлов
+  30 (было 34), FAIL-сумма = baseline_reds.
+- OWNER_REPORTS §2 веч.-16, WIKI 7.3.1 п.6.
+
 ## 2026-09-04 (вечер-15) — документы «под легендой» и другие автоотыгровки: ни одна не минует свою шину
 
 Повторный приказ владельца («автоотыгровки показа/просмотра документов

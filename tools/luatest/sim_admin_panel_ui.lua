@@ -8,6 +8,9 @@
           DScrollPanel (dscrollpanel.lua), у multiline DTextEntry его нет;
        3) cl_grmrp_chat.lua:126 — тот же класс: scroll.VBar:GetCanvas() в
           таймере истории (Timer Failed) — история открывалась и креша.
+       4) grm_chat/cl_hud.lua:219 (04.09, вечер-16) — feed:SetKeyInputEnabled:
+          у Panel такого метода нет (движковое имя SetKeyboardInputEnabled),
+          лента не создавалась вовсе → чат «есть ввод, нет ленты».
      Контракт стенда: по клиентскому коду запрещены вызовы phantom-методов;
      read-only вывод = SetKeyboardInputEnabled(false) (мышь остаётся —
      текст выделяется); автоскролл консоли = SetCaretPos (реальный метод);
@@ -38,6 +41,9 @@ for _, p in ipairs(files) do
     check(p .. ": нет :SetReadOnly(", not has(s, ":SetReadOnly("))
     check(p .. ": нет VBar:GetCanvas(", not has(s, "VBar:GetCanvas("))
     check(p .. ": нет VBar:SetY(", not has(s, "VBar:SetY("))
+    -- вечер-16: у Panel нет SetKeyInputEnabled — есть SetKeyboardInputEnabled
+    -- (живой стек владельца 04.09: cl_hud.lua:219 ensureFeed ← OpenInput).
+    check(p .. ": нет :SetKeyInputEnabled(", not has(s, ":SetKeyInputEnabled("))
 end
 
 print("\n=== 2. ЗАМЕНИЛИ ПРАВИЛЬНО (админка) ===")
