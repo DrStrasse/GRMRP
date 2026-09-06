@@ -100,9 +100,12 @@ Menu.AddTab({ id = "disconnect", order = 70, title = "Отключиться о�
 Menu.AddTab({ id = "quit", order = 80, title = "Выход из игры", accent = COL.red,
     action = function() Menu.OpenGameuiWith("quit") end })
 
+-- Вечер-22: веч.-21 свёл ленту к единому API библиотеки — pushSystem из
+-- него ушёл, а меню звало именно его (баннеры «тихо» пропадали). Канон —
+-- GRMRPChat.AddSystem (тот же канал system, что у баннеров и join/leave).
 function Menu.SystemLine(text)
-    if GRMRPChat and GRMRPChat.pushSystem then
-        GRMRPChat.pushSystem(text)
+    if GRMRPChat and GRMRPChat.AddSystem then
+        GRMRPChat.AddSystem(text)
     else
         MsgC(COL.accent, "[GRMRP] ", COL.text, text, "\n")
     end

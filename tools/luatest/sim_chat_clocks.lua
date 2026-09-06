@@ -370,6 +370,17 @@ local pkSrc = read("lua/grm_chat/modules/client/cl_picker.lua")
 check("пикер: ≡ вместо ✦ (Segoe UI гарантирует)", pkSrc ~= nil
     and pkSrc:find("≡ отыгровки", 1, true) ~= nil and pkSrc:find("✦", 1, true) == nil)
 local gm = read("gamemodes/grmrp/gamemode/init.lua")
+check("загрузка режима: каждый include под pcall (инициатива и клиент)",
+    gm ~= nil and gm:find("local function grminclude(path)", 1, true) ~= nil
+    and read("gamemodes/grmrp/gamemode/cl_init.lua") ~= nil
+    and read("gamemodes/grmrp/gamemode/cl_init.lua"):find("local function grminclude(path)", 1, true) ~= nil)
+check("загрузка режима: смешанная установка — инструкция в лог",
+    gm ~= nil and gm:find("устаревшие", 1, true) ~= nil
+    and read("gamemodes/grmrp/gamemode/cl_init.lua"):find("устаревшие", 1, true) ~= nil)
+check("меню режима: SystemLine → живой API AddSystem (не pushSystem-фантом)",
+    read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua") ~= nil
+    and read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua"):find("GRMRPChat.AddSystem(text)", 1, true) ~= nil
+    and read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua"):find("GRMRPChat.pushSystem", 1, true) == nil)
 check("режим: GM:PlayerSay не роняется чатом", gm ~= nil
     and gm:find("pcall(GRMRPChat.OnPlayerSay, ply, text, teamChat, isDead)", 1, true) ~= nil)
 local adm = read("lua/autorun/server/sv_grm_admin_actions.lua")
