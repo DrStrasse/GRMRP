@@ -387,8 +387,15 @@ check("меню: активация gameui глобалкой gui.ActivateGameUI
 check("меню: перепост движковой команды по TTL и страховка isfunction(RunGameUICommand)",
     menuSrc:find("Menu.pendingTTL", 1, true) ~= nil
     and menuSrc:find("isfunction(RunGameUICommand)", 1, true) ~= nil)
-check("меню: оттиск сборки веч.-25 (виден владельцу в шапке)",
-    menuSrc:find("вечер-25 (06.09)", 1, true) ~= nil)
+check("меню: оттиск сборки веч.-26 (виден владельцу в шапке)",
+    menuSrc:find("вечер-26 (06.09)", 1, true) ~= nil)
+check("меню: ~ / Ё под меню живёт (LookupKeyBinding + фронт-скан toggleconsole)",
+    menuSrc:find("input.LookupKeyBinding", 1, true) ~= nil
+    and menuSrc:find('RunConsoleCommand("toggleconsole")', 1, true) ~= nil
+    and menuSrc:find('hook.Add("OnBindingChanged", "GRMRPMenu_ConsoleKeys"', 1, true) ~= nil)
+check("меню: консольная клавиша защищена фокусом (печать в консоли не закрывает её)",
+    menuSrc:find("vgui.GetKeyboardFocus() == Menu.root", 1, true) ~= nil
+    or menuSrc:find("focused == Menu.root", 1, true) ~= nil)
 check("меню: ESC — сканер фронтов (открытие в кадр нажатия, без вспышки gameui)",
     menuSrc:find("input.IsKeyDown(KEY_ESCAPE)", 1, true) ~= nil
     and menuSrc:find("local escWasDown = false", 1, true) ~= nil)

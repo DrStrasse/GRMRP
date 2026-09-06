@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-25 (06.09)'
+Menu.BuildStamp = 'вечер-26 (06.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -149,9 +149,31 @@ local function statRow(parent, y, label)
     return val
 end
 
+local escWasDown = false
+-- Вечер-26 (владелец: «меню не должно блокировать игровую консоль на ~ / Ё»):
+-- root:MakePopup включает keytrap — движковые бинды под меню не слышны,
+-- и ~ вместе с ними. Тот же приём, что у движка в vgui/dadjustablemodelpanel:
+-- клавиши бинда находим ЧЕРЕЗ input.LookupKeyBinding (не хардкод KEY_GRAVE —
+-- у владельца бинд может быть где угодно; физическая клавиша под RU-раскладкой
+-- та же, коды виртуальные) и сами дёргаем toggleconsole по фронту нажатия.
+local consoleKeys = {}
+local consoleWasDown = false
+local function refreshConsoleKeys()
+    consoleKeys = {}
+    if not isfunction(input.LookupKeyBinding) then return end
+    -- 32..200: печать+цифры+F-клавиши+numpad — весь осмысленный диапазон биндов
+    for code = 32, 200 do
+        local okc, b = pcall(input.LookupKeyBinding, code)
+        if okc and isstring(b) and string.find(b, "toggleconsole", 1, true) then
+            consoleKeys[#consoleKeys + 1] = code
+        end
+    end
+end
+hook.Add("OnBindingChanged", "GRMRPMenu_ConsoleKeys", refreshConsoleKeys)
 ------------------------------------------------------------------ окно
 function Menu.Open()
     if IsValid(Menu.root) then return end
+    refreshConsoleKeys() -- бинды актуальны на момент открытия (вечер-26)
 
     Menu.ownsGameui = false -- играем по-честному: чужая gameui-сессия не наша
     if not GRMRP.JoinTime then GRMRP.JoinTime = CurTime() end
@@ -510,6 +532,7 @@ end
 --     семантика сохранена), при открытом вводе чата ESC не наш (keytrap);
 --   * свою gameui-сессию (настройки/браузер/мастерская/quit) не трогаем.
 local escWasDown = false
+
 hook.Add("Think", "GRMRPMenu_Takeover", function()
     -- Очередь движковых команд (веч.-23): перепост каждый кадр, пока gameui
     -- видим, до TTL — движок не отвечает «принято», повтор идемпотентен.
@@ -546,6 +569,26 @@ hook.Add("Think", "GRMRPMenu_Takeover", function()
         end
     end
     escWasDown = down
+    -- ~ / Ё: открываем консоль сами, но ТОЛЬКО пока фокус наш. Консоль
+    -- (или текстовое поле) фокус перехватит — дальше клавиша её, и печать
+    -- «ё» в командной строке консоль не закрывает.
+    if IsValid(Menu.root) and not chatBusy and #consoleKeys > 0 then
+        local focused = isfunction(vgui.GetKeyboardFocus) and vgui.GetKeyboardFocus()
+        if not isfunction(vgui.GetKeyboardFocus) or focused == Menu.root then
+            local pressed = false
+            for i = 1, #consoleKeys do
+                if input.IsKeyDown(consoleKeys[i]) then pressed = true break end
+            end
+            if pressed and not consoleWasDown then
+                pcall(function() RunConsoleCommand("toggleconsole") end)
+            end
+            consoleWasDown = pressed
+        else
+            consoleWasDown = false
+        end
+    else
+        consoleWasDown = false
+    end
     if gui.IsGameUIVisible() and not Menu.ownsGameui then
         gui.HideGameUI()
         if not IsValid(Menu.root) and not chatBusy
