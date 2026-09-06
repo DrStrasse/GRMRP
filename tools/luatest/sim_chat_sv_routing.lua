@@ -296,7 +296,8 @@ T2("pm: префикс-двойники → неоднозначен или то
 reset()
 GRMRPChat.ProcessLine(A, "привет <script> мир", "ic")
 m = lastMsg()
-T2("markup зеркалится у получателей", m and m.parts[3]:find("＜script＞") ~= nil, m and m.parts[3])
+T2("markup нейтрален WGL4-кавычками (лента читаема)",
+    m and m.parts[3]:find("‹script›", 1, true) ~= nil, m and m.parts[3])
 reset()
 GRMRPChat.ProcessLine(A, "a\tb", "ic")
 m = lastMsg()

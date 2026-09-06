@@ -73,7 +73,11 @@ function GM:PlayerSay(ply, text, teamChat, isDead)
         -- ProcessLine сам дёргает цепочку PlayerSay ради внешних команд
         -- модулей (вечер-12) — вложенный вызов methods глушим точкой входа
         if GRMRPChat._inExternal then return "" end
-        GRMRPChat.OnPlayerSay(ply, text, teamChat, isDead)
+        -- вечер-22: чат не имеет права ронять GM:PlayerSay — pcall+лог.
+        local ok, err = pcall(GRMRPChat.OnPlayerSay, ply, text, teamChat, isDead)
+        if not ok and ErrorNoHalt then
+            ErrorNoHalt("[grm_chat] сбой обработки say: " .. tostring(err) .. "\n")
+        end
         return ""
     end
     return self.BaseClass:PlayerSay(ply, text, teamChat, isDead)

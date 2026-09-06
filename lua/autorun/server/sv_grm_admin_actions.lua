@@ -427,15 +427,18 @@ A.ban = { perm = "mod.ban", target = true, label = "Бан",
 A.serverban = { perm = "mod.ban", target = true, label = "Бан на сервере",
     fn = function(actor, target, args)
         if not (GRM.ServerBan and GRM.ServerBan.Ban) then return false, "Модуль банов не загружен" end
+        -- веч.-22: уведомление — строка PUNISH («наказал игрока Y - бан на
+        -- сервере …»); SB в этом пути молчит, дубля в ленте нет.
         return GRM.ServerBan.Ban(actor, target,
             tonumber(args and args.minutes) or 60,
-            tostring(args and args.reason or "Нарушение правил"))
+            tostring(args and args.reason or "Нарушение правил"),
+            { silent = true })
     end }
 
 A.unserverban = { perm = "mod.ban", target = true, label = "Снять бан на сервере",
     fn = function(actor, target)
         if not (GRM.ServerBan and GRM.ServerBan.Unban) then return false, "Модуль банов не загружен" end
-        return GRM.ServerBan.Unban(actor, tostring(target:SteamID64() or ""))
+        return GRM.ServerBan.Unban(actor, tostring(target:SteamID64() or ""), { silent = true })
     end }
 
 --- Точку отбывания ставит суперадмин по своей позиции.
@@ -770,21 +773,24 @@ AD.Actions = A
      и тот, кто получил. Теперь любое наказание — событие сервера: красная
      строка всем. Формулировки лежат ОДНОЙ таблицей рядом с действиями, а не
      размазаны по два ChatPrint внутри каждой функции. ]]
+-- Вечер-22: у наказаний появилось существительное (поле punish) — ВЛАДЕЛЬЦОМ
+-- вида наказания остаётся эта таблица; лента чата печатает «наказал игрока Y -
+-- <punish>», ничего не выдумывая на стороне HUD.
 local PUNISH = {
-    jail      = { verb = "посадил в клетку", release = "выпустил из клетки", toggle = "GRM_AdminJailed", seconds = true },
-    mute      = { verb = "закрыл текстовый чат", release = "вернул текстовый чат", toggle = "GRM_AdminMuted" },
-    gag       = { verb = "закрыл голосовой чат", release = "вернул голос", toggle = "GRM_AdminGagged" },
+    jail      = { verb = "посадил в клетку", release = "выпустил из клетки", toggle = "GRM_AdminJailed", seconds = true, punish = "заключение в клетку" },
+    mute      = { verb = "закрыл текстовый чат", release = "вернул текстовый чат", toggle = "GRM_AdminMuted", punish = "мут текстового чата" },
+    gag       = { verb = "закрыл голосовой чат", release = "вернул голос", toggle = "GRM_AdminGagged", punish = "мут голосового чата" },
     freeze    = { verb = "заморозил", release = "разморозил", toggle = "GRM_AdminFrozen" },
     ragdoll   = { verb = "уронил в рагдолл", release = "поднял из рагдолла", toggle = "GRM_AdminRagdoll" },
     slay      = { verb = "убил" },
     strip     = { verb = "забрал оружие у" },
-    kick      = { verb = "кикнул", reason = true },
-    ban       = { verb = "забанил глобально", reason = true, minutes = true },
-    serverban = { verb = "забанил на сервере", reason = true, minutes = true },
+    kick      = { verb = "кикнул", reason = true, punish = "кик с сервера" },
+    ban       = { verb = "забанил глобально", reason = true, minutes = true, punish = "глобальный бан" },
+    serverban = { verb = "забанил на сервере", reason = true, minutes = true, punish = "бан на сервере" },
     unserverban = { verb = "снял бан на сервере с" },
     unban     = { verb = "снял глобальный бан" },
-    ban_id    = { verb = "забанил по ID", reason = true, minutes = true },
-    warn      = { verb = "вынес предупреждение", reason = true },
+    ban_id    = { verb = "забанил по ID", reason = true, minutes = true, punish = "бан по SteamID" },
+    warn      = { verb = "вынес предупреждение", reason = true, punish = "предупреждение" },
     respawn   = { verb = "возродил" },
 }
 
@@ -793,8 +799,7 @@ local PUNISH = {
 local function punishText(actorName, targetName, op, args, targetWas)
     local row = PUNISH[op]
     if not row then return nil end
-    local verb = row.verb
-    if row.toggle and targetWas then verb = row.release or row.verb end
+    local releasing = row.toggle and targetWas
 
     local tail = ""
     if row.seconds and not targetWas then
@@ -809,6 +814,17 @@ local function punishText(actorName, targetName, op, args, targetWas)
         local reason = string.Trim(tostring((args and args.reason) or ""))
         if reason ~= "" then tail = tail .. " · причина: " .. string.sub(reason, 1, 120) end
     end
+
+    -- Вечер-22: формулировка владельца для наказаний: «Администратор X
+    -- наказал игрока Y - глобальный бан на 30 мин. · причина: ...». Вид —
+    -- из строки таблицы (punish); снятие наказания и технические операции
+    -- (freeze/slay/strip...) остаются глагольными — они наказанием не являются.
+    if row.punish and not releasing then
+        return ("Администратор %s наказал игрока %s - %s%s")
+            :format(actorName, targetName, row.punish, tail)
+    end
+    local verb = row.verb
+    if releasing then verb = row.release or row.verb end
     return ("%s %s %s%s"):format(actorName, verb, targetName, tail)
 end
 

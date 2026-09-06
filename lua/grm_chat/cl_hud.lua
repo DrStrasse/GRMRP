@@ -14,11 +14,13 @@ GRMRPChat.__hud = true
 -- «🙂» рисовался квадратом («плохо обрабатывает текст» со скрина 03.09).
 -- вечер-10: «чат маленький» (владелец) — лента поднята 14→17, чип 13→15;
 -- имя шрифта историческое (GRMRP_Chat14), размер — authoritative тут.
+-- вечер-22: владелец «текст слишком маленький» — лента 17→19, чип 15→16;
+-- 19px Segoe UI на тёмной панели GRM, межстрочный шаг 30px — читабельно.
 surface.CreateFont("GRMRP_Chat14", {
-    font = "Segoe UI", size = 17, weight = 400, extended = true
+    font = "Segoe UI", size = 19, weight = 400, extended = true
 })
 surface.CreateFont("GRMRP_ChatChip", {
-    font = "Segoe UI", size = 15, weight = 700, extended = true
+    font = "Segoe UI", size = 16, weight = 700, extended = true
 })
 
 GRMRPChat = GRMRPChat or {}
@@ -34,16 +36,35 @@ local TTL, FADE = 45, 4          -- сек; fade — последние FADE с�
 -- global_hygiene ловят именно это).
 local feedLayout, ensureFeed
 
+-- Вечер-22: робастность. nil-поля и nil-канал не роняют ленту: restore
+-- архива, чужие вызовы AddLine и кривые пакеты доезжают до paint, а не до
+-- ErrorNoHalt-обрушения HUD.
+local RAW_CHAN = { id = "raw", title = "·", color = { r = 255, g = 255, b = 255 } }
+local moduleErrBudget = 3
 local function push(chan, name, text, t, mine)
     local entry = {
-        chan = chan, name = name, text = text, t = t, mine = mine and true or false,
+        chan = istable(chan) and chan or RAW_CHAN,
+        name = tostring(name or ""),
+        text = string.sub(tostring(text or ""), 1, 900),
+        t = tonumber(t) or CurTime(),
+        mine = mine and true or false,
         wallT = os.time(), -- вечер-12: стенное время для истории/хранения
     }
     -- Вечер-21: хук модулей (упоминания перекрашивают entry.color,
     -- подавленные каналы ставят entry.muted — строка уходит в архив, но не
     -- в витрину). Единственная точка подписки — обе ветки (сеть/echo/
     -- AddLine/мост) идут через push.
-    if hook and hook.Run then hook.Run("GRMRPChat_Message", entry) end
+    -- Сбой хука модуля не съедает строку: pcall + лог с бюджетом (3).
+    if hook and hook.Run then
+        local ok, err = pcall(hook.Run, "GRMRPChat_Message", entry)
+        if not ok and moduleErrBudget > 0 then
+            moduleErrBudget = moduleErrBudget - 1
+            if ErrorNoHalt then
+                ErrorNoHalt("[grm_chat] модуль ленты: " .. tostring(err) ..
+                    (moduleErrBudget > 0 and "" or " (дальше молчим)") .. "\n")
+            end
+        end
+    end
     if not entry.muted then
         table.insert(GRMRPChat.lines, entry)
         if #GRMRPChat.lines > MAX_LINES then
@@ -84,7 +105,7 @@ function GRMRPChat.AddSelfLine(raw, selChan)
                 name = ""
                 text = rp.fmt(nick, body, extra.cmd == "do" and { self = true } or nil)
             elseif cid == "pm" then
-                name, text = "📩 " .. (extra.target or "?"), body
+                name, text = "[ЛС] " .. (extra.target or "?"), body
             else
                 name, text = nick, body
             end
@@ -111,22 +132,40 @@ if not GRMRPChat._addTextBridge and chat and chat.AddText then
         if not GRMRPChat.Enabled() then
             return baseAddText(...)
         end
-        local parts = {}
-        for i = 1, select("#", ...) do
-            local v = select(i, ...)
-            if isstring(v) then
-                parts[#parts + 1] = v
-            elseif istable(v) and isstring(v[1]) then
-                parts[#parts + 1] = v[1] -- {color, text}
-            elseif IsValid(v) and v.IsPlayer and v:IsPlayer() then
-                parts[#parts + 1] = v:Nick()
+        -- вечер-22: падение моста не глушит движковый вывод — разбор в
+        -- pcall, при сбое строка уходит базовой реализации. Аргументы
+        -- снимаем в таблицу ДО замыкания: '...' внутри функции недоступен.
+        local argc = select("#", ...)
+        local argv = { ... }
+        local ok = pcall(function()
+            local parts = {}
+            for i = 1, argc do
+                local v = argv[i]
+                if isstring(v) then
+                    parts[#parts + 1] = v
+                elseif istable(v) and isstring(v[1]) then
+                    parts[#parts + 1] = v[1] -- {color, text}
+                elseif IsValid(v) and v.IsPlayer and v:IsPlayer() then
+                    parts[#parts + 1] = v:Nick()
+                end
             end
-        end
-        local text = table.concat(parts, " ")
-        if #text == 0 then return end
-        if GRMRPChat.AddLine then
-            GRMRPChat.AddLine("ooc", "", text, CurTime())
-        end
+            local text = table.concat(parts, " ")
+            if #text == 0 then return end
+            if string.find(text, "[МОДЕРАЦИЯ]", 1, true)
+                or string.find(text, "[АДМИНИСТРАЦИЯ]", 1, true) then
+                -- анонсы админки («[МОДЕРАЦИЯ] Администратор X наказал
+                -- игрока Y - глобальный бан…») — в красный канал
+                -- модерации ленты; префикс уже внутри текста
+                if GRMRPChat.AddNotice then
+                    GRMRPChat.AddNotice(text, "МОДЕРАЦИЯ", 225, 70, 70)
+                    return
+                end
+            end
+            if GRMRPChat.AddLine then
+                GRMRPChat.AddLine("ooc", "", text, CurTime())
+            end
+        end)
+        if not ok then return baseAddText(...) end
     end
     GRMRPChat._addTextBridge = true
 end
@@ -155,7 +194,7 @@ function GRMRPChat.Diagnose()
     local portDesc = "чужие владельцы чата: нет"
     local legacy = (GRMChat and GRMChat ~= GRMRPChat) and GRMChat or nil
     if legacy then
-        portDesc = legacy.SUPPRESSED and "чужие владельцы: подавлены ✓"
+        portDesc = legacy.SUPPRESSED and "чужие владельцы: подавлены"
             or "чужие владельцы: АКТИВЕН — дубль чата!!!"
     end
     local modsN, modsBad = 0, 0
@@ -164,7 +203,7 @@ function GRMRPChat.Diagnose()
         elseif m.state == "error" then modsBad = modsBad + 1 end
     end
     local bits = {
-        "чат вечер-21 (06.09) · автоотыгровки модулей — на шине, лента = панель · SendText для модулей",
+        "чат вечер-22 (06.09) · заход/выход и модерация — в ленте · шрифт 19px · автоотыгровки на шине",
         portDesc .. " · chat.AddText: " .. (GRMRPChat._addTextBridge and "мост к ленте" or "мимо ленты!"),
         "лента: " .. n .. " строк · архив истории: " .. arcN .. " · " .. fdesc,
         "память ввода: " .. inpN .. " строк (↑/↓, переживает рестарт)",
@@ -190,7 +229,8 @@ net.Receive(GRMRPChat.Net.MSG, function()
     local text = net.ReadString()
     net.ReadDouble() -- серверные часы: протокол читаем, возраст НЕ считаем
     if chanId == "system" then
-        push({ title = "!", color = { r = 250, g = 185, b = 63 } }, "", name, CurTime(), false)
+        push({ id = "system", title = "Система", color = { r = 250, g = 185, b = 63 } },
+            "", name, CurTime(), false)
         return
     end
     if string.sub(chanId, -5) == "_self" then
@@ -217,7 +257,7 @@ end)
      искажается тем, что и ввод, то есть ничем. Буфер, часы и hold-логика
      не меняются. ]]
 local feed = nil
-local ROW = 26 -- строка ленты вечером-10 крупнее: 22 -> 26
+local ROW = 30 -- строка ленты: веч.-10 22→26, веч.-22 26→30 (текст 19px)
 
 feedLayout = function(p)
     local w = math.min(900, ScrW() - 32)
@@ -255,7 +295,7 @@ ensureFeed = function()
             if lifeLeft > 0 then
                 shown = shown + 1
                 local x, y = 10, h - 12 - shown * ROW
-                local chan = ln.chan
+                local chan = ln.chan or RAW_CHAN
                 local tag = chan.title or "·"
                 local col = ln.color or chan.color or { r = 255, g = 255, b = 255 }
                 local a = math.floor(255 * lifeLeft + 0.5)
@@ -307,8 +347,21 @@ end)
 -- КАКОЙ сборкой рисует чат, — за спор «починили/не починили» отвечает
 -- одна строка, без консоли. Один раз за сессию клиента.
 function GRMRPChat.AddSystem(text)
-    push({ title = "!", color = { r = 250, g = 185, b = 63 } },
+    push({ id = "system", title = "Система", color = { r = 250, g = 185, b = 63 } },
         tostring(text or ""), "", CurTime(), false)
+end
+
+-- Вечер-22: уведомление с собственным тегом канала. Цвета — язык GRM:
+-- амбра «Система» и красный 225,70,70 анонсов админки — без
+-- самодеятельной палитры.
+function GRMRPChat.AddNotice(text, tag, r, g, b)
+    push({ id = "notice", title = tostring(tag or "Система"),
+        color = {
+            r = tonumber(r) or 250,
+            g = tonumber(g) or 185,
+            b = tonumber(b) or 63,
+        } },
+        "", tostring(text or ""), CurTime(), false)
 end
 
 function GRMRPChat.EnsureFeed()

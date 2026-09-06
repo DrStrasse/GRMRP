@@ -72,16 +72,14 @@ end
 -- в «битый хвост», ровно класс жалоб «плохо обрабатывает текст»).
 GRMRPChat.Utf8Cut = utf8Clamp
 
--- Эмодзи: текстовые смайлы заменяются живыми символами, готовые многобайтные
--- символы sanitize и так сохраняет (продовольствие UTF-8-safe). Дёшево и
--- чисто: ровно те же данные видит превью клиента и лента сервера.
+-- Вечер-22: замена смайлов — НЕ эмодзи. GMod рисует каждый шрифт своей
+-- текстурой и в Segoe UI Emoji не линкуется: пиктограммы U+1F300+ были теми
+-- самыми квадратами, за которые владелец ругал чат («работа с символами»).
+-- Оставлены глифы, гарантированные WGL4: ☺ (U+263A) и ♥ (U+2665) есть в
+-- любом Segoe UI. Прочие смайлы доезжают текстом: читаемо и без тофу.
 local EMOJI = {
-    { ":)", "🙂" }, { "(:", "🙂" }, { "=)", "🙂" },
-    { ":-)", "🙂" }, { ":(", "🙁" }, { ":-(", "🙁" },
-    { ":D", "😃" }, { ":-D", "😃" }, { ";)", "😉" }, { ";-)", "😉" },
-    { ":P", "😛" }, { ":-P", "😛" }, { ":o", "😮" }, { ":O", "😮" },
-    { "<3", "❤" }, { "</3", "💔" }, { "+1", "👍" }, { "-1", "👎" },
-    { ":fire:", "🔥" }, { ":skull:", "💀" }, { "xD", "😆" }
+    { ":)", "☺" }, { ":-)", "☺" }, { "=)", "☺" },
+    { "<3", "♥" },
 }
 
 local function replaceAll(text, from, to)
@@ -131,8 +129,13 @@ function GRMRPChat.Sanitize(text, maxBytes)
     s = s:gsub("[ \t]+", " ")
     s = s:gsub("^ +", "")
     s = s:gsub(" +$", "")
-    s = GRMRPChat.EmojiPass(s) -- "<3" жив: углы разворачиваем ПОСЛЕ эмодзи-паса
-    s = s:gsub("<", "＜"):gsub(">", "＞")
+    s = GRMRPChat.EmojiPass(s)
+    -- вечер-22: нейтрализация разметки — углы разворачиваются в WGL4-кавычки
+    -- ‹ › (U+2039/203A — есть в любом шрифте), а не в CJK-fullwidth: те
+    -- полнотекстные формы и рисовались чужой гарнитурой/тофу («плохо
+    -- обрабатывает текст»). Смысл прежний: ни один RichText-потребитель не
+    -- соберёт тег из пользовательского ввода, а ленте текст читаем.
+    s = s:gsub("<", "‹"):gsub(">", "›")
     return utf8Clamp(s, limit)
 end
 
@@ -255,7 +258,7 @@ GRMRPChat.RP = {
             tostring(ctx and ctx.roll or "?") .. " — " .. res
     end },
     roll = { chan = "dice", echo = true, fmt = function(n, b, ctx)
-        return "🎲 " .. n .. " кидает 1.." .. tostring(ctx and ctx.max or 100) ..
+        return "* " .. n .. " кидает 1.." .. tostring(ctx and ctx.max or 100) ..
             " → " .. tostring(ctx and ctx.roll or "?")
     end }
 }
@@ -280,7 +283,7 @@ function GRMRPChat.PreviewText(name, raw, selChan)
     end
     local cmd = string.lower(cmdRaw)
     if cmd == "pm" then
-        return "📩 " .. (body:match("^(%S+)") or "?") .. ": " ..
+        return "[ЛС] " .. (body:match("^(%S+)") or "?") .. ": " ..
             (string.gsub(body, "^%S+%s*", "", 1) or "")
     end
     local def = GRMRPChat.RP[cmd]
@@ -290,7 +293,7 @@ function GRMRPChat.PreviewText(name, raw, selChan)
             return "[" .. chan.title .. "] " .. name .. ": " .. body
         end
     end
-    return "⚠ /" .. cmd .. " — неизвестная команда"
+    return "! /" .. cmd .. " — неизвестная команда"
 end
 
 -- Разбор строки PlayerSay: "/cmd text" → канал+тело; без слэша — defChan.

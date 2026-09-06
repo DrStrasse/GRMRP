@@ -313,8 +313,8 @@ do
     check("sync рекурсивен (модули в подпапках)", sync:find("def tree(base)", 1, true) ~= nil
         and sync:find("мёртвый файл в бандле", 1, true) ~= nil)
     local hud = read("lua/grm_chat/cl_hud.lua") or ""
-    check("лента: хук модулей в push + уважение muted/color",
-        hud:find('hook.Run("GRMRPChat_Message", entry)', 1, true) ~= nil
+    check("лента: хук модулей в push (pcall, веч.-22) + уважение muted/color",
+        hud:find('pcall(hook.Run, "GRMRPChat_Message", entry)', 1, true) ~= nil
         and hud:find("if not entry.muted then", 1, true) ~= nil
         and hud:find("ln.color or", 1, true) ~= nil)
     local inp = read("lua/grm_chat/cl_input.lua") or ""

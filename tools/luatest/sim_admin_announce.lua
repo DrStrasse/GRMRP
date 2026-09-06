@@ -213,14 +213,16 @@ local function act(op, args)
 end
 
 local jailText = act("jail", { seconds = 90 })
-ok(jailText:find("посадил в клетку", 1, true) ~= nil, "клетка объявляется", jailText)
+ok(jailText:find("наказал игрока", 1, true) ~= nil
+    and jailText:find("заключение в клетку", 1, true) ~= nil,
+    "клетка объявляется наказанием (веч.-22)", jailText)
 ok(jailText:find("90 с", 1, true) ~= nil, "в объявлении указан срок", jailText)
 local freeText = act("jail", {})
 ok(freeText:find("выпустил из клетки", 1, true) ~= nil,
     "повторное нажатие объявляется как освобождение, а не как посадка", freeText)
 
 local muteText = act("mute")
-ok(muteText:find("закрыл текстовый чат", 1, true) ~= nil, "мут объявляется", muteText)
+ok(muteText:find("мут текстового чата", 1, true) ~= nil, "мут объявляется", muteText)
 local unmuteText = act("mute")
 ok(unmuteText:find("вернул текстовый чат", 1, true) ~= nil, "размут объявляется", unmuteText)
 
@@ -229,11 +231,13 @@ ok(warnText:find("предупреждение", 1, true) ~= nil and warnText:fi
     "предупреждение объявляется с причиной", warnText)
 
 print("\n=== 4. ФОРМУЛИРОВКИ ===")
-ok(AD.PunishText("A", "B", "ban", { minutes = 60, reason = "чит" }, false)
-    :find("на 60 мин.", 1, true) ~= nil, "у бана указан срок")
+local banFull = AD.PunishText("A", "B", "ban", { minutes = 60, reason = "чит" }, false)
+ok(banFull == "Администратор A наказал игрока B - глобальный бан на 60 мин. · причина: чит",
+    "бан: владелецский формат целиком", tostring(banFull))
 ok(AD.PunishText("A", "B", "ban", { minutes = 0 }, false):find("навсегда", 1, true) ~= nil,
     "вечный бан назван вечным")
-ok(AD.PunishText("A", "B", "kick", { reason = "AFK" }):find("причина: AFK", 1, true) ~= nil,
+ok(AD.PunishText("A", "B", "kick", { reason = "AFK" }):find("кик с сервера", 1, true) ~= nil
+    and AD.PunishText("A", "B", "kick", { reason = "AFK" }):find("причина: AFK", 1, true) ~= nil,
     "у кика указана причина")
 ok(AD.PunishText("A", "B", "goto", {}) == nil, "перемещение админа НЕ объявляется всем")
 ok(AD.PunishText("A", "B", "spectate", {}) == nil, "наблюдение НЕ объявляется всем")

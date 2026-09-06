@@ -3,7 +3,8 @@
     gamemode/lib/grm_chat). Секции: часы ленты (урок веч.-6), лента-панель
     (веч.-9), оттиск/диагностика, размеры (веч.-10), история/хранение
     (веч.-12), память ввода/окно (веч.-12.2), подавление чужих и шина
-    модулей (веч.-13), архитектура библиотеки (веч.-14). ]]
+    модулей (веч.-13), архитектура библиотеки (веч.-14), уведомления и
+    робастность ленты (веч.-22). ]]
 local fails, total = 0, 0
 local function check(name, cond, extra)
     total = total + 1
@@ -77,27 +78,35 @@ for _, path in ipairs(FILES.inp) do
     local s = read(path)
     check(path .. ": /chatdiag перехвачен до отправки",
         s:find('"/chatdiag"', 1, true) ~= nil and s:find("GRMRPChat.Diagnose()", 1, true) ~= nil)
-    check(path .. ": баннер вечер-15", s:find("сборка вечер-21 (06.09)", 1, true) ~= nil)
+    check(path .. ": баннер вечер-15", s:find("сборка вечер-22 (06.09)", 1, true) ~= nil)
 end
 for _, path in ipairs(FILES.hud) do
     local s = read(path)
     check(path .. ": Diagnose пишет в ленту",
         s:find("function GRMRPChat.Diagnose", 1, true) ~= nil
         and s:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
-    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-21 (06.09)", 1, true) ~= nil)
+    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-22 (06.09)", 1, true) ~= nil)
 end
 
 print("\n=== 5. РАЗМЕРЫ ЛЕНТЫ (веч.-10) ===")
 for _, path in ipairs(FILES.hud) do
     local s = read(path)
-    check(path .. ": текст 17px", s:find("size = 17, weight = 400", 1, true) ~= nil)
-    check(path .. ": чип 15px", s:find("size = 15, weight = 700", 1, true) ~= nil)
+    check(path .. ": текст 19px (веч.-22)", s:find("size = 19, weight = 400", 1, true) ~= nil)
+    check(path .. ": чип 16px", s:find("size = 16, weight = 700", 1, true) ~= nil)
+    check(path .. ": мелкого 17px больше нет", s:find("size = 17,", 1, true) == nil)
+    check(path .. ": шаг строки 30px", s:find("ROW = 30", 1, true) ~= nil)
     check(path .. ": полоса по факту (GetTextSize)",
         s:find('cw = surface.GetTextSize("[" .. tag .. "]")', 1, true) ~= nil)
     check(path .. ": фон rounded по ширине строки", s:find("draw.RoundedBox(5, x - 8", 1, true) ~= nil)
     check(path .. ": акцент канала слева", s:find("draw.RoundedBox(0, x - 8", 1, true) ~= nil)
     check(path .. ": старой гадалки «130 + tw» нет", s:find("130 + tw", 1, true) == nil)
     check(path .. ": ленты шире (900px)", s:find("math.min(900, ScrW() - 32)", 1, true) ~= nil)
+end
+for _, path in ipairs(FILES.inp) do
+    local s = read(path)
+    check(path .. ": окно ввода 74px (24+30+20)",
+        s:find(", 74)", 1, true) ~= nil and s:find("row:SetTall(24)", 1, true) ~= nil
+        and s:find("preview:SetTall(20)", 1, true) ~= nil)
 end
 
 print("\n=== 6. ИСТОРИЯ/ХРАНЕНИЕ (веч.-12) ===")
@@ -319,6 +328,76 @@ end
 local sv = read("gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua")
 check("sv-форвардер НЕ карантинит (яд был только в cl)",
     sv:find("IsAddonChatStale", 1, true) == nil)
+
+print("\n=== 11. УВЕДОМЛЕНИЯ И РОБАСТНОСТЬ (веч.-22) ===")
+for _, path in ipairs(FILES.hud) do
+    local s = read(path)
+    check(path .. ": push нормализует name/text", s:find('name = tostring(name or "")', 1, true) ~= nil)
+    check(path .. ": push гарантирует t", s:find("t = tonumber(t) or CurTime()", 1, true) ~= nil)
+    check(path .. ": push: nil-канал → RAW_CHAN", s:find("chan = istable(chan) and chan or RAW_CHAN", 1, true) ~= nil)
+    check(path .. ": paint: chan-фолбэк (restore-строки)", s:find("local chan = ln.chan or RAW_CHAN", 1, true) ~= nil)
+    check(path .. ": хук модулей в pcall (строка не съедается)",
+        s:find('pcall(hook.Run, "GRMRPChat_Message", entry)', 1, true) ~= nil)
+    check(path .. ": системный тег читается («Система»)", s:find('title = "Система"', 1, true) ~= nil)
+    check(path .. ": AddNotice — канал уведомлений", s:find("function GRMRPChat.AddNotice", 1, true) ~= nil)
+    check(path .. ": мост: анонсы — в МОДЕРАЦИЮ", s:find('"МОДЕРАЦИЯ", 225, 70, 70', 1, true) ~= nil)
+    check(path .. ": мост: varargs сняты до замыкания", s:find("local argv = { ... }", 1, true) ~= nil)
+    check(path .. ": мост: при сбое — базовый chat.AddText", s:find("if not ok then return baseAddText(...) end", 1, true) ~= nil)
+end
+for _, path in ipairs(FILES.inp) do
+    local s = read(path)
+    check(path .. ": отправка в pcall, строка уже в ленте",
+        s:find("if not ok and GRMRPChat.AddSystem then", 1, true) ~= nil)
+end
+for _, path in ipairs(FILES.sv) do
+    local s = read(path)
+    check(path .. ": PlayerSay-хук под pcall (ошибка → nil)",
+        s:find("local ok, res = pcall(GRMRPChat.OnPlayerSay", 1, true) ~= nil)
+    check(path .. ": net-вход под pcall (автору — баннер)",
+        s:find("Сообщение не обработано", 1, true) ~= nil)
+end
+for _, path in ipairs(FILES.core) do
+    local s = read(path)
+    check(path .. ": символы — WGL4-safe (эмодзи-тофу вырезан)",
+        s:find("🙁", 1, true) == nil and s:find("📩", 1, true) == nil
+        and s:find("🎲", 1, true) == nil and s:find("🔥", 1, true) == nil)
+    check(path .. ": smile→☺, <3→♥", s:find('":)", "☺"', 1, true) ~= nil
+        and s:find('"<3", "♥"', 1, true) ~= nil)
+    check(path .. ": fullwidth-углов нет", s:find("＜", 1, true) == nil)
+    check(path .. ": нейтралка углов — WGL4 ‹›", s:find('gsub("<", "‹"):gsub(">", "›")', 1, true) ~= nil)
+end
+local pkSrc = read("lua/grm_chat/modules/client/cl_picker.lua")
+check("пикер: ≡ вместо ✦ (Segoe UI гарантирует)", pkSrc ~= nil
+    and pkSrc:find("≡ отыгровки", 1, true) ~= nil and pkSrc:find("✦", 1, true) == nil)
+local gm = read("gamemodes/grmrp/gamemode/init.lua")
+check("режим: GM:PlayerSay не роняется чатом", gm ~= nil
+    and gm:find("pcall(GRMRPChat.OnPlayerSay, ply, text, teamChat, isDead)", 1, true) ~= nil)
+local adm = read("lua/autorun/server/sv_grm_admin_actions.lua")
+check("админка: вид наказания — существительные в PUNISH", adm ~= nil
+    and adm:find('punish = "глобальный бан"', 1, true) ~= nil
+    and adm:find('punish = "кик с сервера"', 1, true) ~= nil
+    and adm:find('punish = "мут текстового чата"', 1, true) ~= nil)
+check("админка: формат владельца в punishText", adm ~= nil
+    and adm:find("Администратор %s наказал игрока %s - %s%s", 1, true) ~= nil)
+local pk = read("lua/grm_chat/modules/client/cl_picker.lua")
+check("пикер дорастит окно под свою кнопку (FILL не режется)", pk ~= nil
+    and pk:find("frame:SetTall(frame:GetTall() + 22)", 1, true) ~= nil)
+for _, jlPath in ipairs({
+    "lua/grm_chat/modules/server/sv_joinleave.lua",
+    "gamemodes/grmrp/gamemode/lib/grm_chat/modules/server/sv_joinleave.lua",
+}) do
+    local j = read(jlPath)
+    check(jlPath .. ": владелецские формулировки", j ~= nil
+        and j:find("зашёл на сервер", 1, true) ~= nil
+        and j:find("вышел с сервера", 1, true) ~= nil)
+    check(jlPath .. ": default ВКЛ", j ~= nil and j:find('"grmrp_chat_joinleave", "1"', 1, true) ~= nil)
+end
+check("serverban: AD-действие глушит внутренний анонс SB (нет дубля)",
+    adm ~= nil and adm:find("{ silent = true }", 1, true) ~= nil)
+local banCore = read("lua/autorun/sh_grm_ban.lua")
+check("бан-модуль: opts.silent поддержан Ban/Unban", banCore ~= nil
+    and banCore:find("function SB.Ban(actor, target, minutes, reason, opts)", 1, true) ~= nil
+    and banCore:find("function SB.Unban(actor, query, opts)", 1, true) ~= nil)
 
 print(("\nCHAT CLOCKS: %d/%d, провалов: %d"):format(total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

@@ -286,11 +286,19 @@ end
 
 -- Ввод из нашего окна. Тот же ProcessLine — дублирование запрещено (§5.2).
 net.Receive(GRMRPChat.Net.SAY, function(len, ply)
-    local sel = string.sub(net.ReadString(), 1, GRMRPChat.SUGAR_MAX)
-    local text = net.ReadString()
-    text = string.sub(text, 1, GRMRPChat.HARD_MAX * 2) -- физрежем ДО ядра
-    if not GRMRPChat.GetChannel(sel) then sel = "ic" end -- канал — реестр, не доверие
-    GRMRPChat.ProcessLine(ply, text, sel)
+    -- вечер-22: кривой пакет/сбой ядра не должен вешать net-обработчик —
+    -- ошибка логируется, автор получает баннер, сервер живёт дальше.
+    local ok, err = pcall(function()
+        local sel = string.sub(net.ReadString(), 1, GRMRPChat.SUGAR_MAX)
+        local text = net.ReadString()
+        text = string.sub(text, 1, GRMRPChat.HARD_MAX * 2) -- физрежем ДО ядра
+        if not GRMRPChat.GetChannel(sel) then sel = "ic" end -- канал — реестр, не доверие
+        GRMRPChat.ProcessLine(ply, text, sel)
+    end)
+    if not ok then
+        if ErrorNoHalt then ErrorNoHalt("[grm_chat] net-обработка: " .. tostring(err) .. "\n") end
+        sendSystem(ply, "Сообщение не обработано (сбой чата) — попробуйте ещё раз")
+    end
 end)
 
 hook.Add("PlayerDisconnect", "GRMRPChat", function(ply)
@@ -305,7 +313,14 @@ end)
 hook.Add("PlayerSay", "GRMRPChat_Capture", function(ply, text, teamChat, isDead)
     if GAMEMODE and GAMEMODE.__chatOwnsPlayerSay then return end
     if GRMRPChat._inExternal then return "" end -- ре-ентерь цепочки: съедено
-    return GRMRPChat.OnPlayerSay(ply, text, teamChat, isDead)
+    -- вечер-22: сбой чата не должен ломать цепочку say сервера — при ошибке
+    -- возвращаем nil (движок обрабатывает строку сам), лог одна строка.
+    local ok, res = pcall(GRMRPChat.OnPlayerSay, ply, text, teamChat, isDead)
+    if not ok then
+        if ErrorNoHalt then ErrorNoHalt("[grm_chat] PlayerSay-обработка: " .. tostring(res) .. "\n") end
+        return nil
+    end
+    return res
 end)
 
 -- Вечер-14: поздняя страховка смешанных установок (перерегистрация чужих

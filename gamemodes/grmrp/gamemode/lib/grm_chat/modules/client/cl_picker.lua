@@ -35,14 +35,19 @@ hook.Add("GRMRPChat_InputBuilt", "grm_chat.picker", function(frame, entry)
     local btn = vgui.Create("DButton", frame)
     frame.grmChatPicker = btn
     btn:Dock(TOP)
-    btn:SetTall(18)
+    btn:SetTall(22)
     btn:SetText("")
+    -- вечер-22: пикер докован в то же окно — дорастит frame на свою высоту,
+    -- иначе FILL-поле ввода сжимается (шрифт 19px в 8 px = «текст режет»).
+    if isfunction(frame.SetTall) and isfunction(frame.GetTall) then
+        frame:SetTall(frame:GetTall() + 22)
+    end
     btn.DoClick = function() openMenu(entry) end
     btn.Paint = function(p, w, h)
         surface.SetDrawColor(18, 30, 48, 200)
         surface.DrawRect(0, 0, w, h)
-        draw.SimpleText("✦ отыгровки / команды — Shift+Tab", "GRMRP_ChatChip",
-            8, 3, Color(120, 200, 160))
+        draw.SimpleText("≡ отыгровки / команды — Shift+Tab", "GRMRP_ChatChip",
+            8, 4, Color(120, 200, 160))
     end
 end)
 

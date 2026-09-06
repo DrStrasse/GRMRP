@@ -527,7 +527,7 @@ if SERVER then
     -------------------------------------------------------------------
     -- БАН / РАЗБАН
     -------------------------------------------------------------------
-    function SB.Ban(actor, target, minutes, reason)
+    function SB.Ban(actor, target, minutes, reason, opts)
         if not IsValid(target) or not target:IsPlayer() then return false, "Игрок не в сети" end
         minutes = math.Clamp(math.floor(tonumber(minutes) or 60), 0, 525600)
         reason = string.sub(string.Trim(tostring(reason or "Нарушение правил")), 1, 120)
@@ -563,7 +563,12 @@ if SERVER then
 
         local text = ("%s забанен на сервере (%s) · %s"):format(target:Nick(),
             minutes > 0 and (minutes .. " мин.") or "бессрочно", reason)
-        announce(actorName(actor) .. " выдал бан на сервере: " .. text)
+        -- Вечер-22: когда бан идёт из AD-действия, ленту ведёт PUNISH-строка
+        -- («наказал игрока … - бан на сервере») — silent снимает второй красный
+        -- дубль. Античит и консоль (opts нет) объявляют как прежде.
+        if not (opts and opts.silent) then
+            announce(actorName(actor) .. " выдал бан на сервере: " .. text)
+        end
         if GRM.Notify then
             GRM.Notify(target, "Вы забанены на сервере: " .. reason, 255, 90, 90)
         end
@@ -574,7 +579,7 @@ if SERVER then
         return true, text
     end
 
-    function SB.Unban(actor, query)
+    function SB.Unban(actor, query, opts)
         local sid = tostring(query or "")
         local target
         for _, p in ipairs((GRM.Perf and GRM.Perf.Players) and GRM.Perf.Players() or player.GetAll()) do
@@ -593,8 +598,10 @@ if SERVER then
             SB.Clear(target, back)
             if GRM.Notify then GRM.Notify(target, "Серверный бан снят.", 100, 220, 130) end
         end
-        announce(actorName(actor) .. " снял бан на сервере с " ..
-            (IsValid(target) and target:Nick() or sid))
+        if not (opts and opts.silent) then
+            announce(actorName(actor) .. " снял бан на сервере с " ..
+                (IsValid(target) and target:Nick() or sid))
+        end
         return true, "Серверный бан снят"
     end
 

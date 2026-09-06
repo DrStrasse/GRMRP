@@ -199,14 +199,20 @@ check("mention: короткий ник игнор", G.MentionHit("Петя", "V
 
 sv._me = { IsValid = function() return true end, Nick = function() return "Вася" end }
 local spawn = sv._hooks["PlayerInitialSpawn|grm_chat.joinleave"]
+-- вечер-22: владелец — формулировки «зашёл/вышел с сервера», default ВКЛ
 spawn({ IsValid = function() return true end, Nick = function() return "Вася" end })
-check("joinleave default off → молчим", #G._bc == 0 and #sv._timers == 0)
-sv._cvars["grmrp_chat_joinleave"].v = "1"
-spawn({ IsValid = function() return true end, Nick = function() return "Вася" end })
+check("joinleave default on → приветствие отложено", #sv._timers == 1 and #G._bc == 0)
+check("joinleave cvar создан с default \"1\"",
+    sv._cvars["grmrp_chat_joinleave"] ~= nil and sv._cvars["grmrp_chat_joinleave"].v == "1")
 for _, fn in ipairs(sv._timers) do fn() end
-check("joinleave on: приветствие в broadcast", #G._bc == 1 and G._bc[1]:find("присоединился") ~= nil, G._bc[1])
+check("joinleave: приветствие дословно владельческое",
+    #G._bc == 1 and G._bc[1] == "Игрок Вася зашёл на сервер", tostring(G._bc[1]))
 sv._hooks["PlayerDisconnect|grm_chat.joinleave"]({ IsValid = function() return true end, Nick = function() return "Вася" end })
-check("joinleave on: прощание", #G._bc == 2 and G._bc[2]:find("покинул") ~= nil)
+check("joinleave: прощание дословно владельческое",
+    #G._bc == 2 and G._bc[2] == "Игрок Вася вышел с сервера", tostring(G._bc[2]))
+sv._cvars["grmrp_chat_joinleave"].v = "0"
+sv._hooks["PlayerDisconnect|grm_chat.joinleave"]({ IsValid = function() return true end, Nick = function() return "Петя" end })
+check("joinleave off → молчим", #G._bc == 2)
 
 print("\n=== CLIENT: mute-каналы, mentions, completion, picker ===")
 local cl = boot("CLIENT")

@@ -133,10 +133,17 @@ local function send(text)
         GRMRPChat.AddSelfLine(text, selChan)
     end
 
-    net.Start(GRMRPChat.Net.SAY)
-        net.WriteString(selChan)
-        net.WriteString(text)
-    net.SendToServer()
+    -- вечер-22: сетевой слой может отказать (не на сервере, порт не готов) —
+    -- строка уже в ленте через эхо, пасть из-за доставки не имеем права.
+    local ok = pcall(function()
+        net.Start(GRMRPChat.Net.SAY)
+            net.WriteString(selChan)
+            net.WriteString(text)
+        net.SendToServer()
+    end)
+    if not ok and GRMRPChat.AddSystem then
+        GRMRPChat.AddSystem("Доставка на сервер не удалась — сообщение видно только вам")
+    end
 end
 
 -- Вечер-12: модули (биндер!) печатают отыгровки ЭТИМ путём. Сервер автору не
@@ -288,7 +295,7 @@ local function build()
     -- EditablePanel, не DFrame: у DFrame заголовок+поля съедали ~30 из 76 px,
     -- строка ввода схлопывалась в 0 и «уходила за нижний край» (скрин 03.09).
     frame = vgui.Create("EditablePanel")
-    frame:SetSize(math.Clamp(ScrW() * 0.55, 460, 900), 66)
+    frame:SetSize(math.Clamp(ScrW() * 0.55, 460, 900), 74)
     frame.Paint = function(_, w, h)
         draw.RoundedBox(5, 0, 0, w, h, Color(8, 14, 23, 242))
         surface.SetDrawColor(40, 62, 92, 110)
@@ -300,7 +307,7 @@ local function build()
 
     local preview = vgui.Create("DLabel", frame)
     preview:Dock(BOTTOM)
-    preview:SetTall(16)
+    preview:SetTall(20)
     preview:SetFont("GRMRP_Chat14")
     preview:SetTextColor(Color(132, 160, 178))
     preview:SetContentAlignment(4)
@@ -308,7 +315,7 @@ local function build()
 
     local row = vgui.Create("DPanel", frame)
     row:Dock(TOP)
-    row:SetTall(22)
+    row:SetTall(24)
     row:SetPaintBackground(false)
 
     chips = {}
@@ -363,7 +370,7 @@ local function build()
     hbtn:SetText("")
     hbtn:Dock(LEFT)
     hbtn:DockMargin(3, 3, 0, 1)
-    hbtn:SetWide(64)
+    hbtn:SetWide(76)
     hbtn.Paint = function(_, w, h)
         draw.SimpleText("история", "GRMRP_ChatChip", w / 2, 3,
             Color(132, 160, 178), TEXT_ALIGN_CENTER)
@@ -374,8 +381,8 @@ local function build()
         toggleHistory()
     end
 
-    -- 66 = 22 (чипы) + 28 (ввод) + 16 (превью): FILL ровно 28 px — поле
-    -- ввода видимое и кликабельное целиком.
+    -- 74 = 24 (чипы) + 30 (ввод) + 20 (превью): FILL ровно 30 px — поле
+    -- ввода видимое и кликабельное целиком (веч.-22: текст 19px).
     entry = vgui.Create("DTextEntry", frame)
     entry:Dock(FILL)
     entry:SetFont("GRMRP_Chat14")
@@ -530,7 +537,7 @@ function GRMRPChat.OpenInput()
     end
     if not GRMRPChat._bannered and GRMRPChat.AddSystem then
         GRMRPChat._bannered = true
-        GRMRPChat.AddSystem("чат GRM · сборка вечер-21 (06.09) · /chatdiag · библиотека едина (дублей чата нет) · память ввода — переживает рестарт")
+        GRMRPChat.AddSystem("чат GRM · сборка вечер-22 (06.09) · /chatdiag · шрифт 19px · уведомления в ленте · память ввода — переживает рестарт")
     end
     if not IsValid(frame) then build() end
     frame:Show()

@@ -155,6 +155,39 @@ do
     local nLines = isT(GRMRPChat.lines) and #GRMRPChat.lines or -1
     check("cl: строки накапливаются (4: AddSystem/AddLine/net/мост)", nLines == 4, nLines)
 
+    -- Вечер-22: анонс модерации (путь AD.Announce → chat.AddText) обязан
+    -- приехать в ленту красным тегом МОДЕРАЦИЯ; цвета — не строки, мост их
+    -- пропускает так же, как в движке.
+    ok, err = pcall(function()
+        chat.AddText({ r = 225, g = 70, b = 70 }, "[МОДЕРАЦИЯ] ",
+            { r = 240, g = 220, b = 220 },
+            "Администратор Иван наказал игрока Петр - глобальный бан навсегда")
+    end)
+    check("cl: анонс [МОДЕРАЦИЯ] доходит до ленты", ok, err)
+    local last = GRMRPChat.lines[#GRMRPChat.lines]
+    check("cl: анонс — в теге МОДЕРАЦИЯ с текстом наказания",
+        last and last.chan and last.chan.title == "МОДЕРАЦИЯ"
+        and last.text:find("наказал игрока Петр - глобальный бан навсегда", 1, true) ~= nil,
+        last and (tostring(last.chan and last.chan.title) .. " / " .. tostring(last.text)))
+
+    -- Вечер-22: падающий хук модуля не съедает строку и не крэшит HUD.
+    _G.hook.Run = function(nm)
+        if nm == "GRMRPChat_Message" then error("модуль-диверсант") end
+    end
+    ok, err = pcall(function() GRMRPChat.AddLine("ic", "Вася", "живем", CurTime()) end)
+    check("cl: падающий хук модуля НЕ крашит push", ok, err)
+    last = GRMRPChat.lines[#GRMRPChat.lines]
+    check("cl: строка после сбоя модуля всё равно в ленте",
+        last and last.text == "живем", last and tostring(last.text))
+    _G.hook.Run = function() end
+    -- nil-аргументы: нормализация push (tostring/tonumber/RAW_CHAN).
+    ok, err = pcall(function() GRMRPChat.AddLine(nil, nil, nil, nil) end)
+    check("cl: AddLine(nil,nil,nil,nil) не роняет ленту", ok, err)
+    last = GRMRPChat.lines[#GRMRPChat.lines]
+    check("cl: nil-аргументы нормализованы (text='' t=число chan=·)",
+        last and last.text == "" and isnumber(last.t)
+        and last.chan and last.chan.title == "·")
+
     for k, v in pairs(saved) do _G[k] = v end
     GRMRPChat = nil
 end

@@ -42,20 +42,20 @@ hook.Add("GRMRPChat_InputBuilt", "grm_chat.completion", function(frame, entry)
     menu:SetKeyboardInputEnabled(false)
     menu.Paint = function(p, w, _h)
         if #st.items == 0 then return end
-        local h = #st.items * 17 + 6
+        local h = #st.items * 20 + 6
         surface.SetDrawColor(12, 20, 33, 240)
         surface.DrawRect(0, 0, w, h)
         surface.SetDrawColor(56, 84, 120, 160)
         surface.DrawOutlinedRect(0, 0, w, h)
         for i, it in ipairs(st.items) do
-            local y = 4 + (i - 1) * 17
+            local y = 4 + (i - 1) * 20
             if i == st.sel then
                 surface.SetDrawColor(48, 204, 255, 36)
-                surface.DrawRect(2, y - 1, w - 4, 16)
+                surface.DrawRect(2, y - 1, w - 4, 19)
             end
             draw.SimpleText(it.name, "GRMRP_Chat14", 8, y,
                 Color(140, 220, 255), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-            draw.SimpleText(it.hint, "GRMRP_Chat14", 92, y,
+            draw.SimpleText(it.hint, "GRMRP_Chat14", 116, y,
                 Color(132, 160, 178), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
         end
     end
