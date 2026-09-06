@@ -270,5 +270,64 @@ do
     check("свой GRMRPChat_*-хук уцелел", hookTable.PlayerSay.GRMRPChat_Capture ~= nil)
 end
 
+
+print("\n=== 4. АВТОЗАГРУЗЧИК И МОДУЛИ (веч.-21, EasyChat-style) ===")
+do
+    local function read(p)
+        local f = io.open(p, "rb")
+        if not f then return nil end
+        local c = f:read("*a")
+        f:close()
+        return c
+    end
+    local autorun = read("lua/autorun/grm_chat.lua") or ""
+    check("авторан подключает loader", autorun:find('include("grm_chat/loader.lua")', 1, true) ~= nil
+        and autorun:find('AddCSLuaFile("grm_chat/loader.lua")', 1, true) ~= nil)
+    local loader = read("lua/grm_chat/loader.lua") or ""
+    check("loader: pcall-изоляция модулей", loader:find("pcall(include, path)", 1, true) ~= nil)
+    check("loader: ignore-лист + три realm-папки",
+        loader:find("module_ignore.txt", 1, true) ~= nil
+        and loader:find('loadDir("shared"', 1, true) ~= nil
+        and loader:find('loadDir("server"', 1, true) ~= nil
+        and loader:find('loadDir("client"', 1, true) ~= nil)
+    for _, P in ipairs({
+        "gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua",
+        "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua",
+    }) do
+        local f = read(P) or ""
+        check(P .. ": форвардер зовёт loader с Mount lib",
+            f:find('GRMRPChat.Mount = "lib/grm_chat"', 1, true) ~= nil
+            and f:find('include("lib/grm_chat/loader.lua")', 1, true) ~= nil)
+    end
+    for _, rel in ipairs({
+        "loader.lua", "modules/shared/sh_emotes.lua",
+        "modules/client/cl_mentions.lua", "modules/client/cl_completion.lua",
+        "modules/client/cl_picker.lua", "modules/client/cl_channels.lua",
+        "modules/server/sv_joinleave.lua",
+    }) do
+        local a, b = read("lua/grm_chat/" .. rel),
+            read("gamemodes/grmrp/gamemode/lib/grm_chat/" .. rel)
+        check("бандл содержит " .. rel, a ~= nil and b ~= nil and a == b)
+    end
+    local sync = read("tools/sync_chat_addon.py") or ""
+    check("sync рекурсивен (модули в подпапках)", sync:find("def tree(base)", 1, true) ~= nil
+        and sync:find("мёртвый файл в бандле", 1, true) ~= nil)
+    local hud = read("lua/grm_chat/cl_hud.lua") or ""
+    check("лента: хук модулей в push + уважение muted/color",
+        hud:find('hook.Run("GRMRPChat_Message", entry)', 1, true) ~= nil
+        and hud:find("if not entry.muted then", 1, true) ~= nil
+        and hud:find("ln.color or", 1, true) ~= nil)
+    local inp = read("lua/grm_chat/cl_input.lua") or ""
+    check("окно: точка расширения + якоря ввода",
+        inp:find('hook.Run("GRMRPChat_InputBuilt", frame, entry)', 1, true) ~= nil
+        and inp:find("function GRMRPChat.GetInputEntry", 1, true) ~= nil
+        and inp:find("function GRMRPChat.SetInputText", 1, true) ~= nil)
+    local svn = read("lua/grm_chat/sv_net.lua") or ""
+    check("sv: BroadcastSystem (один путь ленты)",
+        svn:find("function GRMRPChat.BroadcastSystem", 1, true) ~= nil)
+    local comp = read("lua/grm_chat/modules/client/cl_completion.lua") or ""
+    check("completion не трогает OnEnter (веч.-8)", comp:find("OnEnter", 1, true) == nil)
+end
+
 print(("\nCHAT LIB ARCHITECTURE: %d/%d, провалов: %d"):format(total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

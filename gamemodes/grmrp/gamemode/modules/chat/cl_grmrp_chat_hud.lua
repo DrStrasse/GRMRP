@@ -15,3 +15,8 @@ else
     if stale and GRMRPChat then GRMRPChat.__hud = nil end
     include("lib/grm_chat/cl_hud.lua")
 end
+-- Вечер-21: модули автозагрузчиком (в т.ч. карантин: у СТАРОГО аддона
+-- loader'а нет — берём свой, свежий).
+GRMRPChat = GRMRPChat or {}
+GRMRPChat.Mount = "lib/grm_chat"
+include("lib/grm_chat/loader.lua")

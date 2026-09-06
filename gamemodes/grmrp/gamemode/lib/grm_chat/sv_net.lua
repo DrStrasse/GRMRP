@@ -61,6 +61,16 @@ local function sendSystem(ply, text)
 end
 GRMRPChat.SendSystem = sendSystem
 
+-- Вечер-21: системная строка всем (join/leave-модуль, объявления ядра).
+function GRMRPChat.BroadcastSystem(text)
+    net.Start(GRMRPChat.Net.MSG)
+        net.WriteString("system")
+        net.WriteString(GRMRPChat.Sanitize(text, cvMax:GetInt()))
+        net.WriteString("")
+        net.WriteDouble(0)
+    net.Broadcast()
+end
+
 -- forcedTargets (вечер-15): явно заданный круг слушателей от вызывающей
 -- системы (GRM.RPBroadcast с targets) — для событий с чужой геометрией
 -- слышимости (предъявление «только цели», представление «в радиусе модуля»).

@@ -28,6 +28,19 @@ def read(p):
         return fh.read()
 
 
+def tree(base):
+    """Все .lua бандла относительными путями (веч.-21: модули в подпапках)."""
+    out = []
+    for root, _dirs, names in os.walk(base):
+        for fn in names:
+            if fn.endswith(".lua"):
+                out.append(os.path.relpath(os.path.join(root, fn), base))
+    return sorted(out)
+
+
+FILES = tree(SRC)
+
+
 def check():
     bad = []
     for name in FILES:
@@ -37,20 +50,25 @@ def check():
             continue
         if not os.path.exists(d) or read(s) != read(d):
             bad.append("бандл расходится с библиотекой: " + name)
+    for name in tree(DST):
+        if name not in FILES:
+            bad.append("мёртвый файл в бандле: " + name)
     if bad:
         for b in bad:
             print("sync_chat_addon: " + b)
         return 1
-    print("чат-библиотека и бандл режима идентичны")
+    print("чат-библиотека и бандл режима идентичны (" + str(len(FILES))
+          + " файлов)")
     return 0
 
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "--check":
         sys.exit(check())
-    os.makedirs(DST, exist_ok=True)
-    for name in FILES:
-        shutil.copyfile(os.path.join(SRC, name), os.path.join(DST, name))
+    for name in tree(SRC):
+        d = os.path.join(DST, name)
+        os.makedirs(os.path.dirname(d), exist_ok=True)
+        shutil.copyfile(os.path.join(SRC, name), d)
         print("обновлён бандл: gamemodes/grmrp/gamemode/lib/grm_chat/" + name)
     sys.exit(check())
 

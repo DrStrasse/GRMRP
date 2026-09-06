@@ -11,3 +11,6 @@ if file and file.Exists and file.Exists("grm_chat/sv_net.lua", "LUA") then
 else
     include("lib/grm_chat/sv_net.lua")
 end
+GRMRPChat = GRMRPChat or {}
+GRMRPChat.Mount = "lib/grm_chat"
+include("lib/grm_chat/loader.lua")

@@ -33,3 +33,8 @@ else
     for _, f in each(MODULES_SHARED) do include("grm_chat/" .. f) end
     for _, f in each(MODULES_CLIENT) do include("grm_chat/" .. f) end
 end
+
+-- Вечер-21: автозагрузчик модулей (после ядра; сам разошлёт модульные
+-- файлы клиентам на серверной проходе).
+if SERVER then AddCSLuaFile("grm_chat/loader.lua") end
+include("grm_chat/loader.lua")

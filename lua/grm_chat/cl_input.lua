@@ -468,6 +468,9 @@ local function build()
     -- Прежний полный переопределитель проглотил его — «Enter ничего не
     -- делает» (скрин 03.09). Цепляем базу: себе — Tab/стрелки/Escape,
     -- остальное — базовой обработке (Enter, редактирование, вставка).
+    -- Вечер-21: точка расширения модулей (пикер отыгрышей, автодополнение).
+    if hook and hook.Run then hook.Run("GRMRPChat_InputBuilt", frame, entry) end
+
     local baseTyped = entry.OnKeyCodeTyped
     entry.OnKeyCodeTyped = function(pp, code)
         if code == KEY_ENTER or code == KEY_RETURN or
@@ -503,6 +506,18 @@ local function build()
     end
 end
 
+-- Вечер-21: публичные якоря для модулей (cl_completion/cl_picker).
+function GRMRPChat.GetInputEntry()
+    return IsValid(entry) and entry or nil
+end
+
+function GRMRPChat.SetInputText(text)
+    local e = GRMRPChat.GetInputEntry()
+    if not e then return end
+    e:SetText(tostring(text or ""))
+    if e.SetCaretPos then e:SetCaretPos(#tostring(text or "")) end
+end
+
 function GRMRPChat.OpenInput()
     if not (GRMRPChat.GetChannel and GRMRPChat.Sanitize) then
         -- ядро не загрузилось (битый install/ошибка файла) —Say тихо, но один раз
@@ -515,7 +530,7 @@ function GRMRPChat.OpenInput()
     end
     if not GRMRPChat._bannered and GRMRPChat.AddSystem then
         GRMRPChat._bannered = true
-        GRMRPChat.AddSystem("чат GRM · сборка вечер-20 (04.09) · /chatdiag · библиотека едина (дублей чата нет) · память ввода — переживает рестарт")
+        GRMRPChat.AddSystem("чат GRM · сборка вечер-21 (06.09) · /chatdiag · библиотека едина (дублей чата нет) · память ввода — переживает рестарт")
     end
     if not IsValid(frame) then build() end
     frame:Show()

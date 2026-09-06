@@ -1,5 +1,31 @@
 # CHANGELOG — история изменений
 
+## 2026-09-06 (вечер-21) — чат: модульная библиотека по живому исходнику EasyChat
+
+Приказ владельца: «сначала проработаем чат… нормальная, обширная библиотека;
+ты видел EasyChat вообще?» — замер по факту (свежий исходник Earu/EasyChat,
+8k+ LOC): позаимствован был только паттерн лоадера. Вечер-21 нагоняет
+содержание, не ломая ядро:
+
+- loader.lua — автозагрузка grm_chat/modules/{shared,client,server} (pcall-
+  изоляция, реестр GRMRPChat.Modules, ignore-файл data/grm_chat/module_ignore.txt)
+  — по образцу autoloader.lua EasyChat; режим подключает loader из бандла
+  (Mount "lib/grm_chat"), карантин веч.-20 переживает и его.
+- 6 модулей: sh_emotes (единый каталог отыгрышей/каналов/чужих команд +
+  LowerFold + CompleteCandidates + MentionHit), cl_mentions (перекрас+звук,
+  cvar grmrp_chat_mention_sound), cl_completion (Shift+Tab-меню над вводом;
+  Enter НЕ трогается), cl_picker (кнопка ✦ и /emotes: вставка «/cmd » с
+  кареткой — украшение без подмены), cl_channels (/mute /unmute /mutes,
+  подавленная строка уходит в архив без витрины; переживает рестарт),
+  sv_joinleave (по умолчанию выкл; один путь ленты через BroadcastSystem).
+- Хуки расширения: GRMRPChat_Message (мутация line.color/line.muted),
+  GRMRPChat_InputBuilt; якоря GetInputEntry/SetInputText; /chatdiag печатает
+  состояние модулей; sync_chat_addon рекурсивен (бандл = 11 файлов).
+- Валидация: sim_chat_modules 31/31 (реальный bootstrap loader'а на обоих
+  realm с моками file/hook/net/vgui), lib_arch 34/34 (стена §4), clocks
+  156/156 (форвардер = клей, без логики), grmrp_chat 65/65, sv_routing 47/47,
+  rp_bridge 23/23 (синхронизация с шиной отыгрышей цела), binder 148/148,
+  quarantine 6/6; suite 26/65 == базлайн; loadfile/стиль чисты.
 ## 2026-09-04 (вечер-20) — карантин устаревшего аддона в режиме; живая витрина dist
 
 Третий байт-в-байт залп (SetBounds @addons/grm cl_hud:211 + «blocked (quit)»

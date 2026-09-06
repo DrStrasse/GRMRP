@@ -39,9 +39,16 @@ local function push(chan, name, text, t, mine)
         chan = chan, name = name, text = text, t = t, mine = mine and true or false,
         wallT = os.time(), -- вечер-12: стенное время для истории/хранения
     }
-    table.insert(GRMRPChat.lines, entry)
-    if #GRMRPChat.lines > MAX_LINES then
-        table.remove(GRMRPChat.lines, 1)
+    -- Вечер-21: хук модулей (упоминания перекрашивают entry.color,
+    -- подавленные каналы ставят entry.muted — строка уходит в архив, но не
+    -- в витрину). Единственная точка подписки — обе ветки (сеть/echo/
+    -- AddLine/мост) идут через push.
+    if hook and hook.Run then hook.Run("GRMRPChat_Message", entry) end
+    if not entry.muted then
+        table.insert(GRMRPChat.lines, entry)
+        if #GRMRPChat.lines > MAX_LINES then
+            table.remove(GRMRPChat.lines, 1)
+        end
     end
     -- Вечер-12 («хранение»): лента — витрина (TTL-подметание её честно
     -- убивает), история — архив. Архив TTL не подметается, живёт дольше
@@ -151,13 +158,20 @@ function GRMRPChat.Diagnose()
         portDesc = legacy.SUPPRESSED and "чужие владельцы: подавлены ✓"
             or "чужие владельцы: АКТИВЕН — дубль чата!!!"
     end
+    local modsN, modsBad = 0, 0
+    for _, m in pairs(GRMRPChat.Modules or {}) do
+        if m.state == "loaded" then modsN = modsN + 1
+        elseif m.state == "error" then modsBad = modsBad + 1 end
+    end
     local bits = {
-        "чат вечер-20 (04.09) · автоотыгровки модулей — на шине, лента = панель · SendText для модулей",
+        "чат вечер-21 (06.09) · автоотыгровки модулей — на шине, лента = панель · SendText для модулей",
         portDesc .. " · chat.AddText: " .. (GRMRPChat._addTextBridge and "мост к ленте" or "мимо ленты!"),
         "лента: " .. n .. " строк · архив истории: " .. arcN .. " · " .. fdesc,
         "память ввода: " .. inpN .. " строк (↑/↓, переживает рестарт)",
         "окно истории: " .. (GRMRPChat.HIST_OPEN and "открыто" or "закрыто") .. " · источник — архив, не лента",
         "enable=" .. (cv and tostring(cv:GetBool()) or "cvar нет → вкл"),
+        "модули: " .. modsN .. (modsBad > 0 and (" · ОШИБОК: " .. modsBad)
+            or ""),
         hold,
     }
     for _, s in ipairs(bits) do print("[GRMRP chat] " .. s) end
@@ -243,7 +257,7 @@ ensureFeed = function()
                 local x, y = 10, h - 12 - shown * ROW
                 local chan = ln.chan
                 local tag = chan.title or "·"
-                local col = chan.color or { r = 255, g = 255, b = 255 }
+                local col = ln.color or chan.color or { r = 255, g = 255, b = 255 }
                 local a = math.floor(255 * lifeLeft + 0.5)
 
                 -- «Странные полосы» вечера-9: фон рисовался по формуле

@@ -77,14 +77,14 @@ for _, path in ipairs(FILES.inp) do
     local s = read(path)
     check(path .. ": /chatdiag перехвачен до отправки",
         s:find('"/chatdiag"', 1, true) ~= nil and s:find("GRMRPChat.Diagnose()", 1, true) ~= nil)
-    check(path .. ": баннер вечер-15", s:find("сборка вечер-20 (04.09)", 1, true) ~= nil)
+    check(path .. ": баннер вечер-15", s:find("сборка вечер-21 (06.09)", 1, true) ~= nil)
 end
 for _, path in ipairs(FILES.hud) do
     local s = read(path)
     check(path .. ": Diagnose пишет в ленту",
         s:find("function GRMRPChat.Diagnose", 1, true) ~= nil
         and s:find('GRMRPChat.AddLine("ooc", "чат-диаг"', 1, true) ~= nil)
-    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-20 (04.09)", 1, true) ~= nil)
+    check(path .. ": Diagnose — вечер-15", s:find("чат вечер-21 (06.09)", 1, true) ~= nil)
 end
 
 print("\n=== 5. РАЗМЕРЫ ЛЕНТЫ (веч.-10) ===")
@@ -266,9 +266,11 @@ do
     for _, name in ipairs({ "sh_grmrp_chat_core", "sv_grmrp_chat", "cl_grmrp_chat", "cl_grmrp_chat_hud" }) do
         local p = "gamemodes/grmrp/gamemode/modules/chat/" .. name .. ".lua"
         local s = read(p)
-        check("форвардер тонкий: " .. name,
-            s ~= nil and #s < 1200 and s:find('include("grm_chat/', 1, true) ~= nil
-                and s:find('include("lib/grm_chat/', 1, true) ~= nil)
+        check("форвардер — только клей (никакой логики чата внутри): " .. name,
+            s ~= nil and #s < 2400 and s:find('include("grm_chat/', 1, true) ~= nil
+                and s:find('include("lib/grm_chat/', 1, true) ~= nil
+                and s:find("vgui.Create", 1, true) == nil
+                and s:find("hook.Add", 1, true) == nil)
     end
     for key, pair in pairs(FILES) do
         local a, b = read(pair[1]), read(pair[2])
