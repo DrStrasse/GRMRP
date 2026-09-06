@@ -381,6 +381,14 @@ check("меню режима: SystemLine → живой API AddSystem (не push
     read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua") ~= nil
     and read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua"):find("GRMRPChat.AddSystem(text)", 1, true) ~= nil
     and read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua"):find("GRMRPChat.pushSystem", 1, true) == nil)
+local menuSrc = read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua") or ""
+check("меню: активация gameui глобалкой gui.ActivateGameUI (канон lua/menu движка)",
+    menuSrc:find("isfunction(gui.ActivateGameUI)", 1, true) ~= nil)
+check("меню: перепост движковой команды по TTL и страховка isfunction(RunGameUICommand)",
+    menuSrc:find("Menu.pendingTTL", 1, true) ~= nil
+    and menuSrc:find("isfunction(RunGameUICommand)", 1, true) ~= nil)
+check("меню: оттиск сборки веч.-23 (виден владельцу в шапке)",
+    menuSrc:find("вечер-23 (06.09)", 1, true) ~= nil)
 check("режим: GM:PlayerSay не роняется чатом", gm ~= nil
     and gm:find("pcall(GRMRPChat.OnPlayerSay, ply, text, teamChat, isDead)", 1, true) ~= nil)
 local adm = read("lua/autorun/server/sv_grm_admin_actions.lua")

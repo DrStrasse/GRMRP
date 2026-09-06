@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-21 (06.09)'
+Menu.BuildStamp = 'вечер-23 (06.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -90,13 +90,21 @@ Menu.AddTab({ id = "newgame", order = 40, title = "Новая игра (лока
         end)
         if not ok then Menu.SystemLine("Не удалось: " .. tostring(err)) end
     end })
--- «Мастерская» — стандартное окно: главное меню движка (Addons/Workshop
--- живут в нём). Внешний URL был подменой функционала — снято (вечер-9).
+-- «Мастерская» — СТАНДАРТНОЕ окно: gameui-меню движка, в нём вкладка AddOns
+-- (Workshop живёт в ней). Команды «открой вкладку AddOns» у движка нет —
+-- внешнего URL-самопала не будет (уроки веч.-9/-23). Открытие чинится ниже:
+-- gui.ActivateGameUI вместо конанкоманды-призрака.
 Menu.AddTab({ id = "workshop", order = 50, title = "Мастерская", accent = COL.gold,
     action = function() Menu.OpenGameuiWith(nil) end })
+-- Вечер-23: отключение — штатная клиентская команда движка (её дёргает и
+-- кнопка gameui): один вызов из игрового состояния, без gameui-очереди —
+-- «кое-как с перебоями» было именно гонкой очереди на чужую команду.
 Menu.AddTab({ id = "disconnect", order = 70, title = "Отключиться от сервера", accent = COL.red,
     visible = function() return not game.SinglePlayer() end,
-    action = function() Menu.OpenGameuiWith("Disconnect") end })
+    action = function()
+        Menu.Close()
+        RunConsoleCommand("disconnect")
+    end })
 Menu.AddTab({ id = "quit", order = 80, title = "Выход из игры", accent = COL.red,
     action = function() Menu.OpenGameuiWith("quit") end })
 
@@ -444,6 +452,12 @@ function Menu.Close()
     Menu.root = nil
     Menu.model = nil
     Menu.modelRef = nil
+    -- Вечер-23 («перебои» у «Вернуться в игру»): когда gameui вскрывали НЕ мы,
+    -- закрытие окна обязано погасить и движковый слой — иначе под следующим
+    -- ESC лежит невидимый «уже открытый» gameui и порядок кадров плывёт.
+    if not Menu.ownsGameui and not Menu.pendingCmd and gui.IsGameUIVisible() then
+        gui.HideGameUI()
+    end
     -- Грейс: движок вскрывает gameui от того же нажатия ESC; в окне грейса
     -- его НЕ перехватываем (не «возвращаем» своё окно), а тихо гасим.
     -- Открытие стандартного диалога настроек само снимает флаг.
@@ -462,13 +476,27 @@ end
 -- молчит; пользователь закрывает engine-UI сам, и порядок ESC = диалог →
 -- меню движка → игра.
 function Menu.OpenGameuiWith(cmd)
-    Menu.Close()
+    -- Флаги ставятся ДО Close: Close не должен погасить gameui, который мы
+    -- сейчас сами открываем (вечер-23).
     Menu.justClosedRT = nil -- это не гонка ESC: gameui открыт нами
     Menu.ownsGameui = true
     Menu.pendingCmd = cmd
-    Menu.pendingTries = cmd and 0 or nil
+    Menu.pendingTTL = cmd and (CurTime() + 2.5) or nil
+    Menu.Close()
+    -- Close() выставляет грейс-окно (это защита от гонки ESC) — здесь это НЕ
+    -- гонка: gameui открываем сами, грейс снимает его в тот же кадр.
+    Menu.justClosedRT = nil
     if not gui.IsGameUIVisible() then
-        pcall(function() RunConsoleCommand("gameui_activate") end)
+        -- Вечер-23: каноническая активация — глобалка gui.ActivateGameUI
+        -- (её зовёт сам движок в lua/menu/*). RunConsoleCommand("gameui_activate")
+        -- оставлен запасным каналом: из игрового состояния он принимается не
+        -- всегда — прежняя единственная ставка на него и была «мастерская
+        -- пустая, настройки не открываются».
+        if isfunction(gui.ActivateGameUI) then
+            pcall(gui.ActivateGameUI)
+        else
+            pcall(function() RunConsoleCommand("gameui_activate") end)
+        end
     end
 end
 
@@ -482,17 +510,31 @@ end
 -- окно. Кнопки, сами зовущие gameui (настройки/браузер/мастерская), помечают
 -- сессию своей (ownsGameui) — в своей сессии движку не мешаем.
 hook.Add("Think", "GRMRPMenu_Takeover", function()
+    -- Вечер-23: состояние «команда в очередь». Прошлая версия стреляла один
+    -- раз и считала pcall-успех доставкой — движок принимает команды лишь
+    -- когда меню-состояние реально поднято, и не отвечает «принято»; отсюда
+    -- «иногда срабатывает, иногда нет». Теперь: перепост каждый кадр пока
+    -- gameui видим, до истечения TTL (2.5 с), ДВУМЯ каналами: RunGameUICommand
+    -- (глобалка доступна не во всех состояниях — отсюда isfunction) и
+    -- gamemenucommand (тот же путь движковых кнопок, lua/menu/mainmenu.lua).
+    -- Идемпотентность на стороне движка: повторный вызов не открывает второй
+    -- диалог и не «выходит дважды».
+    if Menu.pendingCmd then
+        if CurTime() > (Menu.pendingTTL or 0) then
+            Menu.pendingCmd = nil
+            Menu.pendingTTL = nil
+        elseif gui.IsGameUIVisible() then
+            if isfunction(RunGameUICommand) then
+                pcall(RunGameUICommand, Menu.pendingCmd)
+            end
+            pcall(RunConsoleCommand, "gamemenucommand", Menu.pendingCmd)
+        end
+        return
+    end
     if gui.IsGameUIVisible() then
         if IsValid(Menu.root) then return end
         if Menu.justClosedRT and RealTime() - Menu.justClosedRT < 0.4 then
             gui.HideGameUI()
-            return
-        end
-        if Menu.pendingCmd then
-            local ok = pcall(function() RunGameUICommand(Menu.pendingCmd) end)
-            Menu.pendingTries = (Menu.pendingTries or 0) + 1
-            if ok then Menu.pendingCmd = nil
-            elseif Menu.pendingTries > 10 then Menu.pendingCmd = nil end
             return
         end
         if Menu.ownsGameui then return end
