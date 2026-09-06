@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-24 (06.09)'
+Menu.BuildStamp = 'вечер-25 (06.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -163,27 +163,10 @@ function Menu.Open()
     root:MakePopup()
     root.animStart = CurTime()
     root.bgAlpha = 0
-    -- ESC навешивается ДО контента: если сборка содержимого ошибётся,
-    -- попоп не должен остаться висеть и есть invnext/invprev (селектор
-    -- оружия «умер» именно так — крах Skin() в модели, лив 03.09).
-    function root:OnKeyCodeTyped(code)
-        if code == KEY_ESCAPE then
-            -- обратный порядок (претензия вечера-9): ESC гасит ВЕРХНИЙ
-            -- слой — открытый ввод/историю чата оставляет себе, меню
-            -- закрывается, только когда оно и есть верхний слой.
-            -- Вечер-24: «возвращаем ключ» (return false) был дырой — у
-            -- истории фокус перехвачен корнем, клавиша не доходила НИКУДА.
-            -- Теперь меню САМО закрывает историю (верхний слой), а ввод
-            -- живёт своим окном и клавишу получает напрямую.
-            if GRMRPChat and GRMRPChat.HIST_OPEN then
-                if GRMRPChat.CloseHistory then GRMRPChat.CloseHistory() end
-                return true
-            end
-            if GRMRPChat and GRMRPChat.INPUT_OPEN then return false end
-            Menu.Close()
-            return true
-        end
-    end
+    -- Вечер-25: ESC НЕ здесь. Панельный обработчик требовал фокуса, а его
+    -- движок у нас отбирает (gameui-кадр) — «залипает: жмёшь, ничего не
+    -- происходит». Единый владелец ESC — сканер GRMRPMenu_Takeover (Think),
+    -- независимый от фокуса; порядок «история → меню → игра» живёт там же.
 
     local colW = math.Clamp(scrW * 0.24, 300, 380)
 
@@ -246,7 +229,12 @@ function Menu.Open()
             end
             b.DoClick = function()
                 surface.PlaySound("buttons/button14.wav")
-                def.action()
+                -- Вечер-25: ошибка действия не должна оставлять полуживую
+                -- панель («залипание кнопки») — pcall + видимая строка в ленту.
+                local ok, err = pcall(def.action)
+                if not ok then
+                    Menu.SystemLine("Кнопка «" .. tostring(def.title) .. "»: " .. tostring(err))
+                end
             end
             b.DoRightClick = b.DoClick
             b.Think = function(s)
@@ -434,10 +422,8 @@ function Menu.Open()
     ------------------------------------------------------------Think: только анимации
     root.AnimEnd = CurTime() + 0.05 * #animList + 0.35
     root.Think = function(s)
-        -- Пока открыто МЕНЮ РЕЖИМА, движковый gameui не имеет права висеть
-        -- поверх (гонка ESC 03.09: «стандартное меню открывается поверх»):
-        -- снимаем его в тот же кадр тихо, без пересоздания нашего окна.
-        if gui.IsGameUIVisible() then gui.HideGameUI() end
+        -- Вечер-25: гашение чужого gameui централизовано в хуке Takeover
+        -- (один владелец — нет гонок двух hide на кадр). Здесь — только анимации.
         local now = CurTime()
         if now < s.AnimEnd then
             local g = easeOut((now - s.animStart) / 0.5)
@@ -464,10 +450,9 @@ function Menu.Close()
     if not Menu.ownsGameui and not Menu.pendingCmd and gui.IsGameUIVisible() then
         gui.HideGameUI()
     end
-    -- Грейс: движок вскрывает gameui от того же нажатия ESC; в окне грейса
-    -- его НЕ перехватываем (не «возвращаем» своё окно), а тихо гасим.
-    -- Открытие стандартного диалога настроек само снимает флаг.
-    Menu.justClosedRT = RealTime()
+    -- Вечер-25: грейс-окно (justClosedRT 0.4с) УБРАНО — оно и съедало
+    -- следующий ESC («залипает»). Эхо клавиши теперь гаснет в сканере
+    -- без влияния на следующее нажатие: флаг фазы escWasDown точнее времени.
 end
 
 -- Настройки/браузер/мастерская = СТАРОЕ: диалоги движка через gamemenucommand
@@ -484,14 +469,11 @@ end
 function Menu.OpenGameuiWith(cmd)
     -- Флаги ставятся ДО Close: Close не должен погасить gameui, который мы
     -- сейчас сами открываем (вечер-23).
-    Menu.justClosedRT = nil -- это не гонка ESC: gameui открыт нами
     Menu.ownsGameui = true
     Menu.pendingCmd = cmd
     Menu.pendingTTL = cmd and (CurTime() + 2.5) or nil
+    Menu.lastToggle = CurTime()
     Menu.Close()
-    -- Close() выставляет грейс-окно (это защита от гонки ESC) — здесь это НЕ
-    -- гонка: gameui открываем сами, грейс снимает его в тот же кадр.
-    Menu.justClosedRT = nil
     if not gui.IsGameUIVisible() then
         -- Вечер-23: каноническая активация — глобалка gui.ActivateGameUI
         -- (её зовёт сам движок в lua/menu/*). RunConsoleCommand("gameui_activate")
@@ -511,20 +493,26 @@ function Menu.OpenStandardSettings()
 end
 
 ------------------------------------------------------------------ перехват ESC
--- Движок открывает gameui по ESC без lua-хука; стандартный приём gamemode'ов —
--- поймать видимый gameui, спрятать его (SP: снимает паузу) и показать своё
--- окно. Кнопки, сами зовущие gameui (настройки/браузер/мастерская), помечают
--- сессию своей (ownsGameui) — в своей сессии движку не мешаем.
+-- Вечер-25 (залп «уже хорошо, но залипает/мерцает; работает пару раз»):
+-- старая схема «поймали видимый gameui → спрятали → открыли окно» шла ПОСЛЕ
+-- движка: окно появлялось на кадр позже вспышки CEF-меню («мерцает»), а
+-- грейс-окно после Close съедало следующий ESC («жмёшь — ничего»). Новый
+-- контракт — сканер фронтов нажатия (тот же приём у движка в lua/menu/
+-- problems/problems_pnl.lua: input.IsKeyDown(KEY_ESCAPE)):
+--   * окно открывается/закрывается в КАДР нажатия, не дожидаясь gameui —
+--     вспышки нет, фокус не нужен (вот почему залипало: root без фокуса ключ
+--     не получал, а грейс глушил перехват);
+--   * чужое gameui (эхо той же клавиши, ремап, случайное вскрытие) гасится
+--     безусловно и молча — но если его вскрыли НЕ нашим фронтом (пользователь
+--     перебиндил ESC), по факту видимости всё ещё открываемся: fallback
+--     защищён от самооткрытия меткой lastToggle;
+--   * порядок «ESC закрывает ВЕРХНЕЕ»: история чата → меню → игра (веч.-9/-24
+--     семантика сохранена), при открытом вводе чата ESC не наш (keytrap);
+--   * свою gameui-сессию (настройки/браузер/мастерская/quit) не трогаем.
+local escWasDown = false
 hook.Add("Think", "GRMRPMenu_Takeover", function()
-    -- Вечер-23: состояние «команда в очередь». Прошлая версия стреляла один
-    -- раз и считала pcall-успех доставкой — движок принимает команды лишь
-    -- когда меню-состояние реально поднято, и не отвечает «принято»; отсюда
-    -- «иногда срабатывает, иногда нет». Теперь: перепост каждый кадр пока
-    -- gameui видим, до истечения TTL (2.5 с), ДВУМЯ каналами: RunGameUICommand
-    -- (глобалка доступна не во всех состояниях — отсюда isfunction) и
-    -- gamemenucommand (тот же путь движковых кнопок, lua/menu/mainmenu.lua).
-    -- Идемпотентность на стороне движка: повторный вызов не открывает второй
-    -- диалог и не «выходит дважды».
+    -- Очередь движковых команд (веч.-23): перепост каждый кадр, пока gameui
+    -- видим, до TTL — движок не отвечает «принято», повтор идемпотентен.
     if Menu.pendingCmd then
         if CurTime() > (Menu.pendingTTL or 0) then
             Menu.pendingCmd = nil
@@ -537,18 +525,39 @@ hook.Add("Think", "GRMRPMenu_Takeover", function()
         end
         return
     end
-    if gui.IsGameUIVisible() then
-        if IsValid(Menu.root) then return end
-        if Menu.justClosedRT and RealTime() - Menu.justClosedRT < 0.4 then
-            gui.HideGameUI()
-            return
+    local chatBusy = GRMRPChat and GRMRPChat.INPUT_OPEN
+    local down = isfunction(input.IsKeyDown) and input.IsKeyDown(KEY_ESCAPE) or false
+    if down and not escWasDown and not chatBusy then
+        if IsValid(Menu.root) then
+            -- закрытие — сканером, а не панелью: фокус движок у нас отбирает
+            if GRMRPChat and GRMRPChat.HIST_OPEN and GRMRPChat.CloseHistory then
+                GRMRPChat.CloseHistory()
+            else
+                Menu.lastToggle = CurTime()
+                Menu.Close()
+            end
+        elseif not Menu.ownsGameui then
+            Menu.lastToggle = CurTime()
+            if GRMRPChat and GRMRPChat.HIST_OPEN and GRMRPChat.CloseHistory then
+                GRMRPChat.CloseHistory()
+            else
+                Menu.Open()
+            end
         end
-        if Menu.ownsGameui then return end
-        gui.HideGameUI()
-        Menu.Open()
-        return
     end
-    if Menu.ownsGameui then
+    escWasDown = down
+    if gui.IsGameUIVisible() and not Menu.ownsGameui then
+        gui.HideGameUI()
+        if not IsValid(Menu.root) and not chatBusy
+            and CurTime() - (Menu.lastToggle or -9) > 0.3 then
+            if GRMRPChat and GRMRPChat.HIST_OPEN and GRMRPChat.CloseHistory then
+                GRMRPChat.CloseHistory()
+            else
+                Menu.Open()
+            end
+        end
+    end
+    if not gui.IsGameUIVisible() and Menu.ownsGameui then
         -- пользователь закрыл engine-UI: обратный порядок сыгран до конца,
         -- перехват снова свободен
         Menu.ownsGameui = false

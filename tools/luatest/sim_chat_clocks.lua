@@ -387,8 +387,18 @@ check("меню: активация gameui глобалкой gui.ActivateGameUI
 check("меню: перепост движковой команды по TTL и страховка isfunction(RunGameUICommand)",
     menuSrc:find("Menu.pendingTTL", 1, true) ~= nil
     and menuSrc:find("isfunction(RunGameUICommand)", 1, true) ~= nil)
-check("меню: оттиск сборки веч.-24 (виден владельцу в шапке)",
-    menuSrc:find("вечер-24 (06.09)", 1, true) ~= nil)
+check("меню: оттиск сборки веч.-25 (виден владельцу в шапке)",
+    menuSrc:find("вечер-25 (06.09)", 1, true) ~= nil)
+check("меню: ESC — сканер фронтов (открытие в кадр нажатия, без вспышки gameui)",
+    menuSrc:find("input.IsKeyDown(KEY_ESCAPE)", 1, true) ~= nil
+    and menuSrc:find("local escWasDown = false", 1, true) ~= nil)
+check("меню: грейс-окно-пожиратель удалено (залипание ESC после Close)",
+    menuSrc:find("Menu.justClosedRT =", 1, true) == nil)
+check("меню: гашение gameui в одном месте (не в root.Think)",
+    menuSrc:find("if gui.IsGameUIVisible() then gui.HideGameUI() end", 1, true) == nil
+    and menuSrc:find("if gui.IsGameUIVisible() and not Menu.ownsGameui then", 1, true) ~= nil)
+check("меню: действия кнопок под pcall (нет «залипания» после ошибки)",
+    menuSrc:find("local ok, err = pcall(def.action)", 1, true) ~= nil)
 local cin = read("lua/grm_chat/cl_input.lua") or ""
 local chud = read("lua/grm_chat/cl_hud.lua") or ""
 check("история: без фантомного DLabel:SetWrap — явный WrapText от ширины окна",
@@ -397,11 +407,10 @@ check("история: без фантомного DLabel:SetWrap — явный
 check(" WrapText: режет переслов и бережёт UTF-8-пары",
     chud:find("function GRMRPChat.WrapText", 1, true) ~= nil
     and chud:find("nb < 0x80 or nb >= 0xC0", 1, true) ~= nil)
-check("история: ESC закрывается независимо от фокуса (Think-страховка + API)",
+check("история: ESC закрывается независимо от фокуса (Think-страховка + сканер веч.-25)",
     cin:find('hook.Add("Think", "GRMRPChat_HistEsc"', 1, true) ~= nil
     and cin:find("function GRMRPChat.CloseHistory()", 1, true) ~= nil
-    and menuSrc:find("if GRMRPChat and GRMRPChat.HIST_OPEN then", 1, true) ~= nil
-    and menuSrc:find("GRMRPChat.CloseHistory()", 1, true) ~= nil)
+    and menuSrc:find("if GRMRPChat and GRMRPChat.HIST_OPEN and GRMRPChat.CloseHistory then", 1, true) ~= nil)
 check("анти-спам: локальное зеркало кулдауна в отправке (отбивка, нет ложного эха)",
     cin:find("GRMRPChat.CooldownLeft(effChan)", 1, true) ~= nil
     and cin:find("GRMRPChat.MarkCooldownSend(effChan)", 1, true) ~= nil

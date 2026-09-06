@@ -59,7 +59,7 @@ check("смена модели — полная пересъёмка", has("appl
 print("\n=== 5. РАЗМЕР И ОТТИСК ===")
 check("окно модели не меньше 240px", has("240, 440"))
 check("карточка раздвинута до 430px", has("320, 430"))
-check("оттиск сборки вечер-24", has("вечер-24 (06.09)"))
+check("оттиск сборки вечер-25", has("вечер-25 (06.09)"))
 
 print("\n=== 3. ДЕНЬГИ: КАРТОЧКА + КАССЕТЫ (вечер-11) ===")
 check("карточка: «На счёту» рядом с «Деньги»", has('statRow(card, statsBase + 84, "На счёту")'))
@@ -77,11 +77,15 @@ check("gui.OpenURL из меню вырезан", not has("gui.OpenURL"))
 check("подавления на фиксированные 30 секунд нет", not has("CurTime() + 30"))
 check("сессия gameui помечается своей", has("Menu.ownsGameui = true"))
 check("команда ждёт реального menu-состояния", has("if Menu.pendingCmd then"))
-check("ESC сперва закрывает историю (веч.-24: ключ не должен теряться)",
-    has("if GRMRPChat and GRMRPChat.HIST_OPEN then")
+check("ESC сперва закрывает историю (сканер веч.-25: ключ не теряется без фокуса)",
+    has("if GRMRPChat and GRMRPChat.HIST_OPEN and GRMRPChat.CloseHistory then")
     and has("GRMRPChat.CloseHistory()"))
-check("ESC при открытом вводе остаётся вводу",
-    has("if GRMRPChat and GRMRPChat.INPUT_OPEN then return false end"))
+check("ESC при открытом вводе остаётся вводу (chatBusy guard)",
+    has("local chatBusy = GRMRPChat and GRMRPChat.INPUT_OPEN")
+    and has("if down and not escWasDown and not chatBusy then"))
+check("ESC открыт-закрыт — один владелец: сканер, не панель (веч.-25)",
+    not has("root:OnKeyCodeTyped")
+    and has("input.IsKeyDown(KEY_ESCAPE)"))
 check("фолбек-копия групп 1..8 для кривых списков", has("ply:GetBodygroup(i)"))
 
 print(("\nMENU SHOWCASE: %d/%d, провалов: %d"):format(total - fails, total, fails))
