@@ -27,7 +27,6 @@ local files = {
     "lua/autorun/client/cl_grm_hud.lua",
     "lua/grm_chat/cl_input.lua",
     "lua/grm_chat/cl_hud.lua",
-    "gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua",
     "gamemodes/grmrp/gamemode/lib/grm_chat/cl_input.lua",
     "gamemodes/grmrp/gamemode/lib/grm_chat/cl_hud.lua",
 }
@@ -50,6 +49,18 @@ do
     check("автоскролл консоли — SetCaretPos в конец",
         has(adm, "out:SetCaretPos(#"))
     check("SetCaretPos застрахован Existence-guard'ом", has(adm, "if out.SetCaretPos then"))
+    -- Вечер-29: боев «attempt to call method 'SetBackgroundColor' (a nil
+    -- value)» @1397 (x86-64/Source Engine 24). SetBackgroundColor — accessor
+    -- класса DPanel; DTextEntry наследуется от базовой Panel, где его нет.
+    -- Тёмный фон поля — родитель-DPanel (своя Paint) + SetPaintBackground
+    -- (false) у поля: этот аксессор движковый dtextentry.lua зовёт у себя
+    -- в Init, т.е. на классе гарантирован.
+    check("веч.-29: ни одного :SetBackgroundColor( в админке (запрет на DTextEntry)",
+        not has(adm, ":SetBackgroundColor("))
+    check("веч.-29: тёмный вывод — поле теряет скиновую текстуру (SetPaintBackground(false))",
+        has(adm, "out:SetPaintBackground(false)"))
+    check("веч.-29: тёмную коробку рисует родитель-DPanel",
+        has(adm, "outBox.Paint = function(s, w, h) draw.RoundedBox(4, 0, 0, w, h, C.sidebar) end"))
 end
 
 print("\n=== 3. ИСТОРИЯ ЧАТА (реальные API + размер) ===")
@@ -74,7 +85,7 @@ print("\n=== 4. RUNTIME: трейс владельца 04.09 (AddSystem→push�
 do
     local isT = function(v) return type(v) == "table" end
     local PHANTOM = { SetKeyInputEnabled = true, SetReadOnly = true,
-        SetBounds = true }
+        SetBounds = true, SetBackgroundColor = true }
     local panelMT
     local function newPanel() return setmetatable({ __panel = true }, panelMT) end
     panelMT = { __index = function(p, k)

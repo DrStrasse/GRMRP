@@ -1384,9 +1384,23 @@ local function buildConsole(pnl)
             "GRMAdm_Small", 2, h / 2, C.orange, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
     end
 
-    local out = vgui.Create("DTextEntry", pnl)
-    out:Dock(FILL) out:DockMargin(0, 6, 0, 6)
+    -- Вечер-29 (боев владельца: «attempt to call method
+    -- 'SetBackgroundColor' (a nil value)» @1397 на x86-64 / Source Engine
+    -- 24): у DTextEntry нет НИ SetReadOnly (веч.-9), НИ SetBackgroundColor —
+    -- тот сеттер живёт в классе DPanel, а DTextEntry наследуется прямо от
+    -- базовой Panel. Тёмный вывод делаем легально: тёмную коробку рисует
+    -- родитель-DPanel своей Paint, а поле лишается скиновой светлой текстуры
+    -- через SetPaintBackground(false) — этот аксессор движковый
+    -- dtextentry.lua зовёт у себя в Init, значит на классе он гарантирован.
+    local outBox = vgui.Create("DPanel", pnl)
+    outBox:Dock(FILL) outBox:DockMargin(0, 6, 0, 6)
+    outBox:SetPaintBackground(false)
+    outBox.Paint = function(s, w, h) draw.RoundedBox(4, 0, 0, w, h, C.sidebar) end
+
+    local out = vgui.Create("DTextEntry", outBox)
+    out:Dock(FILL)
     out:SetMultiline(true) out:SetFont("GRMAdm_Body")
+    out:SetPaintBackground(false)
     -- Живой крах 1389 (владелец, вечер-9): у DTextEntry нет SetReadOnly —
     -- по исходнику движка (garrysmod/lua/vgui/dtextentry.lua) там только
     -- SetEditable/SetDisabled/AllowInput. Вызов несуществующего метода
@@ -1394,7 +1408,7 @@ local function buildConsole(pnl)
     -- read-only: снять клавиатурный ввод, оставить мышь — текст можно
     -- выделить и скопировать.
     out:SetKeyboardInputEnabled(false)
-    out:SetTextColor(C.text) out:SetBackgroundColor(C.sidebar)
+    out:SetTextColor(C.text)
     for _, l in ipairs(AD.ConsoleLines or {}) do out:SetText(out:GetValue() .. l .. "\n") end
 
     local rowIn = vgui.Create("DPanel", pnl)
@@ -1402,7 +1416,9 @@ local function buildConsole(pnl)
     local input = vgui.Create("DTextEntry", rowIn)
     input:Dock(FILL) input:DockMargin(0, 3, 96, 3)
     input:SetFont("GRMAdm_Body") input:SetPlaceholderText("status · get <cvar> · set <cvar> <val> · bans · ac list · любая консольная строка")
-    input:SetTextColor(C.text) input:SetBackgroundColor(C.card)
+    input:SetTextColor(C.text)
+    -- веч.-29: без SetBackgroundColor на DTextEntry (см. выше) — поле в
+    -- штатном скиновом виде, как поиск в спавнменю
     local send = vgui.Create("DButton", rowIn)
     send:Dock(RIGHT) send:SetWide(88) send:SetText("выполнить") send:SetFont("GRMAdm_Btn")
     local function fire()

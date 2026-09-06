@@ -341,10 +341,12 @@ end
 
 -- Вечер-24 (ESC «пересекается с меню паузы и не закрывает ничего»): у
 -- истории фокус может быть потерян (открыли из ввода → окно ввода закрылось
--- → клавиша уходит движку → gameui → меню поверх истории; ESC «в никуда»).
--- Теперь история закрывается ВЕРХНЕЙ клавишей независимо от фокуса:
--- собственным OnKeyCodeTyped, либо перехватом gameui-всплытия здесь, либо
--- форвардом из корня меню паузы (Menu root).
+-- → клавиша уходит движку → gameui; ESC «в никуда»). История закрывается
+-- ВЕРХНЕЙ клавишей независимо от фокуса: собственным OnKeyCodeTyped либо
+-- этой Think-страховкой. Вечер-29: кастомное меню паузы режима УБРАНО по
+-- заказу владельца — движковое ESC-меню первично, библиотека его НЕ трогает
+-- (никаких HideGameUI): если gameui всплыло при открытой истории, история
+-- просто уступает верхний слой и закрывается.
 function GRMRPChat.CloseHistory()
     if IsValid(histPanel) then histPanel:Remove() end
 end
@@ -352,8 +354,7 @@ GRMRPChat.OpenHistory = toggleHistory
 
 hook.Add("Think", "GRMRPChat_HistEsc", function()
     if not IsValid(histPanel) then return end
-    if gui.IsGameUIVisible() and not (IsValid(GRMRPMenu and GRMRPMenu.root)) then
-        gui.HideGameUI()
+    if gui.IsGameUIVisible() then
         GRMRPChat.CloseHistory()
     end
 end)

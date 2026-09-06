@@ -377,69 +377,52 @@ check("загрузка режима: каждый include под pcall (ини�
 check("загрузка режима: смешанная установка — инструкция в лог",
     gm ~= nil and gm:find("устаревшие", 1, true) ~= nil
     and read("gamemodes/grmrp/gamemode/cl_init.lua"):find("устаревшие", 1, true) ~= nil)
-check("меню режима: SystemLine → живой API AddSystem (не pushSystem-фантом)",
-    read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua") ~= nil
-    and read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua"):find("GRMRPChat.AddSystem(text)", 1, true) ~= nil
-    and read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua"):find("GRMRPChat.pushSystem", 1, true) == nil)
-local menuSrc = read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua") or ""
-check("меню: активация gameui глобалкой gui.ActivateGameUI (канон lua/menu движка)",
-    menuSrc:find("isfunction(gui.ActivateGameUI)", 1, true) ~= nil)
-check("меню: перепост движковой команды по TTL и страховка isfunction(RunGameUICommand)",
-    menuSrc:find("Menu.pendingTTL", 1, true) ~= nil
-    and menuSrc:find("isfunction(RunGameUICommand)", 1, true) ~= nil)
-check("меню: оттиск сборки веч.-28 (виден владельцу в шапке)",
-    menuSrc:find("вечер-28 (06.09)", 1, true) ~= nil)
-check("меню: keytrap снят — ~ и любые движковые бинды живы под окном (веч.-27)",
-    menuSrc:find("root:SetKeyboardInputEnabled(false)", 1, true) ~= nil
-    and menuSrc:find('RunConsoleCommand("toggleconsole")', 1, true) == nil)
 check("форвардеры чата: include бандла только через GRM.LibInclude (веч.-27)",
     (read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua") or ""):find("GRM.LibInclude(", 1, true) ~= nil
     and (read("gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua") or ""):find("GRM.LibInclude(", 1, true) ~= nil
     and (read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua") or ""):find("GRM.LibChatMissing()", 1, true) ~= nil
     and (read("lua/autorun/sh_01_grm_core.lua") or ""):find("библиотека чата не найдена", 1, true) ~= nil)
-check("меню: ESC — сканер фронтов (открытие в кадр нажатия, без вспышки gameui)",
-    menuSrc:find("input.IsKeyDown(KEY_ESCAPE)", 1, true) ~= nil
-    and menuSrc:find("local escWasDown = false", 1, true) ~= nil)
-check("меню: грейс-окно-пожиратель удалено (залипание ESC после Close)",
-    menuSrc:find("Menu.justClosedRT =", 1, true) == nil)
-check("меню: гашение gameui в одном месте (не в root.Think)",
-    menuSrc:find("if gui.IsGameUIVisible() then gui.HideGameUI() end", 1, true) == nil
-    and menuSrc:find("if gui.IsGameUIVisible() and not Menu.ownsGameui then", 1, true) ~= nil)
-check("меню: действия кнопок под pcall (нет «залипания» после ошибки)",
-    menuSrc:find("local ok, err = pcall(def.action)", 1, true) ~= nil)
--- Вечер-28: кастомная консоль режима (дубль старой) + отход перед нативной.
-check("меню: guard движковой консоли — сканер отходит, когда открыта ~ (веч.-28)",
-    menuSrc:find("isfunction(gui.IsConsoleVisible) and gui.IsConsoleVisible()", 1, true) ~= nil)
-check("меню: при открытой движковой консоли своя гасится (две консоли — конфликт)",
-    menuSrc:find("pcall(GRMRPConsole.Close)", 1, true) ~= nil
-    and menuSrc:find("if GRMRPConsole and isfunction(GRMRPConsole.Close) then", 1, true) ~= nil)
-check("меню: ESC-иерархия — консоль режима выше меню (веч.-28)",
-    menuSrc:find("if GRMRPConsole and isfunction(GRMRPConsole.IsOpen) and GRMRPConsole.IsOpen() then", 1, true) ~= nil)
-check("меню: вкладка консоли — через реестр и только если модуль доехал (веч.-28)",
-    menuSrc:find("if GRMRPConsole and isfunction(GRMRPConsole.Toggle) then", 1, true) ~= nil
-    and menuSrc:find('Menu.AddTab({ id = "console"', 1, true) ~= nil)
-local conSrc = read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_console.lua") or ""
-check("консоль: файл-дубль на месте и клиент-only (веч.-28)",
-    conSrc ~= "" and conSrc:find("if SERVER then return end", 1, true) ~= nil)
-check("консоль: дубль через широковещательный хук, НЕ через net.Receive (чтец один)",
-    conSrc:find('hook.Add("GRM_AdminConsoleLine", "GRMRPConsole"', 1, true) ~= nil
-    and conSrc:find("net.Receive(", 1, true) == nil)
-check("консоль: имя канала — из реестра GRM.Admin.Net (не строка-копия)",
-    conSrc:find("names.CONSOLE", 1, true) ~= nil
-    and conSrc:find('net.Start("GRM_Admin_Console")', 1, true) == nil)
-check("консоль: история GRM.Admin.ConsoleLines проигрывается один раз",
-    conSrc:find("GRM.Admin.ConsoleLines", 1, true) ~= nil
-    and conSrc:find("historyReplayed", 1, true) ~= nil)
-check("консоль: только реальные методы (без вызовов SetReadOnly/VBar/SetBounds-фантомов)",
-    conSrc:find(":SetReadOnly(", 1, true) == nil
-    and conSrc:find(":VBar(", 1, true) == nil
-    and conSrc:find(":SetBounds(", 1, true) == nil
-    and conSrc:find("SetKeyInputEnabled(", 1, true) == nil
-    and conSrc:find("out:SetKeyboardInputEnabled(false)", 1, true) ~= nil)
-check("консоль: никакого lua-пути к движковой консоли (ULib-блок веч.-27 в силе)",
-    conSrc:find('RunConsoleCommand("toggleconsole"', 1, true) == nil
-    and conSrc:find("RunConsoleCommand", 1, true) == nil
-    and menuSrc:find('RunConsoleCommand("toggleconsole"', 1, true) == nil)
+-- Вечер-29 (заказ владельца): кастомное меню паузы УБРАНО целиком — в новом
+-- движке (x86-64, Source Engine 24) его ESC-перехват рождал ДВА меню.
+-- Режим более не имеет ui-модуля, не трогает gameui и ESC; меню паузы —
+-- только движковое, консоль — только ~ (нативно).
+check("веч.-29: файлы меню/консоли режима более не shipped",
+    read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua") == nil
+    and read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_console.lua") == nil)
+check("веч.-29: gamemode не знает ни про какой перехват ESC/gameui",
+    (function()
+        for _, p in ipairs({
+            "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat.lua",
+            "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua",
+            "gamemodes/grmrp/gamemode/modules/chat/sh_grmrp_chat_core.lua",
+            "gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua",
+            "gamemodes/grmrp/gamemode/cl_init.lua",
+            "gamemodes/grmrp/gamemode/shared.lua",
+            "gamemodes/grmrp/gamemode/init.lua",
+        }) do
+            local s = read(p) or ""
+            if s:find("HideGameUI", 1, true) or s:find("gameui_activate", 1, true)
+                or s:find("IsGameUIVisible", 1, true) or s:find("KEY_ESCAPE", 1, true) then
+                return false
+            end
+        end
+        return true
+    end)())
+check("веч.-29: библиотека чата более не ссылается на GRMRPMenu и не гасит gameui",
+    (function()
+        for _, p in ipairs({ "lua/grm_chat/cl_input.lua",
+            "gamemodes/grmrp/gamemode/lib/grm_chat/cl_input.lua" }) do
+            local s = read(p) or ""
+            if s:find("GRMRPMenu", 1, true) or s:find("gui.HideGameUI(", 1, true) then return false end
+        end
+        return true
+    end)())
+check("веч.-29: админка — DTextEntry без фантомного SetBackgroundColor (боев @1397)",
+    (function()
+        local s = read("lua/autorun/client/cl_grm_admin_panel.lua") or ""
+        if s:find(":SetBackgroundColor(", 1, true) then return false end
+        return s:find("out:SetPaintBackground(false)", 1, true) ~= nil
+    end)())
 local cin = read("lua/grm_chat/cl_input.lua") or ""
 local chud = read("lua/grm_chat/cl_hud.lua") or ""
 check("история: без фантомного DLabel:SetWrap — явный WrapText от ширины окна",
@@ -448,10 +431,10 @@ check("история: без фантомного DLabel:SetWrap — явный
 check(" WrapText: режет переслов и бережёт UTF-8-пары",
     chud:find("function GRMRPChat.WrapText", 1, true) ~= nil
     and chud:find("nb < 0x80 or nb >= 0xC0", 1, true) ~= nil)
-check("история: ESC закрывается независимо от фокуса (Think-страховка + сканер веч.-25)",
+check("история: ESC закрывается независимо от фокуса (Think-страховка; веч.-29 — без gameui-тушения)",
     cin:find('hook.Add("Think", "GRMRPChat_HistEsc"', 1, true) ~= nil
     and cin:find("function GRMRPChat.CloseHistory()", 1, true) ~= nil
-    and menuSrc:find("if GRMRPChat and GRMRPChat.HIST_OPEN and GRMRPChat.CloseHistory then", 1, true) ~= nil)
+    and cin:find("if gui.IsGameUIVisible() then", 1, true) ~= nil)
 check("анти-спам: локальное зеркало кулдауна в отправке (отбивка, нет ложного эха)",
     cin:find("GRMRPChat.CooldownLeft(effChan)", 1, true) ~= nil
     and cin:find("GRMRPChat.MarkCooldownSend(effChan)", 1, true) ~= nil

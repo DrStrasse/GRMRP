@@ -126,17 +126,18 @@ do
     end
 end
 
-print("\n=== E. Стены веч.-27 ===")
-local menuSrc = (function()
-    local f = assert(io.open("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua", "rb"))
+print("\n=== E. Стены веч.-27/-29 ===")
+local function read2(p)
+    local f = io.open(p, "rb")
+    if not f then return nil end
     local s = f:read("*a") f:close() return s
-end)()
-check("меню: keyboard-захват снят (движковые бинды и ~ живы сами)",
-    menuSrc:find("root:SetKeyboardInputEnabled(false)", 1, true) ~= nil)
-check("меню: lua-прокси toggleconsole удалён (ULib-блока нет в пути)",
-    menuSrc:find('RunConsoleCommand("toggleconsole")', 1, true) == nil
-    and menuSrc:find("LookupKeyBinding", 1, true) == nil)
-check("меню: оттиск веч.-28", menuSrc:find("вечер-28 (06.09)", 1, true) ~= nil)
+end
+check("веч.-29: меню паузы режима удалено заказом владельца (файл не shipped)",
+    io.open("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_menu.lua", "rb") == nil
+    and io.open("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_console.lua", "rb") == nil)
+check("веч.-29: тамп-носитель для проверки установки — /chatdiag в чате",
+    (read2("lua/grm_chat/cl_input.lua") or ""):find("chatdiag", 1, true) ~= nil
+    or (read2("lua/grm_chat/cl_hud.lua") or ""):find("chatdiag", 1, true) ~= nil)
 
 print(string.format("\nLOADER FALLBACK: %d/%d, провалов: %d", total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)
