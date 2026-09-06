@@ -1380,7 +1380,7 @@ local function buildConsole(pnl)
     local warn = vgui.Create("DPanel", pnl)
     warn:Dock(TOP) warn:SetTall(34) warn:SetPaintBackground(false)
     warn.Paint = function(_, w, h)
-        draw.SimpleText("Каждая строка уходит в движковый консоль-лог сервера и в аудит. Тишины не будет — коллеги с этим правом видят эхо.",
+        draw.SimpleText("Каждая строка уходит в движковый консоль-лог сервера и в аудит. Тишины не будет — коллеги с этим правом видят эхо.   ·   сборка веч.-29 (нет этой приписки = на сервере СТАРЫЙ cl_grm_admin_panel.lua)",
             "GRMAdm_Small", 2, h / 2, C.orange, TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
     end
 
