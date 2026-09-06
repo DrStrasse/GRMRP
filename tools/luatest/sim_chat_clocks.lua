@@ -277,7 +277,7 @@ do
         local s = read(p)
         check("форвардер — только клей (никакой логики чата внутри): " .. name,
             s ~= nil and #s < 2400 and s:find('include("grm_chat/', 1, true) ~= nil
-                and s:find('include("lib/grm_chat/', 1, true) ~= nil
+                and s:find('LibInclude("lib/grm_chat/', 1, true) ~= nil
                 and s:find("vgui.Create", 1, true) == nil
                 and s:find("hook.Add", 1, true) == nil)
     end
@@ -323,7 +323,7 @@ for _, P in ipairs({ "cl_grmrp_chat_hud.lua", "cl_grmrp_chat.lua" }) do
     local s = read("gamemodes/grmrp/gamemode/modules/chat/" .. P)
     check(P .. ": при stale — встроенная копия + сброс флага",
         s:find("IsAddonChatStale", 1, true) ~= nil
-        and s:find("include(\"lib/grm_chat/", 1, true) ~= nil)
+        and s:find("LibInclude(\"lib/grm_chat/", 1, true) ~= nil)
 end
 local sv = read("gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua")
 check("sv-форвардер НЕ карантинит (яд был только в cl)",
@@ -387,15 +387,16 @@ check("меню: активация gameui глобалкой gui.ActivateGameUI
 check("меню: перепост движковой команды по TTL и страховка isfunction(RunGameUICommand)",
     menuSrc:find("Menu.pendingTTL", 1, true) ~= nil
     and menuSrc:find("isfunction(RunGameUICommand)", 1, true) ~= nil)
-check("меню: оттиск сборки веч.-26 (виден владельцу в шапке)",
-    menuSrc:find("вечер-26 (06.09)", 1, true) ~= nil)
-check("меню: ~ / Ё под меню живёт (LookupKeyBinding + фронт-скан toggleconsole)",
-    menuSrc:find("input.LookupKeyBinding", 1, true) ~= nil
-    and menuSrc:find('RunConsoleCommand("toggleconsole")', 1, true) ~= nil
-    and menuSrc:find('hook.Add("OnBindingChanged", "GRMRPMenu_ConsoleKeys"', 1, true) ~= nil)
-check("меню: консольная клавиша защищена фокусом (печать в консоли не закрывает её)",
-    menuSrc:find("vgui.GetKeyboardFocus() == Menu.root", 1, true) ~= nil
-    or menuSrc:find("focused == Menu.root", 1, true) ~= nil)
+check("меню: оттиск сборки веч.-27 (виден владельцу в шапке)",
+    menuSrc:find("вечер-27 (06.09)", 1, true) ~= nil)
+check("меню: keytrap снят — ~ и любые движковые бинды живы под окном (веч.-27)",
+    menuSrc:find("root:SetKeyboardInputEnabled(false)", 1, true) ~= nil
+    and menuSrc:find('RunConsoleCommand("toggleconsole")', 1, true) == nil)
+check("форвардеры чата: include бандла только через GRM.LibInclude (веч.-27)",
+    (read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua") or ""):find("GRM.LibInclude(", 1, true) ~= nil
+    and (read("gamemodes/grmrp/gamemode/modules/chat/sv_grmrp_chat.lua") or ""):find("GRM.LibInclude(", 1, true) ~= nil
+    and (read("gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua") or ""):find("GRM.LibChatMissing()", 1, true) ~= nil
+    and (read("lua/autorun/sh_01_grm_core.lua") or ""):find("библиотека чата не найдена", 1, true) ~= nil)
 check("меню: ESC — сканер фронтов (открытие в кадр нажатия, без вспышки gameui)",
     menuSrc:find("input.IsKeyDown(KEY_ESCAPE)", 1, true) ~= nil
     and menuSrc:find("local escWasDown = false", 1, true) ~= nil)

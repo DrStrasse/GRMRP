@@ -225,7 +225,22 @@ check("повторный include не ломает ядро", GRMRPChat.Sanitiz
 -- ---------- 3. форвардер без аддона берёт бандл ----------
 do
     local ok, err = pcall(function()
-        g.file.Exists = function(p) return false end -- «аддона нет»
+        -- веч.-27: «аддона нет» (LUA false), бандл есть (GAME true).
+        g.file.Exists = function(path, space)
+            if space == "GAME" then
+                return string.find(path, "lib/grm_chat/", 1, true) ~= nil
+            end
+            return false
+        end
+        g.GRM = g.GRM or {}
+        g.GRM.LibInclude = function(rel)
+            if not g.file.Exists("gamemodes/grmrp/gamemode/" .. rel, "GAME") then
+                return false
+            end
+            include(rel)
+            return true
+        end
+        g.GRM.LibChatMissing = function() error("не должен зваться: бандл есть") end
         local f = assert(loadfile(rp("gamemodes/grmrp/gamemode/modules/chat/sh_grmrp_chat_core.lua")))
         f()
         g.file.Exists = function() return true end
@@ -295,9 +310,10 @@ do
         "gamemodes/grmrp/gamemode/modules/chat/cl_grmrp_chat_hud.lua",
     }) do
         local f = read(P) or ""
-        check(P .. ": форвардер зовёт loader с Mount lib",
+        check(P .. ": форвардер зовёт loader с Mount lib (через LibInclude, веч.-27)",
             f:find('GRMRPChat.Mount = "lib/grm_chat"', 1, true) ~= nil
-            and f:find('include("lib/grm_chat/loader.lua")', 1, true) ~= nil)
+            and f:find('GRM.LibInclude("lib/grm_chat/loader.lua")', 1, true) ~= nil
+            and f:find("GRM.LibChatMissing()", 1, true) ~= nil)
     end
     for _, rel in ipairs({
         "loader.lua", "modules/shared/sh_emotes.lua",

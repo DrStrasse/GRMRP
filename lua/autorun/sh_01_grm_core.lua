@@ -333,4 +333,27 @@ function C.FactionAccessSnapshot()
     return out
 end
 
+-- Вечер-27 (боевой лог «Couldn't include file 'lib\grm_chat\loader.lua'»):
+-- gamemode доезжает и без папки lib/ (выборочная ручная копия). include
+-- бандла — только через проверку существования; отсутствие = тихий false,
+-- инструкция — одна на свет (GRM.LibChatMissing), печатается по месту нужды.
+function GRM.LibInclude(rel)
+    if not GRM._libRoot then
+        local am = isfunction(engine and engine.ActiveGamemode) and engine.ActiveGamemode()
+        GRM._libRoot = "gamemodes/" .. (am or "grmrp") .. "/gamemode/"
+    end
+    if not (file and file.Exists and file.Exists(GRM._libRoot .. rel, "GAME")) then
+        return false
+    end
+    include(rel)
+    return true
+end
+function GRM.LibChatMissing()
+    ErrorNoHalt("[GRMRP] ВАЖНО: библиотека чата не найдена — нет ни addons/grm,"
+        .. " ни gamemodes/grmrp/gamemode/lib. Распакуйте grmrp_gamemode.zip в"
+        .. " gamemodes/ ЦЕЛИКОМ (папка lib обязательна), предварительно удалив"
+        .. " gamemodes/grmrp; либо поставьте grm_single_addon.zip в addons/"
+        .. " целиком. Чат до починки отключён, режим жив.\n")
+end
+
 print("[GRM Core] contracts and languages v" .. C.Version .. " loaded")

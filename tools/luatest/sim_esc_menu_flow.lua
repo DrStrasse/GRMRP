@@ -28,13 +28,15 @@ print("\n=== 0. СТАТИЧЕСКИЙ КОНТРАКТ ===")
 check("скан фронтов: input.IsKeyDown(KEY_ESCAPE)", has("input.IsKeyDown(KEY_ESCAPE)"))
 check("грейса-пожирателя больше нет", not has("Menu.justClosedRT ="))
 check("корень НЕ владеет ESC (один владелец — сканер)", not has("root:OnKeyCodeTyped"))
-check("консоль: бинд ищется LookupKeyBinding, не хардкодом клавиши",
-    has("input.LookupKeyBinding") and has('string.find(b, "toggleconsole", 1, true)')
-    and not has("RunConsoleCommand(\"toggleconsole\")\n            elseif"))
+check("консоль: keytrap окна снят (движковые бинды живут сами, веч.-27)",
+    has("root:SetKeyboardInputEnabled(false)"))
+check("консоль: lua-прокси toggleconsole удалён (ULib-блок больше не зовём)",
+    not has('RunConsoleCommand("toggleconsole")')
+    and not has("LookupKeyBinding"))
 check("гашение gameui централизовано (root.Think — анимации)",
     not has("if gui.IsGameUIVisible() then gui.HideGameUI() end"))
 check("кнопки: действие под pcall (нет «залипания»)", has("local ok, err = pcall(def.action)"))
-check("оттиск вечер-26", has("вечер-26 (06.09)"))
+check("оттиск вечер-27", has("вечер-27 (06.09)"))
 check("перепост до TTL + isfunction-страховка", has("Menu.pendingTTL")
     and has("isfunction(RunGameUICommand)"))
 check("активация — канон gui.ActivateGameUI", has("isfunction(gui.ActivateGameUI)"))
@@ -62,6 +64,9 @@ local function newPanel()
     return setmetatable({ __panel = true }, {
         __index = function(t, k)
             if k == "Remove" then return function(s) s.__removed = true end end
+            if k == "SetKeyboardInputEnabled" then
+                return function(sl, v) sl.__kb = v end
+            end
             if rawget(t, k) ~= nil then return rawget(t, k) end
             return noopRet
         end,
@@ -277,40 +282,28 @@ do
         and has("GRMRPChat.AddSystem(text)"))
 end
 
-print("\n=== 12. КОНСОЛЬ ~ / Ё ПОД МЕНЮ (веч.-26) ===")
-guiState.visible = false; step() -- отпустить сессию gameui после сцен.10
+print("\n=== 12. КОНСОЛЬ ~ / Ё ПОД МЕНЮ (веч.-27: keytrap снят) ===")
+guiState.visible = false; step()
 Menu.Close()
-BINDS[96] = "toggleconsole"; BINDS[97] = nil
-local rbind = hooks["GRMRPMenu_ConsoleKeys"]
-check("хук перескана биндов зарегистрирован", type(rbind) == "function")
-local function fireCount()
-        local n = 0
-        for _, c in ipairs(cons) do if c[1] == "toggleconsole" then n = n + 1 end end
-        return n
-    end
-    cons = {}
-    press() -- открыть меню (фронт ESC; скан консоли живёт при валидном root)
-    FOCUS.p = Menu.root -- MakePopup в стенде — фокус считаем нашим
-    check("меню открыто (предыстория чищена)", ENV.IsValid(Menu.root))
-    KEYS[96] = true; step()
-    KEYS[96] = false; step()
-    check("~ при открытом меню дёргает toggleconsole", fireCount() == 1, fireCount())
-    KEYS[96] = true; step(); step() -- два кадра удержания
-    KEYS[96] = false; step()
-    check("удержание — один выстрел на нажатие", fireCount() == 2, fireCount())
-    FOCUS.p = newPanel() -- консоль/поле перехватили фокус
-    KEYS[96] = true; step(); KEYS[96] = false; step()
-    check("чужой фокус (печать в консоли) — клавишу НЕ трогаем", fireCount() == 2, fireCount())
-    FOCUS.p = Menu.root
-    BINDS[96] = nil; BINDS[105] = "toggleconsole +toggleconsole"
-    hooks["GRMRPMenu_ConsoleKeys"]() -- перескан
-    KEYS[105] = true; step(); KEYS[105] = false; step()
-    check("ремап бинда: после OnBindingChanged ловится новая клавиша", fireCount() == 3, fireCount())
-    chatStub.INPUT_OPEN = true -- открытый чат-ввод: ~ не наш (фокус у поля)
-    KEYS[96] = true; step(); KEYS[96] = false; step()
-    chatStub.INPUT_OPEN = false
-    check("при открытом вводе ~ не трогаем (не спорим с полем)", fireCount() == 3, fireCount())
-    KEYS[96] = false; KEYS[105] = false; FOCUS.p = nil
+press()
+local r0 = Menu.root
+check("меню открыто", ENV.IsValid(r0))
+check("окно мышиное: keyboard-capture выключен", rawget(r0, "__kb") == false,
+    tostring(rawget(r0, "__kb")))
+check("ни одного lua-вызова toggleconsole ( ULib не о чем спотыкаться)", (function()
+    for _, c in ipairs(cons) do if c[1] == "toggleconsole" then return false end end
+    return true
+end)())
+check("лоадер-перескан биндов выведен (OnBindingChanged не занимаем)",
+    hooks["GRMRPMenu_ConsoleKeys"] == nil)
+KEYS[96] = true; step(); KEYS[96] = false; step()
+check("нажатие ~ у нас в кармане ничего не дёргает (путь — engine bind)",
+    (function()
+        for _, c in ipairs(cons) do if c[1] == "toggleconsole" then return false end end
+        return true
+    end)())
+press()
+check("ESC по-прежнему закрывает без keyboard-capture", not ENV.IsValid(Menu.root))
 
 print(string.format("\nESC MENU FLOW: %d/%d, провалов: %d", total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

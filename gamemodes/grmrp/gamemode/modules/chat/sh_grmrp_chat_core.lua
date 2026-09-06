@@ -3,11 +3,10 @@
     только точка входа режима. Если аддон не доехал (соло-установка
     gamemode-зипа), подключаем идентичную встроенную копию из
     gamemode/lib/grm_chat — гейт tools/sync_chat_addon.py --check следит за
-    байтовым равенством. Тела файлов идемпотентны (флаги __core/__sv/__hud/
-    __inp), поэтому двойной include (лоадером и отсюда) безопасен. ]]
-
+    байтовым равенством. веч.-27: бандл может отсутствовать (выборочная копия)
+    — include строго через GRM.LibInclude, молчаливый пропуск без паники. ]]
 if file and file.Exists and file.Exists("grm_chat/sh_core.lua", "LUA") then
     include("grm_chat/sh_core.lua")
 else
-    include("lib/grm_chat/sh_core.lua")
+    GRM.LibInclude("lib/grm_chat/sh_core.lua")
 end
