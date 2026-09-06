@@ -129,7 +129,30 @@ local function send(text)
         return
     end
     local def = first and GRMRPChat.RP and GRMRPChat.RP[string.lower(first)]
-    if not (def and def.echo) then
+    -- Вечер-24 (анти-спам «так себе»): эффективный канал — то, что сервер
+    -- действительно выберет после парсинга («/advert» печатают и из «Крика»).
+    -- На канал с cooldown вешается локальное зеркало: в окне таймера строка
+    -- НЕ печатается и не отправляется (мгновенная отбивка), а для принятой
+    -- строки эхо делает сервер после вердикта — раньше оптимистичный
+    -- локальный показ рисовал автору «пропущенное» объявление даже при
+    -- отказе, что и читалось как «всё равно пропустило».
+    local effChan = selChan
+    if string.sub(text, 1, 1) == "/" and GRMRPChat.ParseSay then
+        local okp, cid = pcall(GRMRPChat.ParseSay, text, selChan)
+        if okp and cid then effChan = cid end
+    end
+    local chanNow = GRMRPChat.GetChannel and GRMRPChat.GetChannel(effChan)
+    local gated = chanNow and (chanNow.cooldown or 0) > 0
+    if gated then
+        local left = math.ceil(GRMRPChat.CooldownLeft(effChan))
+        if left > 0 then
+            GRMRPChat.AddSystem(string.format("%s: подождите %d сек",
+                chanNow.title, left))
+            return
+        end
+        GRMRPChat.MarkCooldownSend(effChan)
+    end
+    if not (def and def.echo) and not gated then
         GRMRPChat.AddSelfLine(text, selChan)
     end
 
@@ -196,6 +219,15 @@ local function toggleHistory()
     body:SetPaintBackground(false)
     body:Dock(TOP)
     local state = { y = 0, n = 0 }
+    -- Вечер-24 (владелец: «нормально ничего не отражает»): ширина текста
+    -- считается ОТ ФОРМУЛЫ ОКНА, а не от scroll:GetWide() в тот же кадр —
+    -- иначе C++ Label без применённой ширины переносит «по букве» (скрин
+    -- 06.09: вертикальный столбик вместо строк).
+    local LINEH = 18
+    local histLines = {}
+    local innerW = function()
+        return math.max(320, math.Clamp(ScrW() * 0.62, 760, 1400) - 74)
+    end
     -- вечер-12.2: «окна» — при смене разрешения окно и скролл пересчитываются
     -- (прежде край съедал строки после alt+enter/fullscreen)
     hook.Add("OnScreenSizeChanged", "GRMRPChat_HistSize", function()
@@ -205,33 +237,42 @@ local function toggleHistory()
         if IsValid(scroll) then
             scroll:SetSize(win:GetWide() - 20, win:GetTall() - 38)
         end
+        if GRMRPChat._histRelayout then GRMRPChat._histRelayout() end
     end)
 
     -- Вечер-12 («хранение/история»): источник — АРХИВ, а не кормовой буфер:
     -- строки ленты подметаются TTL через ~49 с, «история» оказывалась самой
     -- лентой. Архив живёт в cl_grmrp_chat_hud (push), пишется на диск и
     -- несёт стенные метки времени (wallT) — корректные и после рестарта.
+    local lastLine = nil
     local function addLine(ln)
         local chan = ln.chan or { title = "·", color = { r = 200, g = 200, b = 200 } }
         local wallT = tonumber(ln.wallT) or math.max(0, math.ceil((ln.t or 0) + RealTime() - CurTime()))
-        local line = vgui.Create("DLabel", body)
-        line:SetText(os.date("%H:%M", wallT) ..
-            "  [" .. (chan.title or "·") .. "]  " ..
-            ((ln.name and #ln.name > 0) and (ln.name .. ": ") or "") .. (ln.text or ""))
-        line:SetFont("GRMRP_Chat14")
-        line:SetTextColor(Color(225, 238, 247))
-        line:SetWrap(true)
-        line:SetSelectable(true)
-        line:SetWide(scroll:GetWide() - 24)
-        line:SetPos(0, state.y)
-        line:SizeToContents()
-        local hh = math.max(18, line:GetTall())
-        line:SetTall(hh)
-        state.y = state.y + hh
+        local full = "[" .. (chan.title or "·") .. "]  " ..
+            ((ln.name and #ln.name > 0) and (ln.name .. ": ") or "") .. (ln.text or "")
+        -- Вечер-24: «всё касаемо отыгровок — фиолетовое» и в истории тоже;
+        -- тег [Отыгровка] в ленте остаётся жёлтым (chan.color), тело — нет.
+        local col = chan.bodyColor and Color(chan.bodyColor.r, chan.bodyColor.g, chan.bodyColor.b)
+            or Color(225, 238, 247)
+        local wrapped = (GRMRPChat.WrapText and GRMRPChat.WrapText(full, "GRMRP_Chat14", innerW()))
+            or { full }
+        local firstL
+        for i = 1, #wrapped do
+            local line = vgui.Create("DLabel", body)
+            line:SetText((i == 1 and (os.date("%H:%M", wallT) .. "  ") or "    ") .. wrapped[i])
+            line:SetFont("GRMRP_Chat14")
+            line:SetTextColor(col)
+            line:SetSelectable(true)
+            line:SetSize(innerW() + 44, LINEH)
+            line:SetPos(0, state.y)
+            state.y = state.y + LINEH
+            histLines[#histLines + 1] = { line = line, src = ln }
+            if i == 1 then firstL = line end
+            lastLine = line
+        end
         body:SetTall(state.y + 4)
-        return line
+        return firstL
     end
-    local lastLine = nil
     -- вечер-12.2: прилипание к низу по API из dscrollpanel.lua движка
     -- (GetVBar/GetCanvas/SetScroll/GetScroll — греп gsrc; ничего выдуманного)
     local function maxScroll()
@@ -254,6 +295,20 @@ local function toggleHistory()
         local vb = IsValid(scroll) and scroll.GetVBar and scroll:GetVBar()
         if not (IsValid(vb) and isfunction(vb.GetScroll)) then return true end
         return vb:GetScroll() >= maxScroll() - 4
+    end
+    -- вечер-24: перенос считается от ширины окна — при alt+enter ленты
+    -- перекладываются ЗАНОВО (upvalue stick/addLine: объявлен после них)
+    GRMRPChat._histRelayout = function()
+        if not IsValid(win) or not IsValid(body) then return end
+        for i = #histLines, 1, -1 do
+            if IsValid(histLines[i].line) then histLines[i].line:Remove() end
+        end
+        histLines = {}
+        state.y = 0
+        local arc = GRMRPChat.archive or {}
+        for i = 1, state.n do addLine(arc[i]) end
+        body:SetTall(state.y + 4)
+        timer.Simple(0.05, stick)
     end
     local src = GRMRPChat.archive or GRMRPChat.lines or {}
     for i = 1, #src do lastLine = addLine(src[i]) end
@@ -283,6 +338,25 @@ local function toggleHistory()
     end
     GRMRPChat.HIST_OPEN = true
 end
+
+-- Вечер-24 (ESC «пересекается с меню паузы и не закрывает ничего»): у
+-- истории фокус может быть потерян (открыли из ввода → окно ввода закрылось
+-- → клавиша уходит движку → gameui → меню поверх истории; ESC «в никуда»).
+-- Теперь история закрывается ВЕРХНЕЙ клавишей независимо от фокуса:
+-- собственным OnKeyCodeTyped, либо перехватом gameui-всплытия здесь, либо
+-- форвардом из корня меню паузы (Menu root).
+function GRMRPChat.CloseHistory()
+    if IsValid(histPanel) then histPanel:Remove() end
+end
+GRMRPChat.OpenHistory = toggleHistory
+
+hook.Add("Think", "GRMRPChat_HistEsc", function()
+    if not IsValid(histPanel) then return end
+    if gui.IsGameUIVisible() and not (IsValid(GRMRPMenu and GRMRPMenu.root)) then
+        gui.HideGameUI()
+        GRMRPChat.CloseHistory()
+    end
+end)
 
 
 local function setChannel(id)
@@ -400,7 +474,19 @@ local function build()
     local function updatePreview(pp)
         if not IsValid(preview) then return end
         if GRMRPChat.PreviewText then
-            preview:SetText(GRMRPChat.PreviewText(LocalPlayer():Name(), pp:GetValue(), selChan))
+            local v = pp:GetValue()
+            preview:SetText(GRMRPChat.PreviewText(LocalPlayer():Name(), v, selChan))
+            -- Вечер-24: «всё касаемо отыгровок» фиолетовое — превью тоже.
+            -- Эффективный канал берётся из парсера («/me» из любого таба).
+            local c = GRMRPChat.GetChannel and GRMRPChat.GetChannel(selChan)
+            if isstring(v) and string.sub(v, 1, 1) == "/" and GRMRPChat.ParseSay then
+                local okp, cid = pcall(GRMRPChat.ParseSay, v, selChan)
+                if okp and cid and GRMRPChat.GetChannel then
+                    c = GRMRPChat.GetChannel(cid) or c
+                end
+            end
+            local bc = c and c.bodyColor
+            preview:SetTextColor(bc and Color(bc.r, bc.g, bc.b) or Color(132, 160, 178))
         end
     end
     entry.updatePreview = updatePreview

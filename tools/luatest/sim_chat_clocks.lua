@@ -387,8 +387,35 @@ check("меню: активация gameui глобалкой gui.ActivateGameUI
 check("меню: перепост движковой команды по TTL и страховка isfunction(RunGameUICommand)",
     menuSrc:find("Menu.pendingTTL", 1, true) ~= nil
     and menuSrc:find("isfunction(RunGameUICommand)", 1, true) ~= nil)
-check("меню: оттиск сборки веч.-23 (виден владельцу в шапке)",
-    menuSrc:find("вечер-23 (06.09)", 1, true) ~= nil)
+check("меню: оттиск сборки веч.-24 (виден владельцу в шапке)",
+    menuSrc:find("вечер-24 (06.09)", 1, true) ~= nil)
+local cin = read("lua/grm_chat/cl_input.lua") or ""
+local chud = read("lua/grm_chat/cl_hud.lua") or ""
+check("история: без фантомного DLabel:SetWrap — явный WrapText от ширины окна",
+    cin:find("SetWrap", 1, true) == nil
+    and cin:find('GRMRPChat.WrapText(full, "GRMRP_Chat14", innerW())', 1, true) ~= nil)
+check(" WrapText: режет переслов и бережёт UTF-8-пары",
+    chud:find("function GRMRPChat.WrapText", 1, true) ~= nil
+    and chud:find("nb < 0x80 or nb >= 0xC0", 1, true) ~= nil)
+check("история: ESC закрывается независимо от фокуса (Think-страховка + API)",
+    cin:find('hook.Add("Think", "GRMRPChat_HistEsc"', 1, true) ~= nil
+    and cin:find("function GRMRPChat.CloseHistory()", 1, true) ~= nil
+    and menuSrc:find("if GRMRPChat and GRMRPChat.HIST_OPEN then", 1, true) ~= nil
+    and menuSrc:find("GRMRPChat.CloseHistory()", 1, true) ~= nil)
+check("анти-спам: локальное зеркало кулдауна в отправке (отбивка, нет ложного эха)",
+    cin:find("GRMRPChat.CooldownLeft(effChan)", 1, true) ~= nil
+    and cin:find("GRMRPChat.MarkCooldownSend(effChan)", 1, true) ~= nil
+    and cin:find("if not (def and def.echo) and not gated then", 1, true) ~= nil)
+check("анти-спам: каналы с cooldown — эхо автора через сервер (includeAuthor)",
+    (read("lua/grm_chat/sv_net.lua") or ""):find(
+        "deliver(chan, ply, body, extra, nil, chan.cooldown > 0)", 1, true) ~= nil)
+check("отыгровка: тело фиолетовое (bodyColor), тег остаётся жёлтым",
+    (read("lua/grm_chat/sh_core.lua") or ""):find("bodyColor = { r = 176, g = 106, b = 255 }", 1, true) ~= nil
+    and chud:find("bcol and Color(bcol.r, bcol.g, bcol.b, a)", 1, true) ~= nil
+    and cin:find("chan.bodyColor and Color(chan.bodyColor.r, chan.bodyColor.g, chan.bodyColor.b)", 1, true) ~= nil)
+check("бандл режима: cl_input зеркало библиотеки (гейт кулдауна пролился)",
+    (read("gamemodes/grmrp/gamemode/lib/grm_chat/cl_input.lua") or ""):find(
+        "GRMRPChat.CooldownLeft(effChan)", 1, true) ~= nil)
 check("режим: GM:PlayerSay не роняется чатом", gm ~= nil
     and gm:find("pcall(GRMRPChat.OnPlayerSay, ply, text, teamChat, isDead)", 1, true) ~= nil)
 local adm = read("lua/autorun/server/sv_grm_admin_actions.lua")

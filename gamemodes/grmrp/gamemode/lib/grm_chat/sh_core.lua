@@ -160,6 +160,13 @@ function GRMRPChat.RegisterChannel(id, spec)
             b = math.Clamp(tonumber(col.b) or 255, 0, 255)
         },
         scope = (spec.scope == "world" or spec.scope == "pm") and spec.scope or "range",
+        -- Вечер-24 (владелец): «текст после тега отыгровки — фиолетовый».
+        -- Тег канала остаётся цветом chan.color, ТЕЛО строки — своим тоном.
+        bodyColor = istable(spec.bodyColor) and {
+            r = math.Clamp(tonumber(spec.bodyColor.r) or 255, 0, 255),
+            g = math.Clamp(tonumber(spec.bodyColor.g) or 255, 0, 255),
+            b = math.Clamp(tonumber(spec.bodyColor.b) or 255, 0, 255)
+        } or nil,
         range = math.Clamp(tonumber(spec.range) or 700, 0, 4096),
         onlyDead = spec.onlyDead == true,
         cooldown = math.Clamp(tonumber(spec.cooldown) or 0, 0, 300)
@@ -200,7 +207,8 @@ GRMRPChat.RegisterChannel("ooc", {
 GRMRPChat.RegisterChannel("me", {
     title = "Отыгровка", scope = "range", cmd = "me",
     cmds = { "do", "it", "try" },
-    color = { r = 255, g = 185, b = 63 }
+    color = { r = 255, g = 185, b = 63 },
+    bodyColor = { r = 176, g = 106, b = 255 }
 })
 GRMRPChat.RegisterChannel("dice", {
     title = "Кости", scope = "range", cmd = "roll", allowEmpty = true,

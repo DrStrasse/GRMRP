@@ -116,6 +116,69 @@ function GRMRPChat.AddSelfLine(raw, selChan)
         name, text, CurTime(), true)
 end
 
+-- Вечер-24 (история чата «не отражает»): у C++ Label перенос зависит от
+-- уже применённой ширины панели — в тот же кадр после SetSize она негарантирована,
+-- и DLabel дал «столбик по букве» на весь экран. Перенос считается ЗДЕСЬ
+-- явно (ground truth — surface.GetTextSize), строки раскладываются сами.
+function GRMRPChat.WrapText(text, fontName, maxW)
+    text = tostring(text or "")
+    maxW = math.max(60, tonumber(maxW) or 200)
+    surface.SetFont(fontName or "DermaDefault")
+    local out, cur = {}, ""
+    for word in text:gmatch("%S+") do
+        local try = #cur == 0 and word or (cur .. " " .. word)
+        local tw = surface.GetTextSize(try) or 0
+        if tw <= maxW then
+            cur = try
+        else
+            if #cur > 0 then out[#out + 1] = cur end
+            -- слово длиннее всей ширины: режем по ширине, иначе у.Label
+            -- начинается «столбик по букве» (тот самый скрин 06.09)
+            local w = word
+            while (surface.GetTextSize(w) or 0) > maxW do
+                local cut = #w
+                while cut > 1 and (surface.GetTextSize(w:sub(1, cut)) or 0) > maxW do
+                    cut = cut - 1
+                end
+                -- не рассечь UTF-8-пару (клипы посередине буквы — WIKI);
+                -- continuation byte = 0x80..0xBF на позиции cut+1
+                while cut > 1 do
+                    local nb = w:byte(cut + 1)
+                    if not nb or nb < 0x80 or nb >= 0xC0 then break end
+                    cut = cut - 1
+                end
+                out[#out + 1] = w:sub(1, cut)
+                w = w:sub(cut + 1)
+            end
+            cur = w
+        end
+    end
+    if #cur > 0 then out[#out + 1] = cur end
+    if #out == 0 then out[1] = "" end
+    return out
+end
+
+-- Клиентское зеркало кулдауна каналов (advert и пр.): сервер и так отвергает
+-- сверх лимита, НО оптимистичное эхо печатало «принятое» сообщение автору —
+-- владелец видел свою строку в ленте и решал, что анти-спам пропустил
+-- (претензия веч.-24). Теперь в окне кулдауна сообщение не печатается и
+-- даже не уходит: мгновенная локальная отбивка, сервер — по-прежнему
+-- единственный владелец решения.
+function GRMRPChat.CooldownLeft(chanId)
+    local chan = GRMRPChat.GetChannel and GRMRPChat.GetChannel(chanId)
+    if not chan or not chan.cooldown or chan.cooldown <= 0 then return 0 end
+    local last = (GRMRPChat._cdSent or {})[chanId]
+    if not last then return 0 end
+    return math.max(0, chan.cooldown - (CurTime() - last))
+end
+
+function GRMRPChat.MarkCooldownSend(chanId)
+    local chan = GRMRPChat.GetChannel and GRMRPChat.GetChannel(chanId)
+    if not chan or not chan.cooldown or chan.cooldown <= 0 then return end
+    GRMRPChat._cdSent = GRMRPChat._cdSent or {}
+    GRMRPChat._cdSent[chanId] = CurTime()
+end
+
 function GRMRPChat.ClearLines()
     GRMRPChat.lines = {}
 end
@@ -322,8 +385,13 @@ ensureFeed = function()
                         Color(170, 190, 210, a), TEXT_ALIGN_LEFT)
                     tx = tx + nw
                 end
+                -- Вечер-24 (владелец): тело отыгровки — фиолетовое (bodyColor
+                -- канала), тег [Отыгровка] остаётся жёлтым. Свой эхо-каст красим
+                -- тем же тоном: «всё касаемо отыгровок», не только чужие строки.
+                local bcol = chan.bodyColor
                 draw.DrawText(ln.text, "GRMRP_Chat14", tx, y - 2,
-                    ln.mine and Color(255, 255, 255, a) or Color(225, 238, 247, a),
+                    bcol and Color(bcol.r, bcol.g, bcol.b, a)
+                    or (ln.mine and Color(255, 255, 255, a) or Color(225, 238, 247, a)),
                     TEXT_ALIGN_LEFT)
             end
         end

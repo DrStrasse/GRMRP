@@ -10,21 +10,21 @@
                 "count": 30
             },
             {
-                "id": "mobile_badger",
-                "count": 1
+                "count": 1,
+                "id": "mobile_badger"
             },
             {
                 "id": "radio_modulator",
-                "count": 1,
                 "data": {
                     "on": true
-                }
+                },
+                "count": 1
             }
         ]
     },
     "_grm_meta": {
         "version": 2,
-        "revision": 4,
-        "savedAt": 1788688826
+        "savedAt": 1788689752,
+        "revision": 4
     }
 }

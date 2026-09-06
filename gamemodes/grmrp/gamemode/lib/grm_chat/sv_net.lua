@@ -265,7 +265,10 @@ function GRMRPChat.ProcessLine(ply, text, defaultChannel)
         chan.range = cvIcRange:GetFloat()
     end
 
-    local err, heard = deliver(chan, ply, body, extra)
+    -- Вечер-24: каналы с cooldown (Объявление) — авторскую строку возвращает
+    -- СЕРВЕР после вердикта (includeAuthor), клиент оптимистичное эхо для них
+    -- не печатает: отказ не оставляет «пропущенного» объявления в ленте.
+    local err, heard = deliver(chan, ply, body, extra, nil, chan.cooldown > 0)
     if err then sendSystem(ply, err) return "" end
     -- Вечер-16 (Код 88.1 переехал из легаси-модуля): молчание локального
     -- канала видно — автор получает системную строку, а не «сообщение

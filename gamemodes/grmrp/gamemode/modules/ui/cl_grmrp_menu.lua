@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-23 (06.09)'
+Menu.BuildStamp = 'вечер-24 (06.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -170,10 +170,16 @@ function Menu.Open()
         if code == KEY_ESCAPE then
             -- обратный порядок (претензия вечера-9): ESC гасит ВЕРХНИЙ
             -- слой — открытый ввод/историю чата оставляет себе, меню
-            -- закрывается, только когда оно и есть верхний слой
-            if GRMRPChat and (GRMRPChat.INPUT_OPEN or GRMRPChat.HIST_OPEN) then
-                return false
+            -- закрывается, только когда оно и есть верхний слой.
+            -- Вечер-24: «возвращаем ключ» (return false) был дырой — у
+            -- истории фокус перехвачен корнем, клавиша не доходила НИКУДА.
+            -- Теперь меню САМО закрывает историю (верхний слой), а ввод
+            -- живёт своим окном и клавишу получает напрямую.
+            if GRMRPChat and GRMRPChat.HIST_OPEN then
+                if GRMRPChat.CloseHistory then GRMRPChat.CloseHistory() end
+                return true
             end
+            if GRMRPChat and GRMRPChat.INPUT_OPEN then return false end
             Menu.Close()
             return true
         end

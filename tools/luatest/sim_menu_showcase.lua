@@ -59,7 +59,7 @@ check("смена модели — полная пересъёмка", has("appl
 print("\n=== 5. РАЗМЕР И ОТТИСК ===")
 check("окно модели не меньше 240px", has("240, 440"))
 check("карточка раздвинута до 430px", has("320, 430"))
-check("оттиск сборки вечер-23", has("вечер-23 (06.09)"))
+check("оттиск сборки вечер-24", has("вечер-24 (06.09)"))
 
 print("\n=== 3. ДЕНЬГИ: КАРТОЧКА + КАССЕТЫ (вечер-11) ===")
 check("карточка: «На счёту» рядом с «Деньги»", has('statRow(card, statsBase + 84, "На счёту")'))
@@ -77,8 +77,11 @@ check("gui.OpenURL из меню вырезан", not has("gui.OpenURL"))
 check("подавления на фиксированные 30 секунд нет", not has("CurTime() + 30"))
 check("сессия gameui помечается своей", has("Menu.ownsGameui = true"))
 check("команда ждёт реального menu-состояния", has("if Menu.pendingCmd then"))
-check("ESC сперва отдаёт верхний слой (ввод/история чата)",
-    has("GRMRPChat.INPUT_OPEN or GRMRPChat.HIST_OPEN"))
+check("ESC сперва закрывает историю (веч.-24: ключ не должен теряться)",
+    has("if GRMRPChat and GRMRPChat.HIST_OPEN then")
+    and has("GRMRPChat.CloseHistory()"))
+check("ESC при открытом вводе остаётся вводу",
+    has("if GRMRPChat and GRMRPChat.INPUT_OPEN then return false end"))
 check("фолбек-копия групп 1..8 для кривых списков", has("ply:GetBodygroup(i)"))
 
 print(("\nMENU SHOWCASE: %d/%d, провалов: %d"):format(total - fails, total, fails))
