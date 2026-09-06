@@ -136,7 +136,7 @@ check("меню: keyboard-захват снят (движковые бинды �
 check("меню: lua-прокси toggleconsole удалён (ULib-блока нет в пути)",
     menuSrc:find('RunConsoleCommand("toggleconsole")', 1, true) == nil
     and menuSrc:find("LookupKeyBinding", 1, true) == nil)
-check("меню: оттиск веч.-27", menuSrc:find("вечер-27 (06.09)", 1, true) ~= nil)
+check("меню: оттиск веч.-28", menuSrc:find("вечер-28 (06.09)", 1, true) ~= nil)
 
 print(string.format("\nLOADER FALLBACK: %d/%d, провалов: %d", total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

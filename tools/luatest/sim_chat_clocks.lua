@@ -387,8 +387,8 @@ check("меню: активация gameui глобалкой gui.ActivateGameUI
 check("меню: перепост движковой команды по TTL и страховка isfunction(RunGameUICommand)",
     menuSrc:find("Menu.pendingTTL", 1, true) ~= nil
     and menuSrc:find("isfunction(RunGameUICommand)", 1, true) ~= nil)
-check("меню: оттиск сборки веч.-27 (виден владельцу в шапке)",
-    menuSrc:find("вечер-27 (06.09)", 1, true) ~= nil)
+check("меню: оттиск сборки веч.-28 (виден владельцу в шапке)",
+    menuSrc:find("вечер-28 (06.09)", 1, true) ~= nil)
 check("меню: keytrap снят — ~ и любые движковые бинды живы под окном (веч.-27)",
     menuSrc:find("root:SetKeyboardInputEnabled(false)", 1, true) ~= nil
     and menuSrc:find('RunConsoleCommand("toggleconsole")', 1, true) == nil)
@@ -407,6 +407,39 @@ check("меню: гашение gameui в одном месте (не в root.Th
     and menuSrc:find("if gui.IsGameUIVisible() and not Menu.ownsGameui then", 1, true) ~= nil)
 check("меню: действия кнопок под pcall (нет «залипания» после ошибки)",
     menuSrc:find("local ok, err = pcall(def.action)", 1, true) ~= nil)
+-- Вечер-28: кастомная консоль режима (дубль старой) + отход перед нативной.
+check("меню: guard движковой консоли — сканер отходит, когда открыта ~ (веч.-28)",
+    menuSrc:find("isfunction(gui.IsConsoleVisible) and gui.IsConsoleVisible()", 1, true) ~= nil)
+check("меню: при открытой движковой консоли своя гасится (две консоли — конфликт)",
+    menuSrc:find("pcall(GRMRPConsole.Close)", 1, true) ~= nil
+    and menuSrc:find("if GRMRPConsole and isfunction(GRMRPConsole.Close) then", 1, true) ~= nil)
+check("меню: ESC-иерархия — консоль режима выше меню (веч.-28)",
+    menuSrc:find("if GRMRPConsole and isfunction(GRMRPConsole.IsOpen) and GRMRPConsole.IsOpen() then", 1, true) ~= nil)
+check("меню: вкладка консоли — через реестр и только если модуль доехал (веч.-28)",
+    menuSrc:find("if GRMRPConsole and isfunction(GRMRPConsole.Toggle) then", 1, true) ~= nil
+    and menuSrc:find('Menu.AddTab({ id = "console"', 1, true) ~= nil)
+local conSrc = read("gamemodes/grmrp/gamemode/modules/ui/cl_grmrp_console.lua") or ""
+check("консоль: файл-дубль на месте и клиент-only (веч.-28)",
+    conSrc ~= "" and conSrc:find("if SERVER then return end", 1, true) ~= nil)
+check("консоль: дубль через широковещательный хук, НЕ через net.Receive (чтец один)",
+    conSrc:find('hook.Add("GRM_AdminConsoleLine", "GRMRPConsole"', 1, true) ~= nil
+    and conSrc:find("net.Receive(", 1, true) == nil)
+check("консоль: имя канала — из реестра GRM.Admin.Net (не строка-копия)",
+    conSrc:find("names.CONSOLE", 1, true) ~= nil
+    and conSrc:find('net.Start("GRM_Admin_Console")', 1, true) == nil)
+check("консоль: история GRM.Admin.ConsoleLines проигрывается один раз",
+    conSrc:find("GRM.Admin.ConsoleLines", 1, true) ~= nil
+    and conSrc:find("historyReplayed", 1, true) ~= nil)
+check("консоль: только реальные методы (без вызовов SetReadOnly/VBar/SetBounds-фантомов)",
+    conSrc:find(":SetReadOnly(", 1, true) == nil
+    and conSrc:find(":VBar(", 1, true) == nil
+    and conSrc:find(":SetBounds(", 1, true) == nil
+    and conSrc:find("SetKeyInputEnabled(", 1, true) == nil
+    and conSrc:find("out:SetKeyboardInputEnabled(false)", 1, true) ~= nil)
+check("консоль: никакого lua-пути к движковой консоли (ULib-блок веч.-27 в силе)",
+    conSrc:find('RunConsoleCommand("toggleconsole"', 1, true) == nil
+    and conSrc:find("RunConsoleCommand", 1, true) == nil
+    and menuSrc:find('RunConsoleCommand("toggleconsole"', 1, true) == nil)
 local cin = read("lua/grm_chat/cl_input.lua") or ""
 local chud = read("lua/grm_chat/cl_hud.lua") or ""
 check("история: без фантомного DLabel:SetWrap — явный WrapText от ширины окна",

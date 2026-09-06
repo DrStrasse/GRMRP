@@ -36,7 +36,9 @@ check("консоль: lua-прокси toggleconsole удалён (ULib-бло�
 check("гашение gameui централизовано (root.Think — анимации)",
     not has("if gui.IsGameUIVisible() then gui.HideGameUI() end"))
 check("кнопки: действие под pcall (нет «залипания»)", has("local ok, err = pcall(def.action)"))
-check("оттиск вечер-27", has("вечер-27 (06.09)"))
+check("оттиск вечер-28", has("вечер-28 (06.09)"))
+check("веч.-28: guard движковой консоли в сканере", has("isfunction(gui.IsConsoleVisible) and gui.IsConsoleVisible()"))
+check("веч.-28: ESC — консоль режима закрывается первой", has("if GRMRPConsole and isfunction(GRMRPConsole.IsOpen) and GRMRPConsole.IsOpen() then"))
 check("перепост до TTL + isfunction-страховка", has("Menu.pendingTTL")
     and has("isfunction(RunGameUICommand)"))
 check("активация — канон gui.ActivateGameUI", has("isfunction(gui.ActivateGameUI)"))
@@ -51,6 +53,17 @@ local ESC = { down = false }
 local KEYS = {}
 local BINDS = {}
 local FOCUS = { p = nil }
+local consVis = false -- движковая консоль (~) видима (веч.-28)
+local conStub -- консоль режима: состояние, «открыта»
+conStub = {
+    open = false, closeTotal = 0,
+    IsOpen = function() return conStub.open end,
+    Close = function()
+        if conStub.open then conStub.open = false end
+        conStub.closeTotal = conStub.closeTotal + 1
+    end,
+    Toggle = function() conStub.open = not conStub.open end
+}
 
 local function noopRet() return 0 end
 local chatStub
@@ -96,6 +109,7 @@ local ENV = {
         IsGameUIVisible = function() return guiState.visible end,
         HideGameUI = function() guiState.hides = guiState.hides + 1; guiState.visible = false end,
         ActivateGameUI = function() guiState.activates = guiState.activates + 1; guiState.visible = true end,
+        IsConsoleVisible = function() return consVis end,
     },
     input = {
         IsKeyDown = function(k) return (k == 27 and ESC.down) or (KEYS[k] == true) or false end,
@@ -119,6 +133,7 @@ local ENV = {
     GRMRP = { VERSION = "sim", JoinTime = 0 },
     GRMRPChat = chatStub,
     GRMRPMenu = {},
+    GRMRPConsole = conStub,
     string = setmetatable({}, { __index = function(_, k)
         if k == "Comma" then return function(_, n) return tostring(n) end end
         return string[k]
@@ -304,6 +319,41 @@ check("нажатие ~ у нас в кармане ничего не дёрга
     end)())
 press()
 check("ESC по-прежнему закрывает без keyboard-capture", not ENV.IsValid(Menu.root))
+
+print("\n=== 13. ВЕЧ.-28: КОНСОЛЬ РЕЖИМА (верхний слой) + ОТХОД ПЕРЕД ДВИЖКОВОЙ ===")
+local consoleTab = false
+for _, d in ipairs(Menu.Tabs()) do if d.id == "console" then consoleTab = true end end
+check("вкладка «console» зарегистрирована реестром (модуль доехал)", consoleTab)
+
+Menu.Close()
+guiState.visible = false; step()
+press()
+check("меню открыто", ENV.IsValid(Menu.root))
+conStub.open = true
+press()
+check("первый ESC гасит консоль режима (верхний слой), меню живёт",
+    conStub.open == false and ENV.IsValid(Menu.root))
+press()
+check("второй ESC закрывает меню", not ENV.IsValid(Menu.root))
+
+consVis = true
+conStub.open = true
+step()
+check("движковая консоль открылась — своя консоль погашена (две — конфликт)",
+    conStub.open == false)
+ESC.down = true; step()
+check("ESC, съеденный движковой консолью, НЕ открывает наше меню", not ENV.IsValid(Menu.root))
+guiState.visible = true -- гипотетическое gameui под движковой консолью
+step()
+check("guard: пока открыта ~ — чужое gameui не тушим (сканер отходит)", guiState.visible)
+ESC.down = false
+T = T + 0.5; RT = RT + 0.5; step()
+consVis = false
+step()
+check("сканер ожил: чужое gameui погашено", not guiState.visible)
+check("fallback по видимости вернул меню (контракт веч.-25 цел)", ENV.IsValid(Menu.root))
+press()
+check("дальше цикл ESC обычный: меню закрывается", not ENV.IsValid(Menu.root))
 
 print(string.format("\nESC MENU FLOW: %d/%d, провалов: %d", total - fails, total, fails))
 os.exit(fails == 0 and 0 or 1)

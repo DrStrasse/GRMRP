@@ -14,7 +14,7 @@ local Menu = GRMRPMenu
 -- Оттиск сборки: виден в шапке меню. Нет строки «сборка …» на экране =
 -- на сервере СТАРЫЙ файл (неснесённая папка grmrp — смешанные установки
 -- уже жгли дважды; теперь опознание — один взгляд).
-Menu.BuildStamp = 'вечер-27 (06.09)'
+Menu.BuildStamp = 'вечер-28 (06.09)'
 
 local COL = {
     bg = Color(8, 14, 23),
@@ -99,6 +99,15 @@ Menu.AddTab({ id = "workshop", order = 50, title = "Мастерская", accen
 -- Вечер-23: отключение — штатная клиентская команда движка (её дёргает и
 -- кнопка gameui): один вызов из игрового состояния, без gameui-очереди —
 -- «кое-как с перебоями» было именно гонкой очереди на чужую команду.
+-- Вечер-28 (заказ владельца): кастомная консоль режима — дубль «Консоли
+-- сервера» старого меню (тот же net-канал, приём через широковещательный
+-- хук GRM_AdminConsoleLine, история из GRM.Admin.ConsoleLines). Модуль
+-- cl_grmrp_console.lua грузится раньше меню по алфавиту ui-папки; если он
+-- не доехал (смешанная установка) — вкладки просто нет, меню живёт.
+if GRMRPConsole and isfunction(GRMRPConsole.Toggle) then
+    Menu.AddTab({ id = "console", order = 60, title = "Консоль режима", accent = COL.gold,
+        action = function() GRMRPConsole.Toggle() end })
+end
 Menu.AddTab({ id = "disconnect", order = 70, title = "Отключиться от сервера", accent = COL.red,
     visible = function() return not game.SinglePlayer() end,
     action = function()
@@ -536,10 +545,29 @@ hook.Add("Think", "GRMRPMenu_Takeover", function()
         end
         return
     end
+    -- Вечер-28 (боевой лог владельца: «зовётся консоль старого меню —
+    -- конфликт старого и нового»): пока открыта ДВИЖКОВАЯ консоль (~),
+    -- сканер и наши окна отходят в сторону — ESC принадлежит консоли и к
+    -- нам приходить не должен (тот же guard носит старое меню,
+    -- sh_grm_f4menu.lua: if gui.IsConsoleVisible() then return end). Свою
+    -- кастомную консоль при этом гасим: две консоли на экране — это и есть
+    -- конфликт. escWasDown зеркалит реальное состояние клавиши, поэтому
+    -- фронт «закрыли консоль» не превращается в лишнее нажатие на меню.
+    if isfunction(gui.IsConsoleVisible) and gui.IsConsoleVisible() then
+        if GRMRPConsole and isfunction(GRMRPConsole.Close) then
+            pcall(GRMRPConsole.Close)
+        end
+        escWasDown = isfunction(input.IsKeyDown) and input.IsKeyDown(KEY_ESCAPE) or false
+        return
+    end
     local chatBusy = GRMRPChat and GRMRPChat.INPUT_OPEN
     local down = isfunction(input.IsKeyDown) and input.IsKeyDown(KEY_ESCAPE) or false
     if down and not escWasDown and not chatBusy then
-        if IsValid(Menu.root) then
+        if GRMRPConsole and isfunction(GRMRPConsole.IsOpen) and GRMRPConsole.IsOpen() then
+            -- верхний слой — консоль режима: первый ESC гасит её, меню
+            -- ждёт следующий (иерархия «сначала ВЕРХНЕЕ», веч.-25/-9)
+            pcall(GRMRPConsole.Close)
+        elseif IsValid(Menu.root) then
             -- закрытие — сканером, а не панелью: фокус движок у нас отбирает
             if GRMRPChat and GRMRPChat.HIST_OPEN and GRMRPChat.CloseHistory then
                 GRMRPChat.CloseHistory()
