@@ -6,8 +6,16 @@ local function grmBootStart(id, tier, fn)
 end
 
 --[[--------------------------------------------------------------------
-    GRM HUD v10.8 — Полноценный HUD для Sandbox
-    v10.8: grm_money_diag — самодиагностика денежного трека (владелец
+    GRM HUD v10.9 — Полноценный HUD для Sandbox
+    v10.9: селектор стал РЕАКТИВНЫМ (боев. отчёт 06.09: «не показывает выбор
+           оружия, слоты и нету ничего»). На x86-64 / Source Engine 24
+           (апрель 2026) смена оружия колесом идёт МИМО PlayerBindPress —
+           движок стреляет PlayerSwitchWeapon; наш бар открывался только по
+           биндам, а ванильный CHudWeaponSelection скрыт — колесо молча
+           меняло оружие. Теперь ЛЮБОЕ переключение (колесо/слоты/lastinv —
+           любой канал, который выбрал движок) открывает бар и подсвечивает
+           реально взятое оружие; событие НЕ глотается. grm_sel_diag чинит
+           диагноз: видно, доходят бинды, доходят переключения.    v10.8: grm_money_diag — самодиагностика денежного трека (владелец
            вечер-11: «деньги не отражает»: данные шли, вопрос был в слое
            отрисовки — теперь видно и то, и другое: баланс, счёт, давность
            последнего grm_balance).    v10.7: деньги переехали в ДВЕ НИЖНИЕ КАССЕТЫ «СОСТОЯНИЯ» (контракт
@@ -279,7 +287,7 @@ end
 
 -- СЕЛЕКТОР ОРУЖИЯ
 local MAXSLOT = 10 -- GMod: реальные интерфейсы доходят до 10-го слота
-local selector = { active = false, slot = 1, pos = 1, lastInput = 0, alpha = 0, weapons = {}, lastRefresh = 0, maxSlot = 0, seen = 0 }
+local selector = { active = false, slot = 1, pos = 1, lastInput = 0, alpha = 0, weapons = {}, lastRefresh = 0, maxSlot = 0, seen = 0, switchSeen = 0 }
 
 --[[ Звуки селектора оружия — стоковые HL2, ровно те же, что играет ванильный
      выбор оружия. Раньше наш селектор листался молча: визуально работает, а
@@ -532,6 +540,46 @@ hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
     if (bind == "+attack2" or bind == "attack2") and selector.active then CloseSelector(); return true end
 end)
 
+-- Вечер-29 (боев отчёт владельца 06.09): на x86-64/Source Engine 24 колесо
+-- меняет оружие мимо PlayerBindPress — движок вызывает PlayerSwitchWeapon
+-- (квесты это обходили ещё вечером-?: у них висит
+-- «GRM_Quest_CutsceneNoSwitch»). Селектор обязан реагировать на САМО
+-- переключение, а не на канал, который выбрал движок. Здесь МЫ ничего не
+-- глотаем и ничего не выбираем — только открываем бар и подводим
+-- подсветку к реально взятому оружию (return строго nil).
+hook.Add("PlayerSwitchWeapon", "GRM_HUD_SwitchSync", function(ply, oldWep, newWep)
+    if not IsValid(ply) or ply ~= LocalPlayer() then return end
+    selector.switchSeen = selector.switchSeen + 1
+    if GRM_HUD_MobileOpen() then return end
+    if GRM.HUD.IsPropToolBusy(ply) then return end
+    if not ply:Alive() then return end
+    RefreshWeapons()
+    local wasActive, wasSlot, wasPos = selector.active, selector.slot, selector.pos
+    local target = IsValid(newWep) and newWep
+        or (IsValid(ply:GetActiveWeapon()) and ply:GetActiveWeapon() or nil)
+    if IsValid(target) and target.GetSlot then
+        local curSlot = math.Clamp((tonumber(target:GetSlot()) or 0) + 1, 1, MAXSLOT)
+        selector.slot = curSlot
+        selector.pos = 1
+        local slotWeps = selector.weapons[curSlot]
+        if slotWeps then
+            for i, w in ipairs(slotWeps) do
+                if w.weapon == target then selector.pos = i; break end
+            end
+        end
+    else
+        FindCurrentWeapon()
+    end
+    selector.active = true
+    selector.lastInput = CurTime()
+    if not wasActive then
+        selectorSound("open", 0.05)
+    elseif wasSlot ~= selector.slot or wasPos ~= selector.pos then
+        selectorSound("move")
+    end
+    sellog(string.format("switch seen=%d → подсветка %d:%d", selector.switchSeen, selector.slot, selector.pos))
+end)
+
 -- Самодиагностика (вечер-10, по образцу /chatdiag): «селектор не работает»
 -- перестаёт быть слепым пятном. В консоли: версия, живой ли хук, сколько
 -- биндов дошло, что с ними стало, инвентарь по слотам.
@@ -539,8 +587,8 @@ if concommand and concommand.Add then
     concommand.Add("grm_sel_diag", function()
         local lp = LocalPlayer()
         local wep = IsValid(lp) and lp:GetActiveWeapon()
-        print(string.format("[GRM sel] v10.6 (вечер-10) bind seen=%d, active=%s, выбор=%d:%d",
-            selector.seen, tostring(selector.active), selector.slot, selector.pos))
+        print(string.format("[GRM sel] v10.9 bind seen=%d, switch seen=%d, active=%s, выбор=%d:%d",
+            selector.seen, selector.switchSeen, tostring(selector.active), selector.slot, selector.pos))
         print(string.format("[GRM sel] в руке: %s (slot=%s) · mobile=%s · propbusy=%s",
             IsValid(wep) and tostring(wep:GetClass()) or "—",
             IsValid(wep) and tostring(wep:GetSlot()) or "—",
@@ -550,9 +598,14 @@ if concommand and concommand.Add then
             if list and #list > 0 then print("[GRM sel] слот " .. s .. ": " .. #list .. " шт") end
         end
         for i = 1, #SELLOG do print("[GRM sel] " .. SELLOG[i]) end
-        if selector.seen == 0 then
-            print("[GRM sel] ВЫВОД: к our хуку не приходило НИ ОДНОГО бинда —")
-            print("[GRM sel] проверьте привязки «След. оружие»/«Пред. оружие» (мышь) в настройках.")
+        if selector.seen == 0 and selector.switchSeen > 0 then
+            print("[GRM sel] ВЫВОД: бинды к хуку не приходят, переключения — да")
+            print("[GRM sel] (так ведёт себя новый движок x86-64). Бар следует за")
+            print("[GRM sel] переключением через PlayerSwitchWeapon — это v10.9, так и должно работать.")
+        elseif selector.seen == 0 and selector.switchSeen == 0 then
+            print("[GRM sel] ВЫВОД: не дошло НИ биндов, НИ переключений — файл")
+            print("[GRM sel] не загружен или хуки сняты. Проверьте в консоли приветствие")
+            print("[GRM sel] «HUD v10.9 загружен»; нет его — старый cl_grm_hud.lua на сервере.")
         end
     end)
 end
@@ -781,6 +834,22 @@ local function DrawWeaponSelector()
     local sw = ScrW()
     local alpha = selector.alpha / 255
     RefreshWeapons()
+    -- Вечер-29 (v10.9): в момент PlayerSwitchWeapon новый weapon на клиенте
+    -- бывает NULL (ещё не создан по сети) — подсветка догоняет на кадре,
+    -- когда в руке реально сменилась пушка. Ориентир «сменилась held»,
+    -- а не «курсор не совпадает»: иначе каждый кадр уводили бы подсветку
+    -- из-под пользователя, вручную обходящего слоты (курсор там — намеренный).
+    local heldNow = LocalPlayer()
+    heldNow = IsValid(heldNow) and heldNow:GetActiveWeapon() or nil
+    if IsValid(heldNow) then
+        if selector.held == nil then
+            selector.held = heldNow
+        elseif heldNow ~= selector.held then
+            selector.held = heldNow
+            FindCurrentWeapon()
+            selector.lastInput = CurTime()
+        end
+    end
     -- вечер-10: бар по фактической геометрии инвентаря (до 10 слотов),
     -- пустые хвосты не раздуваем, привычная сетка — минимум 6.
     local totalSlots = math.Clamp(selector.maxSlot or 6, 6, MAXSLOT)
@@ -884,8 +953,8 @@ end)
 
 grmBootStart("GRM_HUD_Welcome", "late", function()
     timer.Simple(4, function()
-        if IsValid(LocalPlayer()) then GRM.AddNotification("HUD v10.5 — шапка и деньги слева сверху", 5, Color(100, 180, 255)) end
+        if IsValid(LocalPlayer()) then GRM.AddNotification("HUD v10.9 — селектор реагирует на смену оружия (новый движок)", 5, Color(100, 180, 255)) end
     end)
 end)
 
-print("[GRM] HUD v10.8 загружен")
+print("[GRM] HUD v10.9 загружен")

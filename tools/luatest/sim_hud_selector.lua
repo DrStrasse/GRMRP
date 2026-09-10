@@ -1,5 +1,6 @@
 --[[--------------------------------------------------------------------
-    sim_hud_selector — контракт HUD v10.3 (селектор vs физган)
+    sim_hud_selector — контракт HUD v10.9 (селектор vs физган +
+    реактивный бар на PlayerSwitchWeapon — движок x86-64 апреля 2026)
     ./.luabuild/lj/src/luajit tools/luatest/sim_hud_selector.lua
 ----------------------------------------------------------------------]]
 local function read(p)
@@ -19,9 +20,19 @@ local function has(src, n) return src:find(n, 1, true) ~= nil end
 local hud = read("lua/autorun/client/cl_grm_hud.lua")
 
 print("\n=== КОНТРАКТ ИСТОЧНИКА ===")
-check("версия 10.8 в шапке", has(hud, "GRM HUD v10.8"))
-check("приветствие v10.8", has(hud, "HUD v10.8 загружен"))
-check("принт v10.8", has(hud, '[GRM] HUD v10.8 загружен'))
+check("версия 10.9 в шапке", has(hud, "GRM HUD v10.9"))
+check("приветствие v10.9", has(hud, "HUD v10.9 —"))
+check("принт v10.9", has(hud, '[GRM] HUD v10.9 загружен'))
+check("хук SwitchSync в источнике", has(hud, 'hook.Add("PlayerSwitchWeapon", "GRM_HUD_SwitchSync"'))
+check("диагностика печатает switch seen", has(hud, "switch seen"))
+check("подсветка догоняет смену в Draw", has(hud, "selector.held = heldNow"))
+do
+    local s = hud:find('hook.Add("PlayerSwitchWeapon", "GRM_HUD_SwitchSync"', 1, true) or 0
+    local e = (s > 0) and (hud:find("end)", s + 10, true) or 0) or 0
+    local body = (s > 0 and e > s) and hud:sub(s, e) or ""
+    check("хук SwitchSync НЕ глушит смену (нет return true)",
+        s > 0 and e > s and not body:find("return true", 1, true), "s=" .. s .. " e=" .. e)
+end
 check("обход слотов до 10 (MAXSLOT)", has(hud, "local MAXSLOT = 10"))
 check("6-слотовых обходов не осталось", not has(hud, "for offset = 1, 6 do"))
 check("нулевой ход — пас движку", has(hud, "пас движку"))
@@ -231,6 +242,32 @@ bind(ply, "invprev", true)
 NOW = 50
 paint()
 check("гравиган: колесо не снимает", input.selected == nil)
+
+-- Вечер-29 (v10.9): реактивный бар. На движке x86-64 (апрель 2026) колесо
+-- меняет оружие МИМО PlayerBindPress — приходит только PlayerSwitchWeapon.
+-- Бар обязан открываться на саму смену и НИЧЕГО не глотать в этом хуке.
+local sw = H.PlayerSwitchWeapon and H.PlayerSwitchWeapon.GRM_HUD_SwitchSync
+check("хук PlayerSwitchWeapon зарегистрирован", type(sw) == "function")
+if type(sw) == "function" then
+    NOW = 60
+    ply._active = crowbar
+    ply._keys[IN_ATTACK] = false
+    local ret = sw(ply, physgun, pistol)
+    check("SwitchSync возвращает nil (смену не глотает)", ret == nil, tostring(ret))
+    local rOpen = bind(ply, "+attack", true)
+    check("чужая смена оружия ОТКРЫВАЕТ бар", rOpen == true, tostring(rOpen))
+    -- Захват физганом: смена не должна РАЗВОРАЧИВАТЬ бар (саму смену
+    -- решает не наш хук — он и тут возвращает nil)
+    bind(ply, "+attack", true)          -- закрываем бар с прошлого шага
+    ply._active = physgun               -- busy = физган + ЛКМ, не что попало
+    ply._keys[IN_ATTACK] = true
+    NOW = 64
+    local ret2 = sw(ply, crowbar, pistol)
+    local rClosed = bind(ply, "+attack", true)
+    check("SwitchSync при захвате: nil и бар не открывается",
+        ret2 == nil and rClosed == nil, tostring(rClosed))
+    ply._keys[IN_ATTACK] = false
+end
 
 print("")
 if fails == 0 then print("ВСЕ ТЕСТЫ ПРОЙДЕНЫ (hud selector)")
