@@ -20,9 +20,12 @@ local function has(src, n) return src:find(n, 1, true) ~= nil end
 local hud = read("lua/autorun/client/cl_grm_hud.lua")
 
 print("\n=== КОНТРАКТ ИСТОЧНИКА ===")
-check("версия 10.9 в шапке", has(hud, "GRM HUD v10.9"))
-check("приветствие v10.9", has(hud, "HUD v10.9 —"))
-check("принт v10.9", has(hud, '[GRM] HUD v10.9 загружен'))
+check("версия 10.10 в шапке", has(hud, "GRM HUD v10.10"))
+check("приветствие v10.10", has(hud, "HUD v10.10 —"))
+check("принт v10.10", has(hud, '[GRM] HUD v10.10 загружен'))
+check("сырой wheel-хук в источнике", has(hud, 'hook.Add("InputMouseApply", "GRM_HUD_WheelRaw"'))
+check("штемпель дедупа для invnext", has(hud, "selector.wheelAt or -99"))
+check("диагностика печатает wheel seen", has(hud, "wheel seen"))
 check("хук SwitchSync в источнике", has(hud, 'hook.Add("PlayerSwitchWeapon", "GRM_HUD_SwitchSync"'))
 check("диагностика печатает switch seen", has(hud, "switch seen"))
 check("подсветка догоняет смену в Draw", has(hud, "selector.held = heldNow"))
@@ -266,6 +269,33 @@ if type(sw) == "function" then
     local rClosed = bind(ply, "+attack", true)
     check("SwitchSync при захвате: nil и бар не открывается",
         ret2 == nil and rClosed == nil, tostring(rClosed))
+    ply._keys[IN_ATTACK] = false
+end
+
+-- Вечер-30 (v10.10): сырое колесо. Работает даже когда на клиенте НЕТ
+-- никаких привязок mwheel (движок апреля 2026 мог сбросить конфиг мыши).
+local raw = H.InputMouseApply and H.InputMouseApply.GRM_HUD_WheelRaw
+check("сырой wheel-хук зарегистрирован", type(raw) == "function")
+if type(raw) == "function" then
+    NOW = 80
+    ply._active = crowbar
+    ply._keys[IN_ATTACK] = false
+    input.selected = nil
+    local act1 = raw(nil, 0, 0, 1)
+    check("колесо без бинда: шаг, выбор, глотается",
+        act1 == true and input.selected == grav, tostring(input.selected))
+    local rDup = bind(ply, "invnext", true)
+    check("дубль invnext при свежем штампе съеден без шага",
+        rDup == true and input.selected == grav, tostring(input.selected))
+    check("после сырого колеса бар открыт", bind(ply, "+attack", true) == true)
+    -- занятость физгана: сырой канал молчит и не глотает (дистанцию крутит тулза)
+    ply._active = physgun
+    ply._keys[IN_ATTACK] = true
+    NOW = 84
+    input.selected = nil
+    local actBusy = raw(nil, 0, 0, -1)
+    check("сырое колесо при захвате: nil и выбор не тронут",
+        actBusy == nil and input.selected == nil, tostring(actBusy))
     ply._keys[IN_ATTACK] = false
 end
 

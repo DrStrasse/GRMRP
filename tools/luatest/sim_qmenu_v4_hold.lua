@@ -19,7 +19,8 @@ TOP, FILL = 1, 5
 HUD_PRINTCENTER = 4
 ScrW = function() return 1920 end
 ScrH = function() return 1080 end
-CurTime = function() return 10 end
+local QT = 10
+CurTime = function() return QT end
 SysTime = function() return os.clock() end
 color_white = Color(255, 255, 255)
 
@@ -129,6 +130,44 @@ QM.OpenMenu(false)
 ok(IsValid(QM._frame) and QM._holdOpen == false, "OpenMenu(false) без hold")
 QM.CloseMenu()
 ok(not IsValid(QM._frame), "явное закрытие")
+
+-- Вечер-30 (v5.3.0): Think-скан KEY_Q — канал без всяких биндов: новый
+-- движок (x86-64, апрель 2026) может не слать "+menu" вообще.
+_G.KEY_Q = 16
+local qDown = false
+_G.input = { IsKeyDown = function() return qDown end }
+gui.HasFocus = function() return false end
+local think = hooks.Think and hooks.Think.GRM_QMenu_QHold
+ok(isfunction(think), "Think-скан Q зарегистрирован")
+if isfunction(think) then
+    QT = 20
+    qDown = true
+    think()
+    ok(IsValid(QM._frame), "Q без бинда открывает меню (Think-канал)")
+    ok(QM._holdQ == true, "штамп удержания стоит")
+    QT = 21
+    qDown = false
+    think()
+    ok(not IsValid(QM._frame), "отпускание Q закрывает (Think-канал)")
+    -- бинд жив: Think не должен задвоить открытие
+    QT = 22
+    qDown = true
+    bind(_G.__LP, "+menu", true)
+    local f1 = QM._frame
+    think()
+    ok(QM._frame == f1, "дубль Think при живом бинде окно не пересоздаёт")
+    QT = 23
+    bind(_G.__LP, "+menu", false)
+    qDown = false
+    think()
+    ok(not IsValid(QM._frame), "закрытие по отпусканию (оба канала)")
+    -- новое движковое имя команды без «+»
+    QT = 24
+    bind(_G.__LP, "showmenu", true)
+    ok(IsValid(QM._frame), "showmenu (без +/−) тоже открывает")
+    bind(_G.__LP, "showmenu", false)
+    ok(not IsValid(QM._frame), "showmenu release закрывает")
+end
 
 print(("РЕЗУЛЬТАТ: %d/%d, fail=%d"):format(pass, pass + fail, fail))
 if fail > 0 then os.exit(1) end

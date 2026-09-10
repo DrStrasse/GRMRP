@@ -6,7 +6,13 @@ local function grmBootStart(id, tier, fn)
 end
 
 --[[--------------------------------------------------------------------
-    GRM HUD v10.9 — Полноценный HUD для Sandbox
+    GRM HUD v10.10 — Полноценный HUD для Sandbox
+    v10.10: колесо ходит В ОБХОД биндов. Владелец 10.09: «не реагирует
+           вообще никак, ни на скролл» — на новом движке invnext/invprev
+           могут не порождаться вовсе (конфиг мыши пережил обновление), а
+           InputMouseApply получает дельту колеса всегда. Селектор слушает
+           и этот канал; дубль с живым биндом гасится штампом. В grm_sel_diag
+           видно теперь три счётчика: bind / switch / wheel.
     v10.9: селектор стал РЕАКТИВНЫМ (боев. отчёт 06.09: «не показывает выбор
            оружия, слоты и нету ничего»). На x86-64 / Source Engine 24
            (апрель 2026) смена оружия колесом идёт МИМО PlayerBindPress —
@@ -287,7 +293,7 @@ end
 
 -- СЕЛЕКТОР ОРУЖИЯ
 local MAXSLOT = 10 -- GMod: реальные интерфейсы доходят до 10-го слота
-local selector = { active = false, slot = 1, pos = 1, lastInput = 0, alpha = 0, weapons = {}, lastRefresh = 0, maxSlot = 0, seen = 0, switchSeen = 0 }
+local selector = { active = false, slot = 1, pos = 1, lastInput = 0, alpha = 0, weapons = {}, lastRefresh = 0, maxSlot = 0, seen = 0, switchSeen = 0, wheelSeen = 0, wheelAt = -99 }
 
 --[[ Звуки селектора оружия — стоковые HL2, ровно те же, что играет ванильный
      выбор оружия. Раньше наш селектор листался молча: визуально работает, а
@@ -483,6 +489,9 @@ hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
         end
     end
     if bind == "invnext" then
+        -- Сырой канал (InputMouseApply, v10.10) уже отработал этот тик
+        -- колеса: второй шаг поверх него — двойная прокрутка. Глотаем дубль.
+        if CurTime() - (selector.wheelAt or -99) < 0.06 then return true end
         RefreshWeapons()
         if not selector.active then selector.active = true selectorSound("open", 0.05) FindCurrentWeapon() end
         local was = selector.slot .. ":" .. selector.pos
@@ -502,6 +511,7 @@ hook.Add("PlayerBindPress", "GRM_HUD_Selector", function(ply, bind, pressed)
         selector.lastInput = CurTime()
         return
     elseif bind == "invprev" then
+        if CurTime() - (selector.wheelAt or -99) < 0.06 then return true end
         RefreshWeapons()
         if not selector.active then selector.active = true selectorSound("open", 0.05) FindCurrentWeapon() end
         local was = selector.slot .. ":" .. selector.pos
@@ -580,6 +590,39 @@ hook.Add("PlayerSwitchWeapon", "GRM_HUD_SwitchSync", function(ply, oldWep, newWe
     sellog(string.format("switch seen=%d → подсветка %d:%d", selector.switchSeen, selector.slot, selector.pos))
 end)
 
+-- Вечер-30 (v10.10): «селектор вообще ни на что не реагирует, и на скролл
+-- тоже». Если новый движок не порождает ни invnext-бинда, ни смены оружия
+-- (конфиг клавиш после обновления мог обнулиться), последний независимый
+-- канал — InputMouseApply: дельта колеса приходит ВСЕГДА, в любом конфиге.
+-- Берём колесо здесь: шаг по бару = выбор (контракт v10.5), бар открывается,
+-- движку колесо не отдаём (иначе двойная прокрутка). Занятость физгана и
+-- открытый телефон — пропуск (у них свой смысл колеса), фокус панели — тоже.
+hook.Add("InputMouseApply", "GRM_HUD_WheelRaw", function(_, _, _, wheel)
+    if not isnumber(wheel) or wheel == 0 then return end
+    if gui and gui.HasFocus and gui.HasFocus() then return end
+    local lp = LocalPlayer()
+    if not IsValid(lp) or not lp:Alive() then return end
+    if GRM_HUD_MobileOpen() or GRM.HUD.IsPropToolBusy(lp) then return end
+    selector.wheelSeen = selector.wheelSeen + 1
+    selector.wheelAt = CurTime()
+    RefreshWeapons()
+    if not selector.active then
+        selector.active = true
+        selectorSound("open", 0.05)
+        FindCurrentWeapon()
+    end
+    local was = selector.slot .. ":" .. selector.pos
+    if wheel > 0 then NextWeapon() else PrevWeapon() end
+    if was ~= (selector.slot .. ":" .. selector.pos) then
+        selectorSound("move")
+        PickCurrent()
+    end
+    selector.lastInput = CurTime()
+    sellog(string.format("wheel raw seen=%d %s → %d:%d", selector.wheelSeen,
+        wheel > 0 and "up" or "down", selector.slot, selector.pos))
+    return true
+end)
+
 -- Самодиагностика (вечер-10, по образцу /chatdiag): «селектор не работает»
 -- перестаёт быть слепым пятном. В консоли: версия, живой ли хук, сколько
 -- биндов дошло, что с ними стало, инвентарь по слотам.
@@ -587,8 +630,8 @@ if concommand and concommand.Add then
     concommand.Add("grm_sel_diag", function()
         local lp = LocalPlayer()
         local wep = IsValid(lp) and lp:GetActiveWeapon()
-        print(string.format("[GRM sel] v10.9 bind seen=%d, switch seen=%d, active=%s, выбор=%d:%d",
-            selector.seen, selector.switchSeen, tostring(selector.active), selector.slot, selector.pos))
+        print(string.format("[GRM sel] v10.10 bind seen=%d, switch seen=%d, wheel seen=%d, active=%s, выбор=%d:%d",
+            selector.seen, selector.switchSeen, selector.wheelSeen, tostring(selector.active), selector.slot, selector.pos))
         print(string.format("[GRM sel] в руке: %s (slot=%s) · mobile=%s · propbusy=%s",
             IsValid(wep) and tostring(wep:GetClass()) or "—",
             IsValid(wep) and tostring(wep:GetSlot()) or "—",
@@ -598,14 +641,18 @@ if concommand and concommand.Add then
             if list and #list > 0 then print("[GRM sel] слот " .. s .. ": " .. #list .. " шт") end
         end
         for i = 1, #SELLOG do print("[GRM sel] " .. SELLOG[i]) end
-        if selector.seen == 0 and selector.switchSeen > 0 then
+        if selector.seen == 0 and selector.wheelSeen > 0 then
+            print("[GRM sel] ВЫВОД: биндов нет, НО колесо ловится сырым каналом")
+            print("[GRM sel] (InputMouseApply, v10.10) — селектор работает и без привязок.")
+        elseif selector.seen == 0 and selector.switchSeen > 0 then
             print("[GRM sel] ВЫВОД: бинды к хуку не приходят, переключения — да")
             print("[GRM sel] (так ведёт себя новый движок x86-64). Бар следует за")
-            print("[GRM sel] переключением через PlayerSwitchWeapon — это v10.9, так и должно работать.")
-        elseif selector.seen == 0 and selector.switchSeen == 0 then
-            print("[GRM sel] ВЫВОД: не дошло НИ биндов, НИ переключений — файл")
-            print("[GRM sel] не загружен или хуки сняты. Проверьте в консоли приветствие")
-            print("[GRM sel] «HUD v10.9 загружен»; нет его — старый cl_grm_hud.lua на сервере.")
+            print("[GRM sel] переключением через PlayerSwitchWeapon — так и должно работать.")
+        elseif selector.seen == 0 and selector.switchSeen == 0 and selector.wheelSeen == 0 then
+            print("[GRM sel] ВЫВОД: НИ биндов, НИ переключений, НИ сырого колеса.")
+            print("[GRM sel] Если файл свежий («HUD v10.10 загружен» есть в консоли),")
+            print("[GRM sel] значит дельта колеса не доходит даже до InputMouseApply —")
+            print("[GRM sel] проверьте, скроллятся ли списки мышью вообще (консоль, меню).")
         end
     end)
 end
@@ -953,8 +1000,8 @@ end)
 
 grmBootStart("GRM_HUD_Welcome", "late", function()
     timer.Simple(4, function()
-        if IsValid(LocalPlayer()) then GRM.AddNotification("HUD v10.9 — селектор реагирует на смену оружия (новый движок)", 5, Color(100, 180, 255)) end
+        if IsValid(LocalPlayer()) then GRM.AddNotification("HUD v10.10 — колесо листает селектор даже без привязок", 5, Color(100, 180, 255)) end
     end)
 end)
 
-print("[GRM] HUD v10.9 загружен")
+print("[GRM] HUD v10.10 загружен")

@@ -1,5 +1,13 @@
 --[[--------------------------------------------------------------------
-    GRM Q-меню «Стройка» v5.0.0 (Код 96) — большой безопасный SpawnMenu
+    GRM Q-меню «Стройка» v5.3.0 (Код 96) — большой безопасный SpawnMenu
+
+    v5.3.0: HOLD-Q больше не зависит от PlayerBindPress (тот же класс дыры,
+      что и селектор на движке x86-64 апреля 2026 — владелец 10.09: «Q меню
+      сломалось»). Если движок не шлёт «+menu» (или зовёт команду иначе —
+      «menu»/«showmenu»), Q ловится кромочным сканом KEY_Q в Think — приём
+      канонический (сам движок так делает в problems_pnl). Оба канала
+      дедуплицированы штампом: окно открывается ровно один раз, закрытие
+      по отпусканию сохранено.
 
     v4.1.1: три колонки — меню | инструменты | панель настроек;
       окно шире и выше; параметры в отдельной правой колонке, не под тулами.
@@ -24,7 +32,7 @@ GRM = GRM or {}
 GRM.QMenu = GRM.QMenu or {}
 local QM = GRM.QMenu
 
-QM.Version = "5.2.0"
+QM.Version = "5.3.0"
 
 local CONFIG_FILE = "grm_qmenu.json"
 
@@ -2092,20 +2100,48 @@ if CLIENT then
     end)
 
     -- HOLD-Q как ванильное: press → открыть, release → закрыть.
+    -- Вечер-30 (v5.3.0): раньше был слышен ТОЛЬКО бинд "+menu". На новом
+    -- движке (x86-64, апрель 2026) Q может приходить под другим именем
+    -- (menu/showmenu) или не приходить как бинд вовсе — тогда кастомное
+    -- меню не открывалось, а ванильное мы блокируем: «Q меню сломалось».
+    -- Поэтому: бинд-имена словарём + независимый кромочный скан KEY_Q
+    -- в Think (канонический приём движка). Дедупликация — штамп: никакой
+    -- двойной открытия/закрытия, когда оба канала живые.
+    local qStamp = -99
+    local qDownThink = false
+    local function qPress()
+        if QM._holdQ and CurTime() - qStamp < 0.1 then return end
+        qStamp = CurTime()
+        QM._holdQ = true
+        if menuHasContent() then
+            if not IsValid(QM._frame) then QM.OpenMenu(true) end
+        elseif IsValid(LocalPlayer()) then
+            LocalPlayer():PrintMessage(HUD_PRINTCENTER, "Q-меню и стройка закрыты администрацией")
+        end
+    end
+    local function qRelease()
+        qStamp = CurTime()
+        QM._holdQ = false
+        QM.CloseMenu()
+    end
+    local Q_BINDS = { menu = true, showmenu = true, spawnmenu = true }
     hook.Add("PlayerBindPress", "GRM_QMenu_BindBlock", function(_, bind, pressed)
-        if bind ~= "+menu" then return end
+        local bn = string.lower(tostring(bind or "")):gsub("^%+", ""):gsub("^%-", "")
+        if not Q_BINDS[bn] then return end
         if qBlockedForMe() then
-            if pressed then
-                if menuHasContent() then
-                    if not IsValid(QM._frame) then QM.OpenMenu(true) end
-                elseif IsValid(LocalPlayer()) then
-                    LocalPlayer():PrintMessage(HUD_PRINTCENTER, "Q-меню и стройка закрыты администрацией")
-                end
-            else
-                QM.CloseMenu()
-            end
+            if pressed then qPress() else qRelease() end
             return true
         end
+    end)
+    hook.Add("Think", "GRM_QMenu_QHold", function()
+        if not (input and isfunction(input.IsKeyDown) and KEY_Q ~= nil) then return end
+        if gui and isfunction(gui.HasFocus) and gui.HasFocus() then return end
+        if not qBlockedForMe() then qDownThink = false; return end
+        local down = input.IsKeyDown(KEY_Q) == true
+        if down == qDownThink then return end
+        qDownThink = down
+        if CurTime() - qStamp < 0.1 then return end -- бинд уже отработал эту фазу
+        if down then qPress() else qRelease() end
     end)
 end
 
