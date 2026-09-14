@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Терминал Комитета</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+:root{
+  --grass:#7cbd4b; --grass-d:#5e9c3e;
+  --dirt:#866043; --dirt-d:#5b3f2a;
+  --stone:#8b8b8b; --stone-m:#6f6f6f; --stone-d:#4a4a4a;
+  --slot:#1d1d1d; --slot-hi:#2a2a2a;
+  --text:#ffffff; --text-dim:#b9b9b9;
+  --gold:#fcee4b; --red:#e0402f;
+}
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  min-height:100vh;
+  color:var(--text);
+  font-family:"Consolas","Courier New",monospace;
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.06) 0 2px, transparent 2px 18px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 2px, transparent 2px 18px),
+    linear-gradient(180deg,#4a3b2f,#2e241c);
+  image-rendering:pixelated;
+  padding-bottom:90px;
+}
+.px{ font-family:'Press Start 2P', monospace; }
+
+/* ---------- banner ---------- */
+.banner{
+  display:flex; align-items:center; gap:16px;
+  padding:18px 20px;
+  background:linear-gradient(#3c3c3c,#2b2b2b);
+  border-bottom:4px solid #000;
+  box-shadow:inset 0 -3px 0 rgba(255,255,255,.06);
+}
+.banner .logo{ width:52px; height:52px; flex:none; }
+.banner h1{ font-family:'Press Start 2P',monospace; font-size:16px; margin:0; letter-spacing:1px;
+  text-shadow:2px 2px 0 #000, 3px 3px 0 rgba(0,0,0,.6); }
+.banner .sub{ color:var(--text-dim); font-size:12px; margin-top:6px; }
+.banner .stamp{ margin-left:auto; font-family:'Press Start 2P',monospace; font-size:9px;
+  color:var(--red); border:2px solid var(--red); padding:6px 10px; transform:rotate(-3deg);
+  text-shadow:1px 1px 0 #000; background:rgba(224,64,47,.08); }
+
+/* ---------- tabs ---------- */
+.tabs{ display:flex; flex-wrap:wrap; gap:2px; padding:0 12px; background:#26211b;
+  border-bottom:3px solid #000; }
+.tab{
+  font-family:'Press Start 2P',monospace; font-size:10px; color:var(--text-dim);
+  background:linear-gradient(#6f6f6f,#565656); border:2px solid #000; border-bottom:none;
+  padding:12px 16px 14px; cursor:pointer; position:relative; top:3px;
+  box-shadow:inset 2px 2px 0 rgba(255,255,255,.25);
+  image-rendering:pixelated;
+}
+.tab:hover{ color:#fff; }
+.tab.active{ background:linear-gradient(#a8a8a8,#7a7a7a); color:#111; font-weight:bold; }
+
+/* ---------- toolbar ---------- */
+.toolbar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:14px 16px; }
+input[type=text], input[type=search], select, textarea{
+  font-family:'Consolas',monospace; font-size:14px; color:var(--text);
+  background:var(--slot); border:2px solid #000; padding:9px 10px;
+  box-shadow:inset 2px 2px 0 rgba(0,0,0,.6);
+}
+input:focus, select:focus, textarea:focus{ outline:2px solid var(--grass); }
+.search{ flex:1 1 220px; }
+.mc-btn{
+  font-family:'Press Start 2P',monospace; font-size:10px; color:#fff;
+  background:linear-gradient(#8f8f8f,#6e6e6e); border:2px solid #000;
+  padding:11px 14px; cursor:pointer; line-height:1;
+  box-shadow:inset 2px 2px 0 rgba(255,255,255,.35), inset -2px -2px 0 rgba(0,0,0,.35);
+  image-rendering:pixelated; text-shadow:1px 1px 0 #000;
+}
+.mc-btn:hover{ background:linear-gradient(#a9d88a,#7cbd4b); color:#12250a; text-shadow:none; }
+.mc-btn.danger:hover{ background:linear-gradient(#e08a7a,#c0392b); color:#fff; text-shadow:1px 1px 0 #000; }
+.mc-btn.gold{ background:linear-gradient(#f8e56a,#d9a520); color:#3a2a05; text-shadow:none; }
+.mc-btn.gold:hover{ background:linear-gradient(#fff3a0,#f0c040); }
+.mc-btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+/* ---------- table ---------- */
+.table-wrap{ margin:0 16px; overflow-x:auto; border:3px solid #000; background:#0f0f0f;
+  box-shadow:0 0 0 2px #000 inset, 0 6px 0 rgba(0,0,0,.3); }
+table{ width:100%; border-collapse:collapse; font-size:13px; }
+th{ font-family:'Press Start 2P',monospace; font-size:9px; color:#111;
+  background:linear-gradient(#c8c8c8,#9c9c9c); padding:10px; text-align:left;
+  border-bottom:3px solid #000; white-space:nowrap; }
+td{ padding:10px; border-bottom:1px solid #2a2a2a; vertical-align:top; }
+tbody tr{ background:var(--slot); cursor:pointer; }
+tbody tr:nth-child(even){ background:#222; }
+tbody tr:hover{ background:#3a5a2a; outline:2px solid var(--grass); outline-offset:-2px; }
+td .dim{ color:var(--text-dim); }
+
+/* badges */
+.badge{ display:inline-block; font-size:11px; font-weight:bold; padding:2px 8px; border:1px solid #000;
+  color:#111; background:#999; image-rendering:pixelated; }
+.cat-A{ background:#55ff55; } .cat-B{ background:#aaff55; } .cat-C{ background:#ffff55; }
+.cat-D{ background:#ffaa00; } .cat-E{ background:#ff5555; color:#fff; }
+.st-active,.st-активен{ background:#55ff55; }
+.st-watch,.st-наблюдение,.st-в-работе{ background:#ffff55; }
+.st-neutral,.st-нейтрализован{ background:#9c9c9c; }
+.st-off,.st-отстранён{ background:#ffaa00; }
+.st-bad,.st-отказано,.st-ликвидирован{ background:#ff5555; color:#fff; }
+.st-new,.st-новый{ background:#aaff55; }
+.st-closed,.st-закрыт{ background:#9c9c9c; }
+
+.empty{ padding:60px 20px; text-align:center; color:var(--text-dim); }
+.empty .big{ font-family:'Press Start 2P',monospace; font-size:14px; color:#777; margin-bottom:12px; }
+
+/* ---------- hotbar ---------- */
+.hotbar{ position:fixed; left:50%; transform:translateX(-50%); bottom:12px;
+  display:flex; gap:2px; padding:4px; background:rgba(0,0,0,.65); border:3px solid #000;
+  box-shadow:0 0 0 2px #000 inset; image-rendering:pixelated; z-index:40; }
+.hotbar .slot{ width:56px; height:56px; background:#2b2b2b; border:2px solid #000;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  box-shadow:inset 2px 2px 0 rgba(255,255,255,.12); }
+.hotbar .slot .n{ font-family:'Press Start 2P',monospace; font-size:12px; color:var(--gold); text-shadow:1px 1px 0 #000; }
+.hotbar .slot .l{ font-size:9px; color:#ccc; }
+.hotbar .slot.sel{ border-color:var(--gold); }
+.hotbar .ver{ font-family:'Press Start 2P',monospace; font-size:8px; color:#777; align-self:center; margin-left:8px; }
+
+/* ---------- modal ---------- */
+.overlay{ position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center;
+  justify-content:center; z-index:50; padding:16px; }
+.overlay.show{ display:flex; }
+.modal{ width:100%; max-width:560px; max-height:92vh; overflow:auto; background:#3a3a3a;
+  border:4px solid #000; box-shadow:0 0 0 4px rgba(0,0,0,.5), 0 12px 0 rgba(0,0,0,.3);
+  image-rendering:pixelated; }
+.modal .head{ font-family:'Press Start 2P',monospace; font-size:12px; padding:14px 16px;
+  background:linear-gradient(#555,#3c3c3c); border-bottom:3px solid #000; display:flex;
+  justify-content:space-between; align-items:center; }
+.modal .body{ padding:16px; display:flex; flex-direction:column; gap:12px; }
+.modal .foot{ padding:14px 16px; border-top:3px solid #000; display:flex; gap:8px; justify-content:flex-end; }
+.field{ display:flex; flex-direction:column; gap:6px; }
+.field label{ font-size:12px; color:var(--text-dim); }
+.field label .req{ color:var(--red); }
+.grif{ font-family:'Press Start 2P',monospace; font-size:9px; color:var(--red);
+  border:2px dashed var(--red); padding:8px; text-align:center; letter-spacing:1px; }
+.detail-grid{ display:grid; grid-template-columns:140px 1fr; gap:8px 12px; font-size:13px; }
+.detail-grid .k{ color:var(--text-dim); }
+.detail-grid .v{ word-break:break-word; }
+.close-x{ cursor:pointer; color:#ccc; font-family:'Press Start 2P',monospace; font-size:12px; }
+.close-x:hover{ color:#fff; }
+
+.toast{ position:fixed; top:16px; right:16px; z-index:100; font-family:'Press Start 2P',monospace;
+  font-size:10px; background:#3a3a3a; border:3px solid #000; padding:12px 16px; color:#fff;
+  display:none; box-shadow:0 0 0 2px #000 inset; }
+.toast.ok{ border-color:var(--grass); }
+.toast.err{ border-color:var(--red); }
+
+@media(max-width:640px){
+  .banner .stamp{ display:none; }
+  .hotbar .slot{ width:44px; height:44px; }
+  .hotbar .ver{ display:none; }
+}
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <svg class="logo" viewBox="0 0 16 16" shape-rendering="crispEdges">
+    <rect width="16" height="16" fill="#111"/>
+    <rect x="2" y="3" width="12" height="9" fill="#e8e0d0"/>
+    <rect x="4" y="5" width="2" height="2" fill="#111"/>
+    <rect x="10" y="5" width="2" height="2" fill="#111"/>
+    <rect x="6" y="9" width="4" height="1" fill="#111"/>
+    <rect x="4" y="12" width="3" height="2" fill="#c0392b"/>
+    <rect x="9" y="12" width="3" height="2" fill="#c0392b"/>
+    <rect x="7" y="1" width="2" height="2" fill="#fcee4b"/>
+  </svg>
+  <div>
+    <h1>ТЕРМИНАЛ КОМИТЕТА</h1>
+    <div class="sub">// реестр досье · рапорты · агенты · журнал действий</div>
+  </div>
+  <div class="stamp">ГРИФ: СЕКРЕТНО</div>
+</div>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="dossier">Досье</button>
+  <button class="tab" data-tab="reports">Рапорты</button>
+  <button class="tab" data-tab="agents">Агенты</button>
+  <button class="tab" data-tab="log">Журнал</button>
+</nav>
+
+<div class="toolbar">
+  <input type="search" class="search" id="search" placeholder="Поиск по всем полям…">
+  <select id="filter"><option value="">Все категории</option></select>
+  <button class="mc-btn gold" id="btnAdd">+ Новое</button>
+  <button class="mc-btn" id="btnExport">Экспорт</button>
+  <button class="mc-btn" id="btnImport">Импорт</button>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+  <button class="mc-btn danger" id="btnWipe">Стереть</button>
+</div>
+
+<div class="table-wrap">
+  <table id="table">
+    <thead id="thead"></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="empty" id="empty" style="display:none">
+    <div class="big">[ ЗАПИСЕЙ НЕТ ]</div>
+    Нажмите «+ Новое», чтобы добавить запись.
+  </div>
+</div>
+
+<div class="hotbar">
+  <div class="slot" data-tab="dossier"><div class="n" id="cDossier">0</div><div class="l">досье</div></div>
+  <div class="slot" data-tab="reports"><div class="n" id="cReports">0</div><div class="l">рапорты</div></div>
+  <div class="slot" data-tab="agents"><div class="n" id="cAgents">0</div><div class="l">агенты</div></div>
+  <div class="slot" data-tab="log"><div class="n" id="cLog">0</div><div class="l">журнал</div></div>
+  <span class="ver">v1.0</span>
+</div>
+
+<!-- editor modal -->
+<div class="overlay" id="editOverlay">
+  <div class="modal">
+    <div class="head"><span id="editTitle">Новая запись</span><span class="close-x" data-close="editOverlay">✕</span></div>
+    <div class="body" id="editBody"></div>
+    <div class="foot">
+      <button class="mc-btn" data-close="editOverlay">Отмена</button>
+      <button class="mc-btn gold" id="btnSave">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- detail modal -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <div class="head"><span id="detailTitle">Досье</span><span class="close-x" data-close="detailOverlay">✕</span></div>
+    <div class="body">
+      <div class="grif">ДЛЯ ВНУТРЕННЕГО ПОЛЬЗОВАНИЯ · ГОСУДАРСТВЕННАЯ ТАЙНА</div>
+      <div class="detail-grid" id="detailBody"></div>
+    </div>
+    <div class="foot">
+      <button class="mc-btn danger" id="btnDelete">Удалить</button>
+      <button class="mc-btn gold" id="btnEditFromDetail">Изменить</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+const LS_KEY = "komitet_db_v1";
+
+const TYPES = ["Наблюдатель","Болтун","Провокатор","Идеалист","Прагматик","Враждебный"];
+const CATS  = ["A","B","C","D","E"];
+const CAT_LABEL = {A:"A — подтверждено лично",B:"B — два источника",C:"C — один источник",D:"D — слух",E:"E — заведомо ложное"};
+const STATUS_DOSSIER = ["Активен","Наблюдение","Нейтрализован","Отказано"];
+const ROLES = ["Наблюдатель","Аналитик","Интервьюер","Исполнитель","Куратор"];
+const CLEARANCE = ["A","B","C"];
+const STATUS_AGENT = ["Активен","Отстранён","Ликвидирован"];
+const STATUS_REPORT = ["Новый","В работе","Закрыт"];
+
+const SCHEMA = {
+  dossier: {
+    label:"Досье на игрока", title:"Досье",
+    cols:["Ник","Тип","Кат.","Статус","Обновлён"],
+    fields:[
+      {key:"nick", label:"Ник игрока", type:"text", required:true},
+      {key:"type", label:"Тип игрока", type:"select", options:TYPES},
+      {key:"cat",  label:"Категория надёжности", type:"select", options:CATS, labels:CAT_LABEL},
+      {key:"status", label:"Статус", type:"select", options:STATUS_DOSSIER},
+      {key:"notes", label:"Заметки / наблюдения", type:"textarea"},
+    ]
+  },
+  reports: {
+    label:"Рапорт", title:"Рапорт",
+    cols:["Тема","Источник","Кат.","Статус","Дата"],
+    fields:[
+      {key:"topic", label:"Тема", type:"text", required:true},
+      {key:"source", label:"Источник", type:"text"},
+      {key:"cat",  label:"Категория информации", type:"select", options:CATS, labels:CAT_LABEL},
+      {key:"status", label:"Статус обработки", type:"select", options:STATUS_REPORT},
+      {key:"body", label:"Содержание", type:"textarea"},
+    ]
+  },
+  agents: {
+    label:"Агент", title:"Агент",
+    cols:["Ник","Роль","Допуск","Статус","Обновлён"],
+    fields:[
+      {key:"nick", label:"Ник агента", type:"text", required:true},
+      {key:"role", label:"Роль", type:"select", options:ROLES},
+      {key:"clear", label:"Уровень допуска", type:"select", options:CLEARANCE},
+      {key:"status", label:"Статус", type:"select", options:STATUS_AGENT},
+      {key:"notes", label:"Заметки", type:"textarea"},
+    ]
+  }
+};
+
+const state = {
+  tab:"dossier",
+  data:null,
+  filter:"",
+  editing:null,   // {tab, id}
+  viewing:null,   // {tab, id}
+};
+
+function nowISO(){ return new Date().toISOString(); }
+function fmt(iso){ return new Date(iso).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}); }
+
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){ state.data = JSON.parse(raw); }
+  }catch(e){}
+  if(!state.data || !Array.isArray(state.data.dossier)){
+    state.data = { dossier:[], reports:[], agents:[], log:[] };
+    seed();
+    pushLog("Система инициализирована");
+    save();
+  }
+}
+
+function seed(){
+  const d = (nick,type,cat,status,notes)=>({id:uid(),nick,type,cat,status,notes,updated:nowISO()});
+  const r = (topic,source,cat,status,body)=>({id:uid(),topic,source,cat,status,body,updated:nowISO()});
+  const a = (nick,role,clear,status,notes)=>({id:uid(),nick,role,clear,status,notes,updated:nowISO()});
+  state.data.dossier.push(
+    d("Steve_77","Наблюдатель","B","Наблюдение","Замечен у ворот цитадели. Молчит, но фиксирует перемещения патрулей."),
+    d("xX_Grief_Xx","Враждебный","E","Нейтрализован","Попытка саботажа 12.09. Передан наверх. Не отвечать на провокации."),
+    d("Bookkeeper","Прагматик","C","Активен","Ищет выгоду. Возможен источник по сделкам торговой гильдии."),
+  );
+  state.data.reports.push(
+    r("Слух о мятеже","Аноним","D","Новый","Непроверяемое сообщение о готовящемся выступлении. Требует перекрёстной проверки."),
+    r("Сделка с чужими","Bookkeeper","C","В работе","Один источник, доказательств нет. Ожидание второго независимого подтверждения."),
+  );
+  state.data.agents.push(
+    a("Agent_13","Интервьюер","B","Активен","Специализация — допросы. Склонен к излишнему давлению."),
+    a("Agent_07","Аналитик","A","Активен","Работа с донесениями категории B и выше."),
+    a("Agent_21","Исполнитель","C","Отстранён","Отстранён до разбирательства."),
+  );
+}
+
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(state.data)); }
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+function pushLog(msg){
+  state.data.log.unshift({id:uid(), t:nowISO(), msg});
+  if(state.data.log.length>500) state.data.log.length=500;
+}
+
+function toast(msg, cls){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = "toast show "+(cls||"ok"); t.style.display="block";
+  clearTimeout(t._h); t._h = setTimeout(()=>t.style.display="none", 2200);
+}
+
+/* ---------- rendering ---------- */
+function catBadge(c){ return '<span class="badge cat-'+c+'">'+c+'</span>'; }
+function stBadge(s){
+  const cls = "st-"+s.toLowerCase().replace(/[^a-zа-яё]/g,"-");
+  return '<span class="badge '+cls+'">'+s+'</span>';
+}
+
+function renderTabs(){
+  document.querySelectorAll(".tab").forEach(b=>{
+    b.classList.toggle("active", b.dataset.tab===state.tab);
+  });
+  document.querySelectorAll(".hotbar .slot").forEach(s=>{
+    s.classList.toggle("sel", s.dataset.tab===state.tab);
+  });
+}
+
+function renderFilter(){
+  const sel = document.getElementById("filter");
+  const isAgent = state.tab==="agents";
+  const opts = isAgent ? CLEARANCE : CATS;
+  const cur = state.filter;
+  sel.innerHTML = '<option value="">Все '+(isAgent?"допуски":"категории")+'</option>'+
+    opts.map(o=>'<option value="'+o+'"'+(o===cur?' selected':'')+'>'+o+'</option>').join("");
+}
+
+function rows(){
+  if(state.tab==="log") return state.data.log;
+  return state.data[state.tab];
+}
+
+function recordMatches(rec){
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const f = state.filter;
+  let ok = true;
+  if(f){
+    const v = state.tab==="agents" ? rec.clear : rec.cat;
+    if(v!==f) ok=false;
+  }
+  if(ok && q){
+    ok = Object.values(rec).some(v=>v!=null && String(v).toLowerCase().includes(q));
+  }
+  return ok;
+}
+
+function renderTable(){
+  const thead = document.getElementById("thead");
+  const tbody = document.getElementById("tbody");
+  const empty = document.getElementById("empty");
+  thead.innerHTML=""; tbody.innerHTML="";
+
+  if(state.tab==="log"){
+    thead.innerHTML = "<tr><th>Время</th><th>Действие</th></tr>";
+  }else{
+    thead.innerHTML = "<tr>"+SCHEMA[state.tab].cols.map(c=>"<th>"+c+"</th>").join("")+"</tr>";
+  }
+
+  const list = rows().filter(recordMatches);
+  const table = document.getElementById("table");
+  table.style.display = list.length ? "" : "none";
+  empty.style.display = list.length ? "none" : "block";
+
+  if(state.tab==="log"){
+    list.slice(0,300).forEach(r=>{
+      const tr=document.createElement("tr");
+      tr.innerHTML='<td class="dim">'+fmt(r.t)+'</td><td>'+esc(r.msg)+'</td>';
+      tbody.appendChild(tr);
+    });
+    return;
+  }
+
+  list.forEach(rec=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML = rowHtml(state.tab, rec);
+    tr.addEventListener("click", ()=>openDetail(state.tab, rec.id));
+    tbody.appendChild(tr);
+  });
+}
+
+function rowHtml(tab, rec){
+  if(tab==="dossier"){
+    return '<td><b>'+esc(rec.nick)+'</b></td><td>'+esc(rec.type)+'</td><td>'+catBadge(rec.cat)+
+      '</td><td>'+stBadge(rec.status)+'</td><td class="dim">'+fmt(rec.updated)+'</td>';
+  }
+  if(tab==="reports"){
+    return '<td><b>'+esc(rec.topic)+'</b></td><td>'+esc(rec.source||"—")+'</td><td>'+catBadge(rec.cat)+
+      '</td><td>'+stBadge(rec.status)+'</td><td class="dim">'+fmt(rec.updated)+'</td>';
+  }
+  if(tab==="agents"){
+    return '<td><b>'+esc(rec.nick)+'</b></td><td>'+esc(rec.role)+'</td><td>'+catBadge(rec.clear)+
+      '</td><td>'+stBadge(rec.status)+'</td><td class="dim">'+fmt(rec.updated)+'</td>';
+  }
+  return "";
+}
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function renderCounts(){
+  document.getElementById("cDossier").textContent = state.data.dossier.length;
+  document.getElementById("cReports").textContent = state.data.reports.length;
+  document.getElementById("cAgents").textContent  = state.data.agents.length;
+  document.getElementById("cLog").textContent    = state.data.log.length;
+}
+
+function render(){
+  renderTabs(); renderFilter(); renderTable(); renderCounts();
+}
+
+/* ---------- editor ---------- */
+function openEditor(tab, id){
+  state.editing = id!=null ? {tab,id} : {tab,id:null};
+  const schema = SCHEMA[tab];
+  const rec = id!=null ? state.data[tab].find(x=>x.id===id) : null;
+  document.getElementById("editTitle").textContent = (rec?"Изменить: ":"Новая запись: ")+schema.label;
+  const body = document.getElementById("editBody");
+  body.innerHTML="";
+  schema.fields.forEach(f=>{
+    const wrap=document.createElement("div"); wrap.className="field";
+    const lab=document.createElement("label");
+    lab.innerHTML = f.label + (f.required?' <span class="req">*</span>':'');
+    wrap.appendChild(lab);
+    let el;
+    if(f.type==="select"){
+      el=document.createElement("select");
+      el.innerHTML = '<option value="">—</option>' + f.options.map(o=>{
+        const lbl = f.labels ? f.labels[o] : o;
+        return '<option value="'+o+'">'+lbl+'</option>';
+      }).join("");
+    }else if(f.type==="textarea"){
+      el=document.createElement("textarea"); el.rows=4;
+    }else{
+      el=document.createElement("input"); el.type="text";
+    }
+    el.dataset.key = f.key;
+    if(rec && rec[f.key]!=null) el.value = rec[f.key];
+    wrap.appendChild(el);
+    body.appendChild(wrap);
+  });
+  document.getElementById("editOverlay").classList.add("show");
+}
+
+function saveEditor(){
+  const {tab,id} = state.editing;
+  const schema = SCHEMA[tab];
+  const rec = {id: id || uid()};
+  let ok=true;
+  schema.fields.forEach(f=>{
+    const el = document.querySelector('#editBody [data-key="'+f.key+'"]');
+    const val = el ? el.value.trim() : "";
+    if(f.required && !val){ ok=false; el.style.outline="2px solid var(--red)"; return; }
+    rec[f.key]=val;
+  });
+  if(!ok){ toast("Заполните обязательные поля","err"); return; }
+  rec.updated = nowISO();
+  const arr = state.data[tab];
+  if(id!=null){
+    const i = arr.findIndex(x=>x.id===id);
+    if(i>=0){ arr[i] = Object.assign(arr[i], rec); pushLog("Изменено: "+schema.label+" «"+rec.nick||rec.topic+"»"); }
+  }else{
+    arr.push(rec);
+    pushLog("Добавлено: "+schema.label+" «"+(rec.nick||rec.topic)+"»");
+  }
+  save();
+  closeModal("editOverlay");
+  toast("Сохранено");
+  render();
+}
+
+/* ---------- detail ---------- */
+function openDetail(tab, id){
+  state.viewing = {tab,id};
+  const rec = state.data[tab].find(x=>x.id===id);
+  if(!rec) return;
+  document.getElementById("detailTitle").textContent = SCHEMA[tab].label;
+  const body = document.getElementById("detailBody");
+  body.innerHTML="";
+  SCHEMA[tab].fields.forEach(f=>{
+    const val = rec[f.key];
+    let shown;
+    if(f.key==="cat") shown = val ? catBadge(val) : "—";
+    else if(f.key==="status" || f.key==="clear") shown = val ? stBadge(val) : "—";
+    else if(f.type==="textarea") shown = esc(val)||"<span class='dim'>—</span>";
+    else shown = esc(val)||"<span class='dim'>—</span>";
+    body.innerHTML += '<div class="k">'+f.label+'</div><div class="v">'+shown+'</div>';
+  });
+  body.innerHTML += '<div class="k">Обновлено</div><div class="v dim">'+fmt(rec.updated)+'</div>';
+  document.getElementById("detailOverlay").classList.add("show");
+}
+
+function deleteViewing(){
+  const {tab,id} = state.viewing;
+  const rec = state.data[tab].find(x=>x.id===id);
+  if(!rec) return;
+  if(!confirm("Удалить запись «"+(rec.nick||rec.topic)+"»? Действие необратимо.")) return;
+  state.data[tab] = state.data[tab].filter(x=>x.id!==id);
+  pushLog("Удалено: "+SCHEMA[tab].label+" «"+(rec.nick||rec.topic)+"»");
+  save();
+  closeModal("detailOverlay");
+  toast("Запись удалена","err");
+  render();
+}
+
+/* ---------- import / export / wipe ---------- */
+function doExport(){
+  const blob = new Blob([JSON.stringify(state.data,null,2)],{type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "komitet_db_"+Date.now()+".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  pushLog("Экспорт базы данных"); save();
+  toast("Файл экспортирован");
+}
+
+function doImport(file){
+  const rd = new FileReader();
+  rd.onload = ()=>{
+    try{
+      const obj = JSON.parse(rd.result);
+      if(!obj || !Array.isArray(obj.dossier)) throw new Error("bad shape");
+      if(!confirm("Заменить текущую базу данными из файла? Текущие записи будут перезаписаны.")) return;
+      state.data = {dossier:obj.dossier||[], reports:obj.reports||[], agents:obj.agents||[], log:obj.log||[]};
+      pushLog("Импорт базы данных"); save(); toast("База импортирована"); render();
+    }catch(e){ toast("Некорректный файл","err"); }
+  };
+  rd.readAsText(file);
+}
+
+function doWipe(){
+  if(!confirm("СТЕРЕТЬ ВСЮ БАЗУ? Это удалит все досье, рапорты и агентов.")) return;
+  if(!confirm("Точно? Восстановление невозможно.")) return;
+  state.data = {dossier:[], reports:[], agents:[], log:[]};
+  pushLog("База данных стёрта"); save(); toast("База стёрта","err"); render();
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove("show"); }
+
+/* ---------- events ---------- */
+document.getElementById("tabs").addEventListener("click", e=>{
+  const b = e.target.closest(".tab"); if(!b) return;
+  state.tab = b.dataset.tab; state.filter=""; render();
+});
+document.querySelector(".hotbar").addEventListener("click", e=>{
+  const s = e.target.closest(".slot"); if(!s) return;
+  state.tab = s.dataset.tab; state.filter=""; render();
+});
+document.getElementById("search").addEventListener("input", renderTable);
+document.getElementById("filter").addEventListener("change", e=>{ state.filter=e.target.value; renderTable(); });
+
+document.getElementById("btnAdd").addEventListener("click", ()=>openEditor(state.tab, null));
+document.getElementById("btnSave").addEventListener("click", saveEditor);
+document.getElementById("btnExport").addEventListener("click", doExport);
+document.getElementById("btnImport").addEventListener("click", ()=>document.getElementById("fileInput").click());
+document.getElementById("fileInput").addEventListener("change", e=>{ if(e.target.files[0]) doImport(e.target.files[0]); e.target.value=""; });
+document.getElementById("btnWipe").addEventListener("click", doWipe);
+
+document.getElementById("btnEditFromDetail").addEventListener("click", ()=>{
+  const {tab,id}=state.viewing; closeModal("detailOverlay"); openEditor(tab,id);
+});
+document.getElementById("btnDelete").addEventListener("click", deleteViewing);
+
+document.addEventListener("click", e=>{
+  const c = e.target.closest("[data-close]");
+  if(c) closeModal(c.dataset.close);
+});
+document.querySelectorAll(".overlay").forEach(o=>{
+  o.addEventListener("click", e=>{ if(e.target===o) o.classList.remove("show"); });
+});
+document.addEventListener("keydown", e=>{
+  if(e.key==="Escape"){ document.querySelectorAll(".overlay.show").forEach(o=>o.classList.remove("show")); }
+});
+
+/* init */
+load();
+render();
+</script>
+</body>
+</html>
